@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "n-eda"
+name = "prism-eda"
 version = "0.1.0"
-description = "An advanced automated profiling and eda library for any find of data."
+description = "Task-aware exploratory data analysis with optional AI assistance."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -26,43 +26,58 @@ classifiers = [
 
 # These are the core packages installed when someone pip installs your library
 dependencies = [
-    "pandas>=2.0.0",
+    "jinja2>=3.1.0",
     "numpy>=1.24.0",
-    "scikit-learn>=1.3.0",    # For out-of-the-box anomaly detection (e.g., Isolation Forest)
-    "matplotlib>=3.7.0",      # For plotting
-    "seaborn>=0.13.0",        # For statistical data visualization
-    "jinja2>=3.1.0",          # Essential if you plan to generate HTML reports
-    "tqdm>=4.65.0",           # For progress bars on large datasets
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    "scikit-learn>=1.3.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/NamahaTech/n-eda"
-#Documentation = "https://github.com/yourusername/data-insight-pro/wiki"
-#Issues = "https://github.com/yourusername/data-insight-pro/issues"
+Homepage = "https://github.com/NamahaTech/prism-eda"
+Documentation = "https://github.com/NamahaTech/prism-eda/tree/main/docs"
+Issues = "https://github.com/NamahaTech/prism-eda/issues"
 
 # Optional dependencies for users who want extra features, or for your own dev/testing
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.3.0",            # Blazing fast modern linter/formatter
-    "mypy>=1.9.0",            # Static type checking
+    "build>=1.2.0",
+    "mypy>=1.9.0",
+    "ruff>=0.3.0",
 ]
 test = [
     "pytest>=8.0.0",
-    "pytest-cov>=5.0.0",      # Test coverage reports
+    "pytest-cov>=5.0.0",
 ]
-# E.g., user runs: pip install data-insight-pro[advanced]
-advanced = [
-    "pyod>=1.1.0",            # Python Outlier Detection library for deep-learning anomaly detection
-    "plotly>=5.18.0",         # For interactive HTML charts
+plotly = [
+    "plotly>=5.18.0",
 ]
 
 # Tool configurations
 [tool.hatch.build.targets.wheel]
-packages = ["src/data_insight_pro"] # Assuming you use a 'src' layout (highly recommended)
+packages = ["src/prism_eda"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"] # Enable standard errors, formatting, and import sorting
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["prism_eda"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+check_untyped_defs = true
+no_implicit_optional = true

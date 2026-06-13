@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prism EDA Report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18201d;
+      --muted: #66736e;
+      --line: #dbe3df;
+      --paper: #f5f7f6;
+      --surface: #ffffff;
+      --accent: #0d7a5f;
+      --accent-soft: #dff4ed;
+      --high: #b42318;
+      --medium: #b54708;
+      --low: #175cd3;
+      --shadow: 0 16px 40px rgba(30, 46, 40, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    a { color: var(--accent); }
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 32px auto 72px; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 36px;
+      border-radius: 24px;
+      color: #f9fffc;
+      background: linear-gradient(135deg, #102820 0%, #0a644e 62%, #0e8c6b 100%);
+      box-shadow: var(--shadow);
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 360px;
+      height: 360px;
+      right: -150px;
+      top: -190px;
+      border: 46px solid rgba(255, 255, 255, 0.08);
+      border-radius: 50%;
+    }
+    .eyebrow { font-size: 12px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; opacity: .78; }
+    h1 { margin: 8px 0 10px; font-size: clamp(34px, 6vw, 58px); line-height: 1; letter-spacing: -.04em; }
+    .hero p { max-width: 780px; margin: 0; font-size: 18px; color: #d6eee6; }
+    .status {
+      display: inline-flex;
+      margin-top: 22px;
+      padding: 7px 12px;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 999px;
+      background: rgba(255,255,255,.1);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+    .metric, .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: 0 8px 24px rgba(30, 46, 40, 0.04);
+    }
+    .metric { padding: 20px; }
+    .metric strong { display: block; font-size: 28px; line-height: 1.1; letter-spacing: -.03em; }
+    .metric span { color: var(--muted); font-size: 13px; }
+    .panel { margin-top: 18px; padding: 24px; }
+    .panel h2 { margin: 0 0 14px; font-size: 22px; letter-spacing: -.02em; overflow-wrap: anywhere; }
+    .panel-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 16px; }
+    .panel-heading p, .muted { color: var(--muted); }
+    .finding { padding: 18px 0; border-top: 1px solid var(--line); }
+    .finding:first-of-type { border-top: 0; }
+    .finding-title { display: flex; align-items: center; gap: 10px; }
+    .finding h3 { min-width: 0; margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+    .finding p { margin: 7px 0 0; overflow-wrap: anywhere; }
+    .badge { padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+    .badge-high { color: var(--high); background: #fee4e2; }
+    .badge-medium { color: var(--medium); background: #ffead5; }
+    .badge-low { color: var(--low); background: #dbeafe; }
+    .recommendation { color: var(--accent); font-weight: 600; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 12px 10px; text-align: left; border-top: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
+    .bar { width: 120px; height: 7px; margin-top: 6px; overflow: hidden; border-radius: 99px; background: #e8eeeb; }
+    .bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+    details { margin-top: 12px; }
+    summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+    code { padding: 2px 5px; border-radius: 5px; background: #eef3f1; font-size: .9em; overflow-wrap: anywhere; word-break: break-word; }
+    .table-wrap code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+    .notice, .runtime-warning { padding: 14px 16px; border-radius: 12px; background: #fff4e8; color: #7a2e0e; }
+    .schema-panel { width: min(1600px, calc(100vw - 32px)); margin-left: 50%; padding: 0; transform: translateX(-50%); overflow: hidden; }
+    .schema-panel-header { padding: 24px 26px 18px; }
+    .er-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+    .er-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+    .er-legend svg { width: 28px; height: 16px; stroke: #5f766e; stroke-width: 1.7; fill: none; stroke-linecap: round; }
+    .legend-key { display: inline-grid; place-items: center; min-width: 26px; height: 20px; padding: 0 5px; border-radius: 5px; font-size: 10px; font-weight: 850; }
+    .legend-pk { color: #075f49; background: #dff4ed; }
+    .legend-fk { color: #33546d; background: #e5eef5; }
+    .legend-line { width: 30px; border-top: 2px solid #668178; }
+    .schema-canvas {
+      overflow: auto;
+      min-height: 520px;
+      padding: 24px;
+      border-top: 1px solid var(--line);
+      background-color: #f7faf8;
+      background-image: radial-gradient(#d3dfda 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+    .schema-canvas svg { display: block; min-width: 760px; max-width: none; }
+    .schema-relationship { color: #668178; }
+    .schema-edge { stroke: currentColor; stroke-width: 1.8; fill: none; opacity: .72; stroke-linecap: round; stroke-linejoin: round; }
+    .schema-cardinality { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; }
+    .schema-relationship:hover { color: var(--accent); }
+    .schema-relationship:hover .schema-edge { stroke-width: 2.5; opacity: 1; }
+    .schema-edge-label-bg { fill: #fff; stroke: #c9d7d1; stroke-width: 1; }
+    .schema-edge-label { fill: #42544d; font-size: 10px; font-weight: 800; }
+    .schema-node { fill: #fff; stroke: #b7c9c2; stroke-width: 1.4; filter: drop-shadow(0 9px 16px rgba(30, 46, 40, .10)); }
+    .schema-node-header { fill: #123d32; }
+    .schema-node-header-rule { fill: #0d7a5f; }
+    .schema-node-icon { stroke: #9de0ca; stroke-width: 1.4; fill: none; }
+    .schema-node-title { fill: #fff; font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+    .schema-node-meta { fill: #b9d8ce; font-size: 10.5px; }
+    .schema-section-label { fill: #7a8984; font-size: 9.5px; font-weight: 800; letter-spacing: .09em; }
+    .schema-row-rule { stroke: #e5ece9; stroke-width: 1; }
+    .schema-row-label { fill: #23312c; font-size: 11.5px; font-weight: 700; }
+    .schema-row-detail { fill: #71817b; font-size: 10px; }
+    .schema-key-badge { stroke-width: 1; }
+    .schema-key-badge.pk { fill: #dff4ed; stroke: #b9e3d5; }
+    .schema-key-badge.fk { fill: #e8f0f6; stroke: #cbdce8; }
+    .schema-key-badge-text { font-size: 9px; font-weight: 850; text-anchor: middle; }
+    .schema-key-badge-text.pk { fill: #07624b; }
+    .schema-key-badge-text.fk { fill: #345b74; }
+    .schema-empty-state, .schema-overflow { fill: #7a8984; font-size: 10.5px; }
+    .runtime-warning { width: min(1180px, calc(100% - 32px)); margin: -48px auto 48px; }
+    .empty { padding: 24px; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); text-align: center; }
+    footer { margin-top: 26px; color: var(--muted); text-align: center; font-size: 13px; }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 20px, 1180px); margin-top: 10px; }
+      .hero { padding: 26px 22px; border-radius: 18px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .panel { padding: 18px; }
+      .schema-panel { width: calc(100vw - 20px); padding: 0; }
+      .schema-panel-header { padding: 20px 18px 16px; }
+      .schema-canvas { min-height: 440px; padding: 14px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .shell { width: 100%; margin: 0; }
+      .hero, .metric, .panel { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="eyebrow">Prism EDA / {{ result.goal }}</div>
+      <h1>{% if result.goal == 'schema_discovery' %}Candidate schema map{% else %}Decision-first data profile{% endif %}</h1>
+      <p>{{ result.summary }}</p>
+      <div class="status">{{ result.status.value | replace('_', ' ') }}</div>
+    </header>
+
+    <section class="metrics" aria-label="Dataset overview">
+      <div class="metric"><strong>{{ result.catalog.table_count | format_value }}</strong><span>Tables</span></div>
+      <div class="metric"><strong>{{ result.catalog.row_count | format_value }}</strong><span>Rows</span></div>
+      <div class="metric"><strong>{{ result.catalog.column_count | format_value }}</strong><span>Columns</span></div>
+      <div class="metric"><strong>{% if result.goal == 'schema_discovery' %}{{ result.metadata.candidate_relationships | format_value }}{% else %}{{ result.findings | length | format_value }}{% endif %}</strong><span>{% if result.goal == 'schema_discovery' %}Candidate relationships{% else %}Prioritized findings{% endif %}</span></div>
+    </section>
+
+    {% if result.warnings %}
+    <section class="panel">
+      <h2>Evidence warnings</h2>
+      {% for warning in result.warnings %}
+      <p class="notice"><strong>{{ warning.code }}</strong>: {{ warning.message }}</p>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if result.goal == 'schema_discovery' %}
+      {% for artifact in result.artifacts %}
+        {% if artifact.kind == 'schema_graph' %}
+        <section class="panel schema-panel">
+          <div class="schema-panel-header">
+            <div class="panel-heading">
+              <h2>{{ artifact.title }}</h2>
+              <p>Evidence-backed candidates, not declared constraints.</p>
+            </div>
+            <div class="er-legend" aria-label="Entity relationship diagram legend">
+              <span><b class="legend-key legend-pk">PK</b> candidate primary key</span>
+              <span><b class="legend-key legend-fk">FK</b> inferred foreign key</span>
+              <span><b class="legend-line"></b> candidate relationship</span>
+              <span><svg viewBox="0 0 28 16" aria-hidden="true"><line x1="10" y1="2" x2="10" y2="14"></line><line x1="17" y1="2" x2="17" y2="14"></line><line x1="17" y1="8" x2="27" y2="8"></line></svg> exactly one</span>
+              <span><svg viewBox="0 0 28 16" aria-hidden="true"><line x1="6" y1="2" x2="6" y2="14"></line><line x1="12" y1="8" x2="27" y2="2"></line><line x1="12" y1="8" x2="27" y2="8"></line><line x1="12" y1="8" x2="27" y2="14"></line></svg> many</span>
+            </div>
+          </div>
+          <div class="schema-canvas">
+            <svg viewBox="0 0 {{ artifact.data.width }} {{ artifact.data.height }}" width="{{ artifact.data.width }}" height="{{ artifact.data.height }}" role="img" aria-label="Candidate entity relationship diagram" preserveAspectRatio="xMinYMin meet">
+              {% for edge in artifact.data.edges %}
+              <g class="schema-relationship">
+                <title>{{ edge.parent_table }}.{{ edge.parent_columns | join(' + ') }} to {{ edge.child_table }}.{{ edge.child_columns | join(' + ') }} · {{ "%.1f%%" | format(edge.confidence * 100) }} confidence · {{ edge.cardinality | replace('_', '–') }}</title>
+                <path class="schema-edge" d="{{ edge.path }}"></path>
+                {% for mark in edge.source_marks %}
+                <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
+                {% endfor %}
+                {% for mark in edge.target_marks %}
+                <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
+                {% endfor %}
+                <rect class="schema-edge-label-bg" x="{{ edge.label_x - 21 }}" y="{{ edge.label_y - 10 }}" width="42" height="20" rx="10"></rect>
+                <text class="schema-edge-label" x="{{ edge.label_x }}" y="{{ edge.label_y + 3.5 }}" text-anchor="middle">{{ "%.0f%%" | format(edge.confidence * 100) }}</text>
+              </g>
+              {% endfor %}
+              {% for node in artifact.data.nodes %}
+              <g class="schema-entity">
+                <title>{{ node.table }} · {{ node.row_count }} rows · {{ node.column_count }} columns</title>
+                <rect class="schema-node" x="{{ node.x }}" y="{{ node.y }}" width="{{ node.width }}" height="{{ node.height }}" rx="16"></rect>
+                <rect class="schema-node-header" x="{{ node.x }}" y="{{ node.y }}" width="{{ node.width }}" height="68" rx="16"></rect>
+                <rect class="schema-node-header" x="{{ node.x }}" y="{{ node.y + 40 }}" width="{{ node.width }}" height="28"></rect>
+                <rect class="schema-node-header-rule" x="{{ node.x }}" y="{{ node.y + 66 }}" width="{{ node.width }}" height="3"></rect>
+                <g class="schema-node-icon">
+                  <rect x="{{ node.x + 17 }}" y="{{ node.y + 18 }}" width="20" height="17" rx="3"></rect>
+                  <line x1="{{ node.x + 17 }}" y1="{{ node.y + 24 }}" x2="{{ node.x + 37 }}" y2="{{ node.y + 24 }}"></line>
+                  <line x1="{{ node.x + 24 }}" y1="{{ node.y + 24 }}" x2="{{ node.x + 24 }}" y2="{{ node.y + 35 }}"></line>
+                </g>
+                <text class="schema-node-title" x="{{ node.x + 48 }}" y="{{ node.y + 30 }}">{{ node.display_table }}</text>
+                <text class="schema-node-meta" x="{{ node.x + 48 }}" y="{{ node.y + 49 }}">{{ node.row_count | format_value }} rows · {{ node.column_count }} columns</text>
+                <text class="schema-section-label" x="{{ node.x + 17 }}" y="{{ node.y + 94 }}">INFERRED KEY ROLES</text>
+                <line class="schema-row-rule" x1="{{ node.x + 16 }}" y1="{{ node.y + 104 }}" x2="{{ node.x + node.width - 16 }}" y2="{{ node.y + 104 }}"></line>
+                {% if node.rows %}
+                  {% for row in node.rows %}
+                  <g>
+                    <title>{{ row.kind }} · {{ row.full_label }} · {{ row.detail }}</title>
+                    {% if not loop.first %}<line class="schema-row-rule" x1="{{ node.x + 16 }}" y1="{{ node.y + 104 + loop.index0 * 34 }}" x2="{{ node.x + node.width - 16 }}" y2="{{ node.y + 104 + loop.index0 * 34 }}"></line>{% endif %}
+                    <rect class="schema-key-badge {{ row.kind | lower }}" x="{{ node.x + 17 }}" y="{{ node.y + 113 + loop.index0 * 34 }}" width="28" height="18" rx="5"></rect>
+                    <text class="schema-key-badge-text {{ row.kind | lower }}" x="{{ node.x + 31 }}" y="{{ node.y + 125.5 + loop.index0 * 34 }}">{{ row.kind }}</text>
+                    <text class="schema-row-label" x="{{ node.x + 54 }}" y="{{ node.y + 125 + loop.index0 * 34 }}">{{ row.label }}</text>
+                    <text class="schema-row-detail" x="{{ node.x + node.width - 17 }}" y="{{ node.y + 125 + loop.index0 * 34 }}" text-anchor="end">{{ row.detail }}</text>
+                  </g>
+                  {% endfor %}
+                {% else %}
+                  <text class="schema-empty-state" x="{{ node.x + 17 }}" y="{{ node.y + 126 }}">No candidate key roles met the evidence threshold</text>
+                {% endif %}
+                {% if node.overflow_count %}
+                <text class="schema-overflow" x="{{ node.x + 17 }}" y="{{ node.y + node.height - 13 }}">+ {{ node.overflow_count }} more inferred key role{% if node.overflow_count != 1 %}s{% endif %}</text>
+                {% endif %}
+              </g>
+              {% endfor %}
+            </svg>
+          </div>
+        </section>
+        {% endif %}
+      {% endfor %}
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Candidate keys</h2>
+          <p>Minimal combinations only; business confirmation is required.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Table</th><th>Columns</th><th>Unique</th><th>Complete</th><th>Confidence</th></tr></thead>
+            <tbody>
+              {% for item in result.evidence %}
+                {% if item.kind == 'candidate_key' %}
+                <tr><td>{{ item.scope.table }}</td><td><code>{{ item.scope.columns | join(' + ') }}</code></td><td>{{ "%.1f%%" | format(item.value.uniqueness_rate * 100) }}{% if item.value.sampled %}<br><span class="muted">sampled</span>{% endif %}</td><td>{{ "%.1f%%" | format(item.value.completeness_rate * 100) }}</td><td>{{ "%.1f%%" | format(item.confidence * 100) }}</td></tr>
+                {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Candidate relationships</h2>
+          <p>Direction runs from the unique parent key to the referencing child columns.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Parent</th><th>Child</th><th>Cardinality</th><th>Included</th><th>Orphan rows</th><th>Confidence</th></tr></thead>
+            <tbody>
+              {% for item in result.evidence %}
+                {% if item.kind == 'candidate_relationship' %}
+                <tr><td>{{ item.value.parent_table }}.<code>{{ item.value.parent_columns | join(' + ') }}</code></td><td>{{ item.value.child_table }}.<code>{{ item.value.child_columns | join(' + ') }}</code></td><td>{{ item.value.cardinality | replace('_', '–') }}</td><td>{{ "%.1f%%" | format(item.value.inclusion_rate * 100) }}</td><td>{{ item.value.orphan_row_count }}</td><td>{{ "%.1f%%" | format(item.confidence * 100) }}{% if item.value.sampled %}<br><span class="muted">sampled</span>{% endif %}</td></tr>
+                {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="panel-heading">
+        <h2>Prioritized findings</h2>
+        <p>Severity and confidence are reported separately.</p>
+      </div>
+      {% if result.findings %}
+        {% for finding in result.findings %}
+        <article class="finding">
+          <div class="finding-title">
+            <span class="badge badge-{{ finding.severity }}">{{ finding.severity }}</span>
+            <h3>{{ finding.title }}</h3>
+          </div>
+          <p>{{ finding.summary }}</p>
+          {% if finding.recommendation %}<p class="recommendation">{{ finding.recommendation }}</p>{% endif %}
+          <details>
+            <summary>Evidence lineage</summary>
+            <p>Confidence: {{ finding.confidence | format_value }} · Evidence: {% for evidence_id in finding.evidence_ids %}<code>{{ evidence_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+          </details>
+        </article>
+        {% endfor %}
+      {% else %}
+        <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
+      {% endif %}
+    </section>
+
+    {% for table in result.catalog.tables %}
+    <section class="panel">
+      <div class="panel-heading">
+        <h2>{{ table.name }}</h2>
+        <p>{{ table.row_count | format_value }} rows · {{ table.column_count | format_value }} columns · {{ table.duplicate_row_count | format_value }} duplicate row{% if table.duplicate_row_count != 1 %}s{% endif %}</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Column</th>
+              <th>Type</th>
+              <th>Role candidates</th>
+              <th>Missing</th>
+              <th>Distinct</th>
+              <th>Range / shape</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for column in table.columns %}
+            <tr>
+              <td><strong>{{ column.name }}</strong><br><span class="muted">{{ column.physical_type }}</span></td>
+              <td>{{ column.semantic_type }}</td>
+              <td>{% if column.roles %}{{ column.roles | join(', ') }}{% else %}<span class="muted">None inferred</span>{% endif %}</td>
+              <td>
+                {{ column.missing_count | format_value }} ({{ "%.1f%%" | format(column.missing_rate * 100) }})
+                <div class="bar" aria-label="Missing rate"><span style="width: {{ [column.missing_rate * 100, 100] | min }}%"></span></div>
+              </td>
+              <td>{{ column.unique_count | format_value }}{% if column.unique_rate is not none %} ({{ "%.1f%%" | format(column.unique_rate * 100) }}){% endif %}</td>
+              <td>
+                {% if column.statistics %}
+                  {% for key, value in column.statistics.items() %}<code>{{ key }}={{ value | format_value }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+                {% else %}
+                  <span class="muted">No numeric range</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <details>
+        <summary>Fingerprint and methods</summary>
+        <p><code>{{ table.fingerprint }}</code><br><span class="muted">{{ table.fingerprint_method }}</span></p>
+      </details>
+    </section>
+    {% endfor %}
+
+    {% if result.transformation_plan.steps %}
+    <section class="panel">
+      <h2>Reviewable transformation plan</h2>
+      <p class="muted">These are recommendations only. Prism EDA has not modified the data.</p>
+      {% for step in result.transformation_plan.steps %}
+      <article class="finding">
+        <div class="finding-title"><span class="badge badge-{{ step.risk if step.risk in ['high', 'medium', 'low'] else 'medium' }}">{{ step.risk }}</span><h3>{{ step.operation | replace('_', ' ') | title }}</h3></div>
+        <p>{{ step.table }}{% if step.columns %}.{{ step.columns | join(', ') }}{% endif %}: {{ step.rationale }}</p>
+      </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2>Reproducibility</h2>
+      <p>Dataset fingerprint: <code>{{ result.catalog.fingerprint }}</code></p>
+      <p class="muted">Mode: {{ result.metadata.mode }} · Sampling: {{ result.metadata.sampling }} · Random seed: {{ result.metadata.random_seed }}</p>
+      {% if result.failures %}
+      <details>
+        <summary>{{ result.failures | length }} optional computation failure(s)</summary>
+        {% for failure in result.failures %}<p>{{ failure.stage }}: {{ failure.message }}</p>{% endfor %}
+      </details>
+      {% endif %}
+    </section>
+
+    <footer>Generated locally by Prism EDA. Numeric claims are backed by structured evidence.</footer>
+  </main>
+</body>
+</html>
