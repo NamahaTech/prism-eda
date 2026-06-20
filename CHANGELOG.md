@@ -21,3 +21,10 @@ stabilizes.
 - Structured report artifacts and a self-contained candidate schema graph.
 - Layered ER diagram rendering with table cards, inferred PK/FK roles, routed
   relationships, confidence badges, and one/many cardinality marks.
+- Deterministic anomaly-detection diagnostics with univariate, multivariate,
+  conditional, rare-category, and optional label-summary evidence.
+- Deterministic classification diagnostics with target balance, association,
+  missingness-by-class, high-cardinality, conflicting-label, and leakage
+  evidence.
+- Generic metric-table artifacts in HTML reports.
+- Detailed implementation plan and roadmap handoff documentation.

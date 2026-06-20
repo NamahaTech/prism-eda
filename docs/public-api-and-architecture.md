@@ -139,15 +139,16 @@ Typed task methods:
 
 ```python
 result = dataset.anomaly_detection(
-    expected_contamination=None,
-    include=["age", "weight", "region"],
+    table="events",
+    target=None,
     mode="deep",
     sampling="auto",
 )
 
 result = dataset.classification(
     target="churned",
-    fairness=None,
+    table="customers",
+    max_categories=50,
     mode="standard",
 )
 
@@ -157,10 +158,13 @@ result = dataset.discover_schema(
 )
 ```
 
-`discover_schema` is implemented. It returns candidate keys and relationships,
-not declared constraints. See `docs/schema-discovery.md` for algorithms,
-thresholds, sampling behavior, and limitations. Classification and anomaly
-detection remain planned at this stage.
+`discover_schema`, `anomaly_detection`, and `classification` are implemented.
+Schema discovery returns candidate keys and relationships, not declared
+constraints. Anomaly detection returns statistical review candidates, not
+confirmed anomaly labels. Classification returns target-readiness, association,
+and leakage diagnostics, not a trained model. See
+`docs/implementation-plan.md` for algorithms, thresholds, sampling behavior,
+limitations, and the detailed roadmap.
 
 Convenience functions:
 

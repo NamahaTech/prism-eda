@@ -166,7 +166,7 @@
   <main class="shell">
     <header class="hero">
       <div class="eyebrow">Prism EDA / {{ result.goal }}</div>
-      <h1>{% if result.goal == 'schema_discovery' %}Candidate schema map{% else %}Decision-first data profile{% endif %}</h1>
+      <h1>{% if result.goal == 'schema_discovery' %}Candidate schema map{% elif result.goal == 'anomaly_detection' %}Anomaly candidate review{% elif result.goal == 'classification' %}Classification readiness map{% else %}Decision-first data profile{% endif %}</h1>
       <p>{{ result.summary }}</p>
       <div class="status">{{ result.status.value | replace('_', ' ') }}</div>
     </header>
@@ -175,7 +175,7 @@
       <div class="metric"><strong>{{ result.catalog.table_count | format_value }}</strong><span>Tables</span></div>
       <div class="metric"><strong>{{ result.catalog.row_count | format_value }}</strong><span>Rows</span></div>
       <div class="metric"><strong>{{ result.catalog.column_count | format_value }}</strong><span>Columns</span></div>
-      <div class="metric"><strong>{% if result.goal == 'schema_discovery' %}{{ result.metadata.candidate_relationships | format_value }}{% else %}{{ result.findings | length | format_value }}{% endif %}</strong><span>{% if result.goal == 'schema_discovery' %}Candidate relationships{% else %}Prioritized findings{% endif %}</span></div>
+      <div class="metric"><strong>{% if result.goal == 'schema_discovery' %}{{ result.metadata.candidate_relationships | format_value }}{% elif result.goal == 'anomaly_detection' %}{{ result.metadata.candidate_signals | format_value }}{% else %}{{ result.findings | length | format_value }}{% endif %}</strong><span>{% if result.goal == 'schema_discovery' %}Candidate relationships{% elif result.goal == 'anomaly_detection' %}Candidate signals{% else %}Prioritized findings{% endif %}</span></div>
     </section>
 
     {% if result.warnings %}
@@ -300,6 +300,29 @@
       </section>
     {% endif %}
 
+    {% for artifact in result.artifacts %}
+      {% if artifact.kind == 'metric_table' %}
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>{{ artifact.title }}</h2>
+          {% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+              {% for row in artifact.data.rows %}
+              <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+    {% endfor %}
+
     <section class="panel">
       <div class="panel-heading">
         <h2>Prioritized findings</h2>
@@ -321,7 +344,7 @@
         </article>
         {% endfor %}
       {% else %}
-        <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
+        <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
       {% endif %}
     </section>
 

@@ -1,6 +1,13 @@
 """Task-aware exploratory data analysis for Python."""
 
-from prism_eda.api import discover_schema, load, minimal_eda, profile
+from prism_eda.api import (
+    anomaly_detection,
+    classification,
+    discover_schema,
+    load,
+    minimal_eda,
+    profile,
+)
 from prism_eda.artifacts import Artifact
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.dataset import Dataset
@@ -17,6 +24,8 @@ __all__ = [
     "Dataset",
     "Event",
     "EventKind",
+    "anomaly_detection",
+    "classification",
     "discover_schema",
     "load",
     "minimal_eda",

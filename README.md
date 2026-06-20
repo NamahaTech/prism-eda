@@ -51,6 +51,8 @@ dataset = pe.load("data/")
 print(list(dataset.tables))
 profile = dataset.profile()
 schema = dataset.discover_schema()
+anomalies = dataset.anomaly_detection()
+classification = dataset.classification("target_column")
 ```
 
 Subfolders are excluded by default. Use `recursive=True` to include them, and
@@ -91,6 +93,31 @@ relationships, cardinality, orphan rows, confidence, evidence lineage, and a
 self-contained ER diagram with candidate PK/FK roles and one/many cardinality
 marks. Candidates are never silently treated as declared database constraints.
 
+## Task-aware recipes
+
+```python
+import prism_eda as pe
+
+anomalies = pe.anomaly_detection("data/events.parquet")
+anomalies.to_html("anomaly-report.html")
+
+classification = pe.classification(
+    "data/training.csv",
+    target="label",
+)
+classification.to_html("classification-report.html")
+```
+
+Anomaly detection currently reports statistical review candidates such as robust
+numeric tails, multivariate robust-score candidates, conditional numeric
+surprises, rare categories, and optional rare-label summaries. It does not mark
+rows as confirmed anomalies.
+
+Classification currently reports target validity, class imbalance, conflicting
+labels, typed feature-target associations, missingness by class, high-cardinality
+risks, and deterministic leakage candidates. It is a readiness diagnostic, not a
+model training pipeline.
+
 See [the product research brief](docs/product-research-brief.md) and
 [the public API specification](docs/public-api-and-architecture.md) for the
 confirmed direction.
@@ -98,6 +125,7 @@ confirmed direction.
 Further documentation:
 
 - [Schema discovery](docs/schema-discovery.md)
+- [Implementation plan and handoff](docs/implementation-plan.md)
 - [Implementation status](docs/implementation-status.md)
 - [Maintainer guide](docs/maintainer-guide.md)
 - [Agent handoff](AGENTS.md)
