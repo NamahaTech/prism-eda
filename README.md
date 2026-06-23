@@ -98,7 +98,10 @@ marks. Candidates are never silently treated as declared database constraints.
 ```python
 import prism_eda as pe
 
-anomalies = pe.anomaly_detection("data/events.parquet")
+anomalies = pe.anomaly_detection(
+    "data/events.parquet",
+    expected_contamination=0.02,  # optional review-prevalence assumption
+)
 anomalies.to_html("anomaly-report.html")
 
 classification = pe.classification(
@@ -109,14 +112,16 @@ classification.to_html("classification-report.html")
 ```
 
 Anomaly detection currently reports statistical review candidates such as robust
-numeric tails, multivariate robust-score candidates, conditional numeric
+numeric tails, multivariate robust-score candidates, Isolation Forest and
+local-density ranked candidates, detector agreement, conditional numeric
 surprises, rare categories, and optional rare-label summaries. It does not mark
 rows as confirmed anomalies.
 
 Classification currently reports target validity, class imbalance, conflicting
 labels, typed feature-target associations, missingness by class, high-cardinality
-risks, and deterministic leakage candidates. It is a readiness diagnostic, not a
-model training pipeline.
+risks, deterministic leakage candidates, leakage-screened probe-model
+separability, and hard-example candidates. It is a readiness diagnostic, not a
+production model training pipeline.
 
 See [the product research brief](docs/product-research-brief.md) and
 [the public API specification](docs/public-api-and-architecture.md) for the

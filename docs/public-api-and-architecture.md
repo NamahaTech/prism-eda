@@ -143,6 +143,7 @@ result = dataset.anomaly_detection(
     target=None,
     mode="deep",
     sampling="auto",
+    expected_contamination=0.02,
 )
 
 result = dataset.classification(
@@ -161,8 +162,10 @@ result = dataset.discover_schema(
 `discover_schema`, `anomaly_detection`, and `classification` are implemented.
 Schema discovery returns candidate keys and relationships, not declared
 constraints. Anomaly detection returns statistical review candidates, not
-confirmed anomaly labels. Classification returns target-readiness, association,
-and leakage diagnostics, not a trained model. See
+confirmed anomaly labels; `expected_contamination` is an optional review-sizing
+assumption, not a confirmed prevalence estimate. Classification returns
+target-readiness, association, leakage, and diagnostic probe-model evidence; it
+does not return a production model object. See
 `docs/implementation-plan.md` for algorithms, thresholds, sampling behavior,
 limitations, and the detailed roadmap.
 

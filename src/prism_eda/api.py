@@ -87,6 +87,7 @@ def anomaly_detection(
     allow_insufficient_evidence: bool = False,
     table: str | None = None,
     target: str | None = None,
+    expected_contamination: float | None = None,
     recursive: bool = False,
     include: Sequence[str] | None = None,
     exclude: Sequence[str] | None = None,
@@ -112,6 +113,7 @@ def anomaly_detection(
         allow_insufficient_evidence=allow_insufficient_evidence,
         table=table,
         target=target,
+        expected_contamination=expected_contamination,
     )
 
 

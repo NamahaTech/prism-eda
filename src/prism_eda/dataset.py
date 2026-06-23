@@ -134,6 +134,7 @@ class Dataset:
         if normalized_goal in {"anomaly_detection", "anomaly", "outlier_detection"}:
             table = options.pop("table", None)
             target = options.pop("target", None) or analysis_context.target
+            expected_contamination = options.pop("expected_contamination", None)
             if options:
                 unknown = ", ".join(sorted(options))
                 raise TypeError(f"Unexpected analysis options: {unknown}")
@@ -148,6 +149,7 @@ class Dataset:
                 config=analysis_config,
                 table=table,
                 target=target,
+                expected_contamination=expected_contamination,
                 callbacks=tuple(callbacks),
             )
         if normalized_goal in {"classification", "classify"}:
@@ -250,6 +252,7 @@ class Dataset:
         allow_insufficient_evidence: bool = False,
         table: str | None = None,
         target: str | None = None,
+        expected_contamination: float | None = None,
     ) -> AnalysisResult:
         """Run deterministic anomaly-detection diagnostics."""
         if config is None:
@@ -266,6 +269,7 @@ class Dataset:
             callbacks=callbacks,
             table=table,
             target=target,
+            expected_contamination=expected_contamination,
         )
 
     def classification(

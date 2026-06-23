@@ -42,6 +42,7 @@ Issues = "https://github.com/NamahaTech/prism-eda/issues"
 [project.optional-dependencies]
 dev = [
     "build>=1.2.0",
+    "hatchling>=1.25.0",
     "mypy>=1.9.0",
     "ruff>=0.3.0",
 ]
@@ -81,3 +82,10 @@ python_version = "3.11"
 warn_unused_configs = true
 check_untyped_defs = true
 no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pandas.*",
+    "sklearn.*",
+]
+ignore_missing_imports = true

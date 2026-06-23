@@ -10,6 +10,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from pandas.api import types as ptypes
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 
 from prism_eda.artifacts import Artifact
 from prism_eda.catalog.models import DatasetCatalog, TableCatalog
@@ -29,6 +31,9 @@ _ROW_BUDGETS = {
     AnalysisMode.STANDARD: 100_000,
     AnalysisMode.DEEP: 250_000,
 }
+
+_DEFAULT_REVIEW_RATE = 0.02
+_MAX_REVIEW_ROWS = 25
 
 
 def _row_budget(mode: AnalysisMode | str) -> int:
@@ -139,6 +144,76 @@ def _top_index_values(scores: pd.Series, limit: int = 5) -> list[dict[str, Any]]
         {"row_index": str(index), "score": float(score)}
         for index, score in sorted_scores.items()
     ]
+
+
+def _review_count(row_count: int, expected_contamination: float | None) -> int:
+    if row_count <= 0:
+        return 0
+    rate = (
+        expected_contamination
+        if expected_contamination is not None
+        else _DEFAULT_REVIEW_RATE
+    )
+    return max(1, min(_MAX_REVIEW_ROWS, math.ceil(row_count * rate)))
+
+
+def _validate_expected_contamination(value: float | None) -> None:
+    if value is None:
+        return
+    if not 0 < value < 0.5:
+        raise ValueError(
+            "expected_contamination must be greater than 0 and less than 0.5"
+        )
+
+
+def _numeric_model_matrix(
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    *,
+    target: str | None,
+) -> tuple[list[str], pd.DataFrame, pd.DataFrame]:
+    columns = _numeric_columns(
+        frame, table, exclude={target} if target else None, allow_identifiers=False
+    )[:12]
+    if len(columns) < 2:
+        return columns, pd.DataFrame(), pd.DataFrame()
+    numeric = frame[columns].apply(pd.to_numeric, errors="coerce")
+    usable = numeric.dropna()
+    if len(usable) < 20:
+        return columns, pd.DataFrame(), pd.DataFrame()
+    z_frame = usable.apply(_robust_z)
+    return columns, usable, z_frame
+
+
+def _model_top_records(
+    scores: pd.Series,
+    z_frame: pd.DataFrame,
+    *,
+    count: int,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for index, score in scores.sort_values(ascending=False).head(count).items():
+        row_z = z_frame.loc[index].abs().sort_values(ascending=False).head(3)
+        records.append(
+            {
+                "row_index": str(index),
+                "score": float(score),
+                "top_contributors": [
+                    {"column": str(column), "abs_robust_z": float(value)}
+                    for column, value in row_z.items()
+                ],
+            }
+        )
+    return records
+
+
+def _jaccard(left: set[str], right: set[str]) -> float:
+    if not left and not right:
+        return 1.0
+    union = left | right
+    if not union:
+        return 0.0
+    return len(left & right) / len(union)
 
 
 def _category_value(value: object) -> str | None:
@@ -257,6 +332,221 @@ def _multivariate_evidence(
     )
 
 
+def _isolation_forest_evidence(
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    *,
+    target: str | None,
+    random_seed: int,
+    expected_contamination: float | None,
+) -> Evidence | None:
+    columns, usable, z_frame = _numeric_model_matrix(frame, table, target=target)
+    if len(columns) < 2 or usable.empty:
+        return None
+    review_count = _review_count(len(usable), expected_contamination)
+    contamination: float | str = (
+        expected_contamination if expected_contamination is not None else "auto"
+    )
+    model = IsolationForest(
+        n_estimators=100,
+        contamination=contamination,
+        random_state=random_seed,
+        n_jobs=1,
+    )
+    model.fit(z_frame)
+    scores = pd.Series(-model.decision_function(z_frame), index=usable.index)
+    top_records = _model_top_records(scores, z_frame, count=review_count)
+    top_rows = {record["row_index"] for record in top_records}
+
+    stability_sets: list[set[str]] = []
+    for seed_offset in (1, 2):
+        stability_model = IsolationForest(
+            n_estimators=100,
+            contamination=contamination,
+            random_state=random_seed + seed_offset,
+            n_jobs=1,
+        )
+        stability_model.fit(z_frame)
+        stability_scores = pd.Series(
+            -stability_model.decision_function(z_frame), index=usable.index
+        )
+        stability_sets.append(
+            {
+                str(index)
+                for index in stability_scores.sort_values(ascending=False)
+                .head(review_count)
+                .index
+            }
+        )
+    mean_jaccard = (
+        sum(_jaccard(top_rows, item) for item in stability_sets) / len(stability_sets)
+        if stability_sets
+        else 1.0
+    )
+    return Evidence.create(
+        kind="anomaly_isolation_forest",
+        scope=EvidenceScope(table=table.name, columns=tuple(columns)),
+        value={
+            "evaluated_row_count": int(len(usable)),
+            "feature_count": len(columns),
+            "candidate_count": len(top_records),
+            "candidate_rate": len(top_records) / len(usable),
+            "expected_contamination": expected_contamination,
+            "threshold_policy": (
+                "expected_contamination"
+                if expected_contamination is not None
+                else "ranked_review_default"
+            ),
+            "max_score": float(scores.max() if len(scores) else 0.0),
+            "top_records": top_records,
+            "stability": {
+                "seed_count": 3,
+                "mean_top_set_jaccard": float(mean_jaccard),
+            },
+        },
+        method="isolation_forest_ranked_review_v1",
+        description=f"Isolation Forest ranked anomaly candidates for {table.name}.",
+        confidence=0.78 if mean_jaccard >= 0.5 else 0.66,
+        assumptions=(
+            "Isolation Forest is a diagnostic review instrument; ranked candidates "
+            "are not confirmed anomalies.",
+            "Numeric features are robust-scaled and rows with missing modeled "
+            "features are skipped.",
+        ),
+    )
+
+
+def _local_density_evidence(
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    *,
+    target: str | None,
+    expected_contamination: float | None,
+) -> Evidence | None:
+    columns, usable, z_frame = _numeric_model_matrix(frame, table, target=target)
+    if len(columns) < 2 or usable.empty:
+        return None
+    if len(usable) < 30 or len(columns) > 12:
+        return None
+    review_count = _review_count(len(usable), expected_contamination)
+    neighbors = min(35, max(10, int(math.sqrt(len(usable)))))
+    if neighbors >= len(usable):
+        return None
+    contamination: float | str = (
+        expected_contamination if expected_contamination is not None else "auto"
+    )
+    model = LocalOutlierFactor(
+        n_neighbors=neighbors,
+        contamination=contamination,
+        metric="minkowski",
+        n_jobs=1,
+    )
+    model.fit_predict(z_frame)
+    scores = pd.Series(-model.negative_outlier_factor_, index=usable.index)
+    top_records = _model_top_records(scores, z_frame, count=review_count)
+    return Evidence.create(
+        kind="anomaly_local_density_outlier",
+        scope=EvidenceScope(table=table.name, columns=tuple(columns)),
+        value={
+            "evaluated_row_count": int(len(usable)),
+            "feature_count": len(columns),
+            "candidate_count": len(top_records),
+            "candidate_rate": len(top_records) / len(usable),
+            "expected_contamination": expected_contamination,
+            "n_neighbors": neighbors,
+            "threshold_policy": (
+                "expected_contamination"
+                if expected_contamination is not None
+                else "ranked_review_default"
+            ),
+            "max_score": float(scores.max() if len(scores) else 0.0),
+            "top_records": top_records,
+        },
+        method="local_outlier_factor_ranked_review_v1",
+        description=f"Local-density anomaly candidates for {table.name}.",
+        confidence=0.72,
+        assumptions=(
+            "Local Outlier Factor is sensitive to feature scaling, sparse regions, "
+            "and high dimensionality.",
+            "Numeric features are robust-scaled and rows with missing modeled "
+            "features are skipped.",
+        ),
+    )
+
+
+def _candidate_rows(item: Evidence) -> list[str]:
+    value = item.value
+    if item.kind in {
+        "anomaly_univariate_outlier",
+        "anomaly_conditional_outlier",
+    }:
+        return [str(record["row_index"]) for record in value.get("examples", ())]
+    if item.kind in {
+        "anomaly_multivariate_outlier",
+        "anomaly_isolation_forest",
+        "anomaly_local_density_outlier",
+    }:
+        return [str(record["row_index"]) for record in value.get("top_records", ())]
+    return []
+
+
+def _agreement_evidence(evidence: Sequence[Evidence], *, table: str) -> Evidence | None:
+    signal_rows: dict[str, set[str]] = {}
+    for item in evidence:
+        if item.scope.table != table:
+            continue
+        rows = set(_candidate_rows(item))
+        if rows:
+            signal_rows[item.id] = rows
+    if len(signal_rows) < 2:
+        return None
+
+    row_signals: dict[str, list[str]] = {}
+    evidence_by_id = {item.id: item for item in evidence}
+    for evidence_id, rows in signal_rows.items():
+        signal = evidence_by_id[evidence_id].kind.replace("anomaly_", "")
+        for row in rows:
+            row_signals.setdefault(row, []).append(signal)
+    agreed = {
+        row: sorted(signals)
+        for row, signals in row_signals.items()
+        if len(set(signals)) >= 2
+    }
+    pairwise_scores: list[float] = []
+    ids = sorted(signal_rows)
+    for left, right in itertools.combinations(ids, 2):
+        pairwise_scores.append(_jaccard(signal_rows[left], signal_rows[right]))
+    mean_pairwise = (
+        sum(pairwise_scores) / len(pairwise_scores) if pairwise_scores else 0.0
+    )
+    return Evidence.create(
+        kind="anomaly_detector_agreement",
+        scope=EvidenceScope(table=table),
+        value={
+            "signal_count": len(signal_rows),
+            "candidate_count": len(agreed),
+            "mean_pairwise_top_set_jaccard": float(mean_pairwise),
+            "top_rows": [
+                {
+                    "row_index": row,
+                    "detector_count": len(signals),
+                    "signals": signals,
+                }
+                for row, signals in sorted(
+                    agreed.items(), key=lambda item: (-len(item[1]), item[0])
+                )[:20]
+            ],
+        },
+        method="ranked_detector_top_set_agreement_v1",
+        description=f"Detector agreement across anomaly signals for {table}.",
+        confidence=0.8 if agreed else 0.64,
+        assumptions=(
+            "Agreement is based on ranked review sets, not confirmed anomaly labels.",
+        ),
+        metadata={"source_evidence_ids": tuple(signal_rows)},
+    )
+
+
 def _conditional_evidence(
     frame: pd.DataFrame,
     table: TableCatalog,
@@ -360,6 +650,65 @@ def _rare_category_evidence(frame: pd.DataFrame, table: TableCatalog) -> list[Ev
     return evidence
 
 
+def _rare_category_combination_evidence(
+    frame: pd.DataFrame, table: TableCatalog
+) -> list[Evidence]:
+    evidence: list[Evidence] = []
+    row_count = len(frame)
+    if row_count < 50:
+        return evidence
+    columns = _categorical_columns(frame, table)[:8]
+    if len(columns) < 2:
+        return evidence
+    threshold = max(1, math.floor(row_count * 0.005))
+    for left, right in itertools.combinations(columns, 2):
+        pair = frame[[left, right]].copy()
+        if (
+            pair[left].nunique(dropna=False) < 2
+            or pair[right].nunique(dropna=False) < 2
+        ):
+            continue
+        counts = pair.value_counts(dropna=False)
+        rare = counts[counts <= threshold]
+        if rare.empty:
+            continue
+        examples: list[dict[str, Any]] = []
+        for values, count in rare.head(10).items():
+            left_value, right_value = (
+                values if isinstance(values, tuple) else (values, None)
+            )
+            examples.append(
+                {
+                    left: _category_value(left_value),
+                    right: _category_value(right_value),
+                    "count": int(count),
+                }
+            )
+        evidence.append(
+            Evidence.create(
+                kind="anomaly_rare_category_combination",
+                scope=EvidenceScope(table=table.name, columns=(left, right)),
+                value={
+                    "evaluated_row_count": row_count,
+                    "rare_combination_count": int(len(rare)),
+                    "rare_row_count": int(rare.sum()),
+                    "frequency_threshold": threshold,
+                    "examples": examples,
+                },
+                method="low_frequency_category_pair_scan_v1",
+                description=(
+                    f"Rare category-pair candidates for {table.name}.{left} + {right}."
+                ),
+                confidence=0.66,
+                assumptions=(
+                    "Rare category combinations can be valid sparse segments; "
+                    "domain review is required.",
+                ),
+            )
+        )
+    return evidence
+
+
 def _label_evidence(frame: pd.DataFrame, table: str, target: str) -> Evidence | None:
     if target not in frame.columns:
         return None
@@ -444,6 +793,59 @@ def _findings_and_steps(
                     ),
                 )
             )
+        elif item.kind == "anomaly_isolation_forest" and value["candidate_count"]:
+            findings.append(
+                Finding.create(
+                    title=f"Isolation Forest review candidates in {item.scope.table}",
+                    summary=(
+                        f"{value['candidate_count']:,} row(s) "
+                        f"({value['candidate_rate']:.1%}) ranked highest by the "
+                        "Isolation Forest diagnostic."
+                    ),
+                    severity="medium",
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Inspect the ranked rows and contributing numeric features "
+                        "before treating them as anomalous."
+                    ),
+                )
+            )
+        elif item.kind == "anomaly_local_density_outlier" and value["candidate_count"]:
+            findings.append(
+                Finding.create(
+                    title=f"Local-density review candidates in {item.scope.table}",
+                    summary=(
+                        f"{value['candidate_count']:,} row(s) "
+                        f"({value['candidate_rate']:.1%}) ranked highest by local "
+                        "density contrast."
+                    ),
+                    severity="medium",
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Compare these rows with nearby records; local-density "
+                        "signals can be sensitive to sparse valid subgroups."
+                    ),
+                )
+            )
+        elif item.kind == "anomaly_detector_agreement" and value["candidate_count"]:
+            findings.append(
+                Finding.create(
+                    title=f"Detector agreement on review rows in {item.scope.table}",
+                    summary=(
+                        f"{value['candidate_count']:,} row(s) appeared in at least "
+                        "two ranked anomaly review sets."
+                    ),
+                    severity="high",
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Prioritize agreed rows for human review because independent "
+                        "diagnostics surfaced them together."
+                    ),
+                )
+            )
         elif item.kind == "anomaly_conditional_outlier":
             condition, observed = item.scope.columns
             findings.append(
@@ -482,6 +884,27 @@ def _findings_and_steps(
                     ),
                 )
             )
+        elif item.kind == "anomaly_rare_category_combination":
+            left, right = item.scope.columns
+            findings.append(
+                Finding.create(
+                    title=(
+                        f"Rare category combinations in {item.scope.table}: "
+                        f"{left} + {right}"
+                    ),
+                    summary=(
+                        f"{value['rare_combination_count']:,} rare combination(s) "
+                        f"cover {value['rare_row_count']:,} row(s)."
+                    ),
+                    severity="low",
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Confirm whether these sparse category pairs are valid "
+                        "segments before grouping or treating them as anomalies."
+                    ),
+                )
+            )
         elif item.kind == "anomaly_label_summary" and value["minority_rate"] <= 0.05:
             findings.append(
                 Finding.create(
@@ -510,6 +933,9 @@ def _artifact(evidence: Sequence[Evidence]) -> Artifact | None:
             "anomaly_univariate_outlier",
             "anomaly_multivariate_outlier",
             "anomaly_conditional_outlier",
+            "anomaly_isolation_forest",
+            "anomaly_local_density_outlier",
+            "anomaly_detector_agreement",
         }:
             rows.append(
                 {
@@ -525,6 +951,17 @@ def _artifact(evidence: Sequence[Evidence]) -> Artifact | None:
             rows.append(
                 {
                     "signal": "rare category",
+                    "table": item.scope.table,
+                    "columns": " + ".join(item.scope.columns),
+                    "candidate_rows": value["rare_row_count"],
+                    "rate": "low frequency",
+                    "confidence": f"{item.confidence:.0%}",
+                }
+            )
+        elif item.kind == "anomaly_rare_category_combination":
+            rows.append(
+                {
+                    "signal": "rare category combination",
                     "table": item.scope.table,
                     "columns": " + ".join(item.scope.columns),
                     "candidate_rows": value["rare_row_count"],
@@ -567,9 +1004,11 @@ def anomaly_detection_dataset(
     config: AnalysisConfig,
     table: str | None = None,
     target: str | None = None,
+    expected_contamination: float | None = None,
     callbacks: tuple[EventCallback, ...] = (),
 ) -> AnalysisResult:
     """Run deterministic anomaly-detection diagnostics."""
+    _validate_expected_contamination(expected_contamination)
     emit(
         callbacks,
         Event(EventKind.RUN_STARTED, "Anomaly diagnostics started.", stage="anomaly"),
@@ -601,10 +1040,31 @@ def anomaly_detection_dataset(
         )
         if multivariate is not None:
             evidence.append(multivariate)
+        isolation_forest = _isolation_forest_evidence(
+            sampled,
+            table_catalog,
+            target=active_target,
+            random_seed=config.random_seed,
+            expected_contamination=expected_contamination,
+        )
+        if isolation_forest is not None:
+            evidence.append(isolation_forest)
+        local_density = _local_density_evidence(
+            sampled,
+            table_catalog,
+            target=active_target,
+            expected_contamination=expected_contamination,
+        )
+        if local_density is not None:
+            evidence.append(local_density)
         evidence.extend(
             _conditional_evidence(sampled, table_catalog, target=active_target)
         )
         evidence.extend(_rare_category_evidence(sampled, table_catalog))
+        evidence.extend(_rare_category_combination_evidence(sampled, table_catalog))
+        agreement = _agreement_evidence(evidence, table=table_catalog.name)
+        if agreement is not None:
+            evidence.append(agreement)
 
     for item in evidence:
         emit(
@@ -666,6 +1126,7 @@ def anomaly_detection_dataset(
             "random_seed": config.random_seed,
             "selected_table": table,
             "target": target or context.target,
+            "expected_contamination": expected_contamination,
             "candidate_signals": len(findings),
         },
     )

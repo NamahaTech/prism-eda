@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-06-20
+Last updated: 2026-06-23
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -46,6 +46,12 @@ removed, or materially re-scoped.
 - Univariate robust numeric tail candidates using IQR and modified z-score style
   evidence
 - Multivariate robust-scaled numeric candidate scores
+- Isolation Forest ranked review candidates with deterministic seed-stability
+  disclosure
+- Local Outlier Factor ranked review candidates where row count and
+  dimensionality are suitable
+- Detector agreement evidence across ranked anomaly review sets
+- Optional expected-contamination parameter for review sizing
 - Conditional numeric anomaly candidates for surprising feature combinations
 - Rare categorical value candidates
 - Metric-table report artifact for candidate anomaly signals
@@ -62,6 +68,9 @@ removed, or materially re-scoped.
 - High-cardinality feature risk
 - Deterministic leakage candidates from exact copies, target-name overlap, and
   highly predictive value rules
+- Leakage-screened logistic-regression diagnostic probe with fold-local
+  preprocessing and cross-validated separability metrics
+- Cross-validated hard-example candidates from probe errors
 - Class-balance and feature-signal report artifacts
 
 ### Engineering
@@ -75,16 +84,11 @@ removed, or materially re-scoped.
 
 ### Anomaly detection improvements
 
-- Isolation Forest multivariate candidates
-- Local-density candidates where applicable
 - Rare categorical combinations
-- Detector agreement, stability, and per-row explanations
-- Threshold-free ranked output with optional expected contamination
 
 ### Classification improvements
 
-- Diagnostic probe models with cross-validation
-- Class overlap and hard-example detection
+- Class overlap and neighborhood-disagreement detection
 - Group/time split guidance and opt-in fairness coverage
 - Train/test comparison when both are supplied
 

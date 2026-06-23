@@ -152,6 +152,7 @@ confirm business meaning and expected cardinality.
 
 ```python
 result = pe.anomaly_detection(df)
+result = pe.anomaly_detection(df, expected_contamination=0.02)
 result = dataset.anomaly_detection(table="events")
 result = dataset.analyze("anomaly_detection", table="events")
 ```
@@ -168,9 +169,15 @@ Implemented diagnostics:
 - univariate numeric tail candidates using IQR and modified z-score style robust
   scaling;
 - multivariate numeric candidates using robust-scaled Euclidean scores;
+- Isolation Forest ranked review candidates with deterministic seed-stability
+  disclosure;
+- Local Outlier Factor ranked review candidates when row count and dimensionality
+  are suitable;
+- detector agreement evidence across ranked review sets;
 - conditional numeric candidates, such as a value being unusual within local
   bands of another feature;
 - rare categorical values;
+- optional expected-contamination parameter for review sizing;
 - ranked metric-table artifact summarizing anomaly candidate signals;
 - evidence-linked findings and review recommendations.
 
@@ -179,8 +186,9 @@ Important limitations:
 - this is deterministic diagnostic EDA, not a fitted anomaly detector;
 - candidates are not confirmed anomalies;
 - current multivariate scoring does not model covariance;
-- no Isolation Forest, Local Outlier Factor, detector agreement, or stability
-  analysis is implemented yet;
+- model-backed detectors skip rows with missing modeled numeric features;
+- Local Outlier Factor is skipped when the data is too small or unsuitable for
+  local-density diagnostics;
 - conditional detection currently uses quantile bins and may miss sparse,
   nonlinear, or high-cardinality contexts.
 
@@ -204,13 +212,20 @@ Implemented diagnostics:
 - high-cardinality feature risk;
 - deterministic target-leakage candidates from exact copies, name overlap, and
   highly predictive value rules;
+- leakage-screened logistic-regression diagnostic probe with preprocessing fit
+  inside each cross-validation fold;
+- separability metrics including accuracy, balanced accuracy, macro F1, and
+  majority-baseline lift;
+- cross-validated hard-example candidates from probe errors;
 - class-balance and feature-signal metric-table artifacts;
 - evidence-linked findings and transformation recommendations.
 
 Important limitations:
 
-- no model training is performed yet;
-- no cross-validation, probe model, calibration, or hard-example detection yet;
+- probe models are diagnostic instruments, not production model training;
+- the probe excludes obvious leakage, identifiers, and high-cardinality features,
+  so it may understate signal when those fields are legitimately predictive;
+- no calibration or neighborhood-disagreement detection yet;
 - no train/test comparison yet;
 - no group/time split recommendation yet beyond existing context fields;
 - fairness or subgroup coverage is not implemented.
@@ -350,19 +365,13 @@ Remaining before a first public alpha:
 Recommended order:
 
 1. Improve anomaly detection:
-   - Isolation Forest as an optional or core diagnostic if scikit-learn remains
-     core;
-   - Local Outlier Factor when row count and dimensionality are suitable;
-   - detector agreement and disagreement;
-   - score stability across seeds/subsamples;
-   - per-row explanation tables;
-   - expected contamination parameter.
+   - rare categorical combinations;
+   - detector disagreement summaries;
+   - broader score stability across subsamples;
+   - richer per-row explanations.
 
 2. Improve classification:
-   - diagnostic probe model with cross-validation;
-   - leakage-safe preprocessing inside the probe;
-   - separability metrics;
-   - hard-example and neighborhood-disagreement candidates;
+   - neighborhood-disagreement candidates;
    - train/test comparison if the user provides separate tables;
    - group/time split guidance using `AnalysisContext.entity_id` and
      `AnalysisContext.timestamp`.

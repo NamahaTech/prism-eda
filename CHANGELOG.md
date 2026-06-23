@@ -23,8 +23,13 @@ stabilizes.
   relationships, confidence badges, and one/many cardinality marks.
 - Deterministic anomaly-detection diagnostics with univariate, multivariate,
   conditional, rare-category, and optional label-summary evidence.
+- Isolation Forest, Local Outlier Factor, detector-agreement, and seed-stability
+  anomaly evidence with optional expected-contamination review sizing.
 - Deterministic classification diagnostics with target balance, association,
   missingness-by-class, high-cardinality, conflicting-label, and leakage
   evidence.
+- Leakage-screened classification probe diagnostics with fold-local
+  preprocessing, cross-validated separability metrics, and hard-example review
+  candidates.
 - Generic metric-table artifacts in HTML reports.
 - Detailed implementation plan and roadmap handoff documentation.
