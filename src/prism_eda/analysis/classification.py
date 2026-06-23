@@ -22,7 +22,12 @@ from prism_eda.artifacts import Artifact
 from prism_eda.catalog.models import DatasetCatalog, TableCatalog
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.events import Event, EventCallback, EventKind, emit
-from prism_eda.evidence.models import Evidence, EvidenceScope, Finding
+from prism_eda.evidence.models import (
+    Evidence,
+    EvidenceScope,
+    Finding,
+    sort_findings,
+)
 from prism_eda.results import (
     AnalysisResult,
     AnalysisStatus,
@@ -39,6 +44,14 @@ _ROW_BUDGETS = {
 
 _MAX_PROBE_FEATURES = 30
 _MAX_HARD_EXAMPLES = 20
+
+# A simple value->label rule that is near-perfect *and* clears the majority
+# baseline by a real margin is a leakage signal. The bar must stay reachable
+# (<= 1.0) even when the target is imbalanced, which is exactly when leakage
+# matters most, so it is a fixed accuracy floor plus a lift guard rather than a
+# margin added on top of the majority rate.
+_LEAKAGE_RULE_ACCURACY = 0.98
+_LEAKAGE_RULE_LIFT = 0.05
 
 
 def _row_budget(mode: AnalysisMode | str) -> int:
@@ -565,7 +578,35 @@ def _association_evidence(
         if profile is None:
             continue
         series = frame[column]
+        # Near-unique, identifier-named columns memorize rows; flag them for
+        # exclusion instead of computing an association or a generic
+        # high-cardinality warning that would bury the real signal.
+        if "identifier_candidate" in profile.roles:
+            evidence.append(
+                Evidence.create(
+                    kind="classification_identifier_feature",
+                    scope=EvidenceScope(table=table.name, columns=(name,)),
+                    value={
+                        "feature": name,
+                        "unique_count": profile.unique_count,
+                        "unique_rate": profile.unique_rate,
+                    },
+                    method="identifier_role_exclusion_v1",
+                    description=(
+                        f"Identifier-like feature {table.name}.{name} is "
+                        "near-unique per row."
+                    ),
+                    confidence=0.9,
+                    assumptions=(
+                        "Identifier-like columns usually label rows rather than "
+                        "explain the target and should be excluded from features.",
+                    ),
+                )
+            )
+            continue
         if ptypes.is_numeric_dtype(series.dtype):
+            # A numeric column with many distinct values is normal, not a
+            # high-cardinality categorical risk, so it only gets an association.
             score = _eta_squared(series, target_series)
             if score is not None:
                 evidence.append(
@@ -586,7 +627,14 @@ def _association_evidence(
                         confidence=0.78,
                     )
                 )
-        if profile.unique_count is not None and profile.unique_count > max_categories:
+            continue
+        # Remaining columns are non-numeric, non-identifier. Only genuine
+        # categorical/text columns can carry high-cardinality encoding risk.
+        if (
+            profile.semantic_type in {"categorical", "text"}
+            and profile.unique_count is not None
+            and profile.unique_count > max_categories
+        ):
             evidence.append(
                 Evidence.create(
                     kind="classification_high_cardinality_feature",
@@ -690,11 +738,14 @@ def _leakage_evidence(
         name_overlap = target_token and target_token in normalized_name
         suspicious_accuracy = (
             rule_accuracy is not None
-            and rule_accuracy >= max(0.98, majority_rate + 0.15)
-            and rule_accuracy > majority_rate
+            and rule_accuracy >= _LEAKAGE_RULE_ACCURACY
+            and (rule_accuracy - majority_rate) >= _LEAKAGE_RULE_LIFT
         )
         if not (exact_copy or name_overlap or suspicious_accuracy):
             continue
+        near_perfect = exact_copy or (
+            rule_accuracy is not None and rule_accuracy >= 0.999
+        )
         evidence.append(
             Evidence.create(
                 kind="classification_leakage_candidate",
@@ -706,10 +757,11 @@ def _leakage_evidence(
                     "name_contains_target": bool(name_overlap),
                     "value_rule_accuracy": rule_accuracy,
                     "majority_baseline": majority_rate,
+                    "near_perfect": near_perfect,
                 },
-                method="deterministic_leakage_screen_v1",
+                method="deterministic_leakage_screen_v2",
                 description=f"Potential target leakage candidate {table.name}.{name}.",
-                confidence=0.9 if exact_copy or suspicious_accuracy else 0.64,
+                confidence=0.92 if exact_copy or suspicious_accuracy else 0.64,
                 assumptions=(
                     "High deterministic predictability can be valid in simple "
                     "domains; review timing and data lineage.",
@@ -757,6 +809,11 @@ def _findings_and_steps(
 ) -> tuple[list[Finding], list[TransformationStep]]:
     findings: list[Finding] = []
     steps: list[TransformationStep] = []
+    leakage_columns = {
+        item.scope.columns[0]
+        for item in evidence
+        if item.kind == "classification_leakage_candidate" and item.scope.columns
+    }
     for item in evidence:
         value = item.value
         if item.kind == "classification_target_summary":
@@ -813,6 +870,7 @@ def _findings_and_steps(
                     )
                 )
         elif item.kind == "classification_leakage_candidate":
+            severity = "critical" if value.get("near_perfect") else "high"
             findings.append(
                 Finding.create(
                     title=f"Potential target leakage: {item.scope.columns[0]}",
@@ -820,7 +878,7 @@ def _findings_and_steps(
                         f"{item.scope.columns[0]} has deterministic target-signal "
                         f"risk against {item.scope.columns[1]}."
                     ),
-                    severity="high",
+                    severity=severity,
                     confidence=item.confidence,
                     evidence_ids=(item.id,),
                     recommendation=(
@@ -840,6 +898,37 @@ def _findings_and_steps(
                     risk="high",
                 )
             )
+        elif item.kind == "classification_identifier_feature":
+            findings.append(
+                Finding.create(
+                    title=f"Identifier-like feature: {item.scope.columns[0]}",
+                    summary=(
+                        f"{item.scope.columns[0]} is unique on "
+                        f"{value['unique_rate']:.0%} of rows and likely labels "
+                        "records rather than explaining the target."
+                    ),
+                    severity="high",
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Exclude identifier-like columns from features; they "
+                        "memorize rows and inflate validation scores."
+                    ),
+                )
+            )
+            steps.append(
+                TransformationStep(
+                    operation="exclude_identifier_feature",
+                    table=item.scope.table or "",
+                    columns=item.scope.columns,
+                    parameters=value,
+                    rationale=(
+                        "Identifier-like columns leak row identity into the model."
+                    ),
+                    evidence_ids=(item.id,),
+                    risk="high",
+                )
+            )
         elif (
             item.kind
             in {
@@ -847,6 +936,7 @@ def _findings_and_steps(
                 "classification_categorical_association",
             }
             and value["effect_size"] >= 0.35
+            and item.scope.columns[0] not in leakage_columns
         ):
             findings.append(
                 Finding.create(
@@ -1001,7 +1091,7 @@ def _findings_and_steps(
                     ),
                 )
             )
-    return findings, steps
+    return sort_findings(findings), steps
 
 
 def _artifacts(evidence: list[Evidence]) -> tuple[Artifact, ...]:
@@ -1078,6 +1168,16 @@ def _artifacts(evidence: list[Evidence]) -> tuple[Artifact, ...]:
                     "confidence": f"{item.confidence:.0%}",
                 }
             )
+        elif item.kind == "classification_identifier_feature":
+            signal_rows.append(
+                {
+                    "signal": "identifier (exclude)",
+                    "feature": item.scope.columns[0],
+                    "metric": "unique count",
+                    "score": item.value["unique_count"],
+                    "confidence": f"{item.confidence:.0%}",
+                }
+            )
         elif item.kind == "classification_probe_model":
             signal_rows.append(
                 {
@@ -1135,6 +1235,35 @@ def _artifacts(evidence: list[Evidence]) -> tuple[Artifact, ...]:
             )
         )
     return tuple(artifacts)
+
+
+def _classification_summary(
+    table: str,
+    target: str,
+    findings: list[Finding],
+    *,
+    has_warnings: bool,
+) -> str:
+    """Lead with a decision verdict instead of a finding count."""
+    suffix = " Sampling or recoverable caveats apply." if has_warnings else ""
+    if not findings:
+        return (
+            f"{table}.{target} looks ready: no blocking classification risks "
+            f"were found.{suffix}"
+        )
+    order = ("critical", "high", "medium", "low")
+    counts = dict.fromkeys(order, 0)
+    for finding in findings:
+        if finding.severity in counts:
+            counts[finding.severity] += 1
+    breakdown = ", ".join(f"{counts[sev]} {sev}" for sev in order if counts[sev])
+    top = findings[0]
+    blocking = top.severity in {"critical", "high"}
+    lead = "not ready to model" if blocking else "review before modeling"
+    return (
+        f"{table}.{target}: {lead}. Top issue — {top.title}. "
+        f"{len(findings)} prioritized finding(s) ({breakdown}).{suffix}"
+    )
 
 
 def classification_dataset(
@@ -1256,17 +1385,19 @@ def classification_dataset(
         summary = "The selected target does not contain enough class evidence."
     elif warnings:
         status = AnalysisStatus.COMPLETED_WITH_WARNINGS
-        summary = (
-            f"Ran classification diagnostics for "
-            f"{table_catalog.name}.{resolved_target}; "
-            f"found {len(findings)} prioritized issue(s), with warnings."
+        summary = _classification_summary(
+            table_catalog.name,
+            resolved_target,
+            findings,
+            has_warnings=True,
         )
     else:
         status = AnalysisStatus.COMPLETED
-        summary = (
-            f"Ran classification diagnostics for "
-            f"{table_catalog.name}.{resolved_target}; "
-            f"found {len(findings)} prioritized issue(s)."
+        summary = _classification_summary(
+            table_catalog.name,
+            resolved_target,
+            findings,
+            has_warnings=False,
         )
 
     result = AnalysisResult(

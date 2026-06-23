@@ -47,3 +47,23 @@ jobs:
         run: python -m build
       - name: Inspect wheel
         run: python -m zipfile --list dist/prism_eda-*.whl
+      - name: Smoke-test installed wheel
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --upgrade pip
+          /tmp/smoke/bin/pip install dist/prism_eda-*.whl
+          /tmp/smoke/bin/python - <<'PY'
+          import pandas as pd
+          import prism_eda as pe
+
+          df = pd.DataFrame(
+              {"y": [0] * 90 + [1] * 10, "leak": [0] * 90 + [1] * 10, "x": list(range(100))}
+          )
+          result = pe.classification(df, target="y")
+          html = result.render_html()
+          # Packaged Jinja template must ship inside the wheel.
+          assert "Classification readiness map" in html
+          # The deterministic engine must still surface critical leakage.
+          assert any(finding.severity == "critical" for finding in result.findings)
+          print("wheel smoke test ok")
+          PY

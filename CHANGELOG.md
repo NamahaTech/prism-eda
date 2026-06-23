@@ -33,3 +33,29 @@ stabilizes.
   candidates.
 - Generic metric-table artifacts in HTML reports.
 - Detailed implementation plan and roadmap handoff documentation.
+- Identifier-like classification features are now flagged for exclusion instead
+  of being mislabeled as generic high-cardinality risks.
+- Findings are now ordered by severity (`critical` first) across every recipe so
+  reports lead with what blocks a decision.
+- Decision-first summaries for classification ("not ready to model …") and
+  anomaly detection (top candidate signal) instead of a raw finding count.
+- `critical` finding severity and report badge for confirmed-style leakage.
+- Privacy `PrivacyPolicy`/`ColumnPolicy` controls are now tested.
+
+### Fixed
+
+- Target-leakage detection no longer misses near-perfect value rules on
+  imbalanced targets. The screen previously required an accuracy above
+  `majority_rate + 0.15`, which exceeds 1.0 for imbalanced data and made the
+  most common leakage case undetectable (`deterministic_leakage_screen_v2`).
+- High-cardinality risk is no longer reported for ordinary numeric columns; only
+  genuine categorical/text columns can carry encoding-cardinality risk.
+- Univariate anomaly tails only become findings when a value is genuinely
+  extreme or the tail is heavy, instead of flagging the ordinary tail every
+  numeric column has.
+- Conditional-anomaly findings are capped to the strongest pairs rather than
+  emitting one per ordered feature combination.
+- One-to-one relationship candidates now require real key-name agreement, so
+  coincidental ID-range overlap between unrelated unique columns is suppressed.
+- Relationship finding titles now name the participating tables and columns.
+- Fixed lint and type errors in the privacy module.

@@ -53,6 +53,13 @@ class SchemaDiscovery:
     warnings: tuple[AnalysisWarning, ...]
 
 
+# Two independently unique ID columns whose value ranges happen to overlap look
+# like a one-to-one relationship from inclusion alone. A genuine 1:1 link (a
+# table split or extension) almost always shares the key name, so one-to-one
+# candidates require real name agreement before they are reported.
+_ONE_TO_ONE_MIN_NAME_SIMILARITY = 0.6
+
+
 def default_max_key_columns(mode: AnalysisMode | str) -> int:
     normalized = AnalysisMode(mode)
     return {
@@ -440,6 +447,10 @@ def discover_relationship_candidates(
                     + 0.15 * key.confidence,
                 )
                 if inclusion_rate < min_inclusion or confidence < min_confidence:
+                    continue
+                if child_is_unique and name_score < _ONE_TO_ONE_MIN_NAME_SIMILARITY:
+                    # Likely coincidental range overlap between two unrelated
+                    # unique ID columns, not a real one-to-one link.
                     continue
                 sampled = key.sampled or child_sampled
                 relationships.append(

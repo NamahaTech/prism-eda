@@ -5,7 +5,12 @@ from __future__ import annotations
 from prism_eda.catalog.models import DatasetCatalog
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.events import Event, EventCallback, EventKind, emit
-from prism_eda.evidence.models import Evidence, EvidenceScope, Finding
+from prism_eda.evidence.models import (
+    Evidence,
+    EvidenceScope,
+    Finding,
+    sort_findings,
+)
 from prism_eda.results import (
     AnalysisFailure,
     AnalysisResult,
@@ -181,7 +186,7 @@ def _findings_and_plan(
                         risk="low",
                     )
                 )
-    return findings, steps
+    return sort_findings(findings), steps
 
 
 def profile_dataset(

@@ -59,11 +59,13 @@ class PrivacyPolicy:
             return "redacted_column"
         return column
 
-    def describe_column(self, column: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    def describe_column(
+        self, column: str, payload: dict[str, Any]
+    ) -> dict[str, Any] | None:
         safe_name = self.safe_column_name(column)
         if safe_name is None:
             return None
-        action = self.policy_for(column).action
+        action = PrivacyAction(self.policy_for(column).action)
         sanitized = {
             key: value
             for key, value in payload.items()

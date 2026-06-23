@@ -17,7 +17,12 @@ from prism_eda.catalog.relationships import (
 )
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.events import Event, EventCallback, EventKind, emit
-from prism_eda.evidence.models import Evidence, EvidenceScope, Finding
+from prism_eda.evidence.models import (
+    Evidence,
+    EvidenceScope,
+    Finding,
+    sort_findings,
+)
 from prism_eda.results import AnalysisResult, AnalysisStatus, AnalysisWarning
 
 
@@ -248,7 +253,7 @@ def _findings(
             Finding.create(
                 title=(
                     f"Candidate {relationship.cardinality.replace('_', '-')} "
-                    "relationship"
+                    f"relationship: {child} → {parent}"
                 ),
                 summary=(
                     f"{child} is {relationship.inclusion_rate:.1%} contained in "
@@ -280,7 +285,7 @@ def _findings(
                     ),
                 )
             )
-    return tuple(findings)
+    return tuple(sort_findings(findings))
 
 
 def _graph_artifact(

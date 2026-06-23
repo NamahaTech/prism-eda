@@ -17,7 +17,12 @@ from prism_eda.artifacts import Artifact
 from prism_eda.catalog.models import DatasetCatalog, TableCatalog
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.events import Event, EventCallback, EventKind, emit
-from prism_eda.evidence.models import Evidence, EvidenceScope, Finding
+from prism_eda.evidence.models import (
+    Evidence,
+    EvidenceScope,
+    Finding,
+    sort_findings,
+)
 from prism_eda.results import (
     AnalysisResult,
     AnalysisStatus,
@@ -34,6 +39,19 @@ _ROW_BUDGETS = {
 
 _DEFAULT_REVIEW_RATE = 0.02
 _MAX_REVIEW_ROWS = 25
+
+# Every Normal column has ~0.7% of rows beyond 1.5x IQR fences, so a non-zero
+# IQR tail count is expected, not anomalous. A univariate tail is only worth a
+# top-level finding when at least one value sits far out (large robust z) or the
+# tail is genuinely heavy (a high candidate rate). Lower-signal tails still
+# produce evidence for the candidate-signal table, just not a headline finding.
+_UNIVARIATE_FINDING_MIN_ROBUST_Z = 8.0
+_UNIVARIATE_FINDING_MIN_RATE = 0.05
+
+# Conditional-anomaly checks run over ordered feature pairs, which grows as
+# k*(k-1). Keep the evidence but cap how many become headline findings so the
+# report does not drown in pairwise combinations.
+_MAX_CONDITIONAL_FINDINGS = 3
 
 
 def _row_budget(mode: AnalysisMode | str) -> int:
@@ -737,9 +755,31 @@ def _findings_and_steps(
 ) -> tuple[list[Finding], list[TransformationStep]]:
     findings: list[Finding] = []
     steps: list[TransformationStep] = []
+    # Surface only the strongest conditional pairs as findings; the rest remain
+    # as evidence in the candidate-signal table.
+    conditional_ranked = sorted(
+        (
+            item
+            for item in evidence
+            if item.kind == "anomaly_conditional_outlier"
+            and item.value.get("candidate_count")
+        ),
+        key=lambda item: item.value.get("max_conditional_score", 0.0),
+        reverse=True,
+    )
+    conditional_finding_ids = {
+        item.id for item in conditional_ranked[:_MAX_CONDITIONAL_FINDINGS]
+    }
     for item in evidence:
         value = item.value
-        if item.kind == "anomaly_univariate_outlier" and value["candidate_count"]:
+        if (
+            item.kind == "anomaly_univariate_outlier"
+            and value["candidate_count"]
+            and (
+                value["max_abs_robust_z"] >= _UNIVARIATE_FINDING_MIN_ROBUST_Z
+                or value["candidate_rate"] >= _UNIVARIATE_FINDING_MIN_RATE
+            )
+        ):
             column = item.scope.columns[0]
             findings.append(
                 Finding.create(
@@ -846,7 +886,10 @@ def _findings_and_steps(
                     ),
                 )
             )
-        elif item.kind == "anomaly_conditional_outlier":
+        elif (
+            item.kind == "anomaly_conditional_outlier"
+            and item.id in conditional_finding_ids
+        ):
             condition, observed = item.scope.columns
             findings.append(
                 Finding.create(
@@ -922,7 +965,7 @@ def _findings_and_steps(
                     ),
                 )
             )
-    return findings, steps
+    return sort_findings(findings), steps
 
 
 def _artifact(evidence: Sequence[Evidence]) -> Artifact | None:
@@ -993,6 +1036,26 @@ def _artifact(evidence: Sequence[Evidence]) -> Artifact | None:
                 "anomalies."
             )
         },
+    )
+
+
+def _anomaly_summary(
+    table_count: int,
+    findings: list[Finding],
+    *,
+    has_warnings: bool,
+) -> str:
+    """Lead with the strongest candidate signal instead of a raw count."""
+    suffix = " Sampling or recoverable caveats apply." if has_warnings else ""
+    if not findings:
+        return (
+            f"No anomaly review candidates cleared the diagnostic thresholds "
+            f"across {table_count} table(s).{suffix}"
+        )
+    top = findings[0]
+    return (
+        f"Anomaly review across {table_count} table(s): top signal — "
+        f"{top.title}. {len(findings)} prioritized candidate signal(s).{suffix}"
     )
 
 
@@ -1093,16 +1156,10 @@ def anomaly_detection_dataset(
         )
     elif warnings:
         status = AnalysisStatus.COMPLETED_WITH_WARNINGS
-        summary = (
-            f"Ran anomaly diagnostics across {len(selected_tables)} table(s); "
-            f"found {len(findings)} prioritized candidate signal(s), with warnings."
-        )
+        summary = _anomaly_summary(len(selected_tables), findings, has_warnings=True)
     else:
         status = AnalysisStatus.COMPLETED
-        summary = (
-            f"Ran anomaly diagnostics across {len(selected_tables)} table(s); "
-            f"found {len(findings)} prioritized candidate signal(s)."
-        )
+        summary = _anomaly_summary(len(selected_tables), findings, has_warnings=False)
 
     result = AnalysisResult(
         goal="anomaly_detection",

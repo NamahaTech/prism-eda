@@ -486,7 +486,20 @@ Before starting a new feature:
 
 ## Current Best Next Task
 
-The strongest next engineering task is to add probe-model diagnostics for
-classification and detector-agreement diagnostics for anomaly detection. Those
-features will make the reports much more useful while still staying deterministic
-and evidence-backed.
+Probe-model and detector-agreement diagnostics are now implemented, and a
+2026-06-23 signal-quality pass fixed the leakage screen on imbalanced targets,
+stopped numeric columns being mislabeled as high-cardinality, added identifier
+exclusion, gated univariate/conditional anomaly noise, suppressed spurious
+one-to-one relationships, added severity ordering and decision-first summaries,
+fixed the privacy module, and added a CI wheel-install smoke test.
+
+The strongest next engineering tasks toward a 0.1 alpha are:
+
+1. The remaining schema noise: a coincidental cross-named one-to-many candidate
+   can still appear from ID-range overlap. This needs join-cardinality and
+   fan-out signals in the relationship confidence model (see
+   `docs/implementation-status.md` known technical debt). Avoid synthetic-only
+   tuning; ideally validate against a real multi-table dataset.
+2. Classification depth from the roadmap: class overlap / neighborhood
+   disagreement, then train/test comparison.
+3. README and API-reference polish for the now-stable recipe behavior.

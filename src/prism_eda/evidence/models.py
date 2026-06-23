@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -63,6 +64,22 @@ class Evidence:
             assumptions=assumptions,
             metadata=metadata or {},
         )
+
+
+# Lower rank sorts first. Findings are presented most-severe first so the report
+# leads with what blocks a decision, not whatever was computed first.
+SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+
+
+def sort_findings(findings: Sequence[Finding]) -> list[Finding]:
+    """Order findings by severity, then by descending confidence."""
+    return sorted(
+        findings,
+        key=lambda finding: (
+            SEVERITY_RANK.get(finding.severity, 99),
+            -finding.confidence,
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
