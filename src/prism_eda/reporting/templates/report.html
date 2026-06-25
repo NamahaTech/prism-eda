@@ -413,7 +413,11 @@
     <section class="panel">
       <h2>Reproducibility</h2>
       <p>Dataset fingerprint: <code>{{ result.catalog.fingerprint }}</code></p>
-      <p class="muted">Mode: {{ result.metadata.mode }} · Sampling: {{ result.metadata.sampling }} · Random seed: {{ result.metadata.random_seed }}</p>
+      {% if result.metadata.get('engine') == 'assisted' %}
+      <p class="muted">Engine: AI-assisted · Provider: {{ result.metadata.get('provider', 'n/a') }} · Model: {{ result.metadata.get('model', 'n/a') }} · Tool calls: {{ result.metadata.get('tool_calls', 0) }}</p>
+      {% else %}
+      <p class="muted">Mode: {{ result.metadata.get('mode', 'n/a') }} · Sampling: {{ result.metadata.get('sampling', 'n/a') }} · Random seed: {{ result.metadata.get('random_seed', 'n/a') }}</p>
+      {% endif %}
       {% if result.failures %}
       <details>
         <summary>{{ result.failures | length }} optional computation failure(s)</summary>

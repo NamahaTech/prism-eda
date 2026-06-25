@@ -15,9 +15,11 @@ later plan and explain analysis, but it does not invent numeric truth.
 - Distribution: `prism-eda`
 - Import package: `prism_eda`
 - Supported Python: 3.11+
-- Implemented recipes: baseline profile and schema discovery
-- Planned next recipes: unlabeled anomaly detection, then classification
-- AI-assisted analysis is planned for 0.2, after deterministic contracts stabilize
+- Implemented recipes: baseline profile, schema discovery, anomaly detection,
+  classification
+- Optional AI-assisted investigation via the `ai-gemini` extra
+  (`prism_eda.assisted_analysis`): an LLM plans over the deterministic tools only
+- Planned next recipes: regression, time-series, clustering
 
 See [implementation status](docs/implementation-status.md) for the exact ledger.
 
@@ -62,6 +64,10 @@ python -m build
 - `reporting/`: the shared self-contained renderer.
 - `transformations/`: declarative recommendations; no automatic mutation.
 - `results.py`: stable result object and explicit exports.
+- `privacy/`: allow/redact/alias/exclude controls for AI-assisted payloads.
+- `assisted_analysis/`: optional LLM layer (providers, deterministic tool
+  registry, LangGraph flow, investigator). Depends on the core one-way; the core
+  never imports it. Lives behind the `ai-gemini` extra.
 
 ## Documentation discipline
 

@@ -4,8 +4,14 @@ Prism EDA is a task-aware exploratory data analysis library for Python. It is
 being built around a deterministic evidence engine, goal-specific analysis
 recipes, self-contained reports, and optional AI-assisted investigation.
 
-The project is currently in early alpha development. Version 0.1 focuses on the
-local deterministic foundation; Gemini-assisted analysis is planned for 0.2.
+The project is currently in early alpha development. It pairs a local
+deterministic foundation with an optional Gemini/Gemma-assisted investigator that
+plans and explains analyses over those deterministic tools (install with the
+`ai-gemini` extra).
+
+> **New here? Start with the [Usage Guide](docs/usage_docs/README.md)** — a
+> step-by-step walkthrough of installing Prism, loading data, every analysis
+> recipe, and reading results, with runnable, verified examples.
 
 ## Quick start
 
@@ -125,12 +131,37 @@ lead with severity (so confirmed-style leakage surfaces first) and the summary
 states a readiness verdict. It is a readiness diagnostic, not a production model
 training pipeline.
 
+## AI-assisted investigation (optional)
+
+Install the `ai-gemini` extra to let a language model plan and explain an
+analysis — but only by calling Prism's deterministic tools. The model never sees
+raw data, never runs code, and every finding it reports is dropped unless it cites
+real evidence those tools produced.
+
+```python
+import prism_eda as pe
+from prism_eda.assisted_analysis import Investigator, GeminiProvider
+
+dataset = pe.load("data/customers.parquet")
+investigator = Investigator(dataset, provider=GeminiProvider.from_env())
+result = investigator.start(goal="classification", context={"target": "churned"}).run()
+result.to_html("investigation.html")
+```
+
+`pip install "prism-eda[ai-gemini]"`. The result is the same `AnalysisResult` the
+deterministic recipes return. See the
+[AI-assisted guide](docs/usage_docs/ai-assisted-analysis.md) and the
+[privacy guide](docs/usage_docs/privacy.md). The deterministic core never imports
+an LLM library.
+
 See [the product research brief](docs/product-research-brief.md) and
 [the public API specification](docs/public-api-and-architecture.md) for the
 confirmed direction.
 
 Further documentation:
 
+- [**Usage Guide**](docs/usage_docs/README.md) — install, load, analyze, export (start here)
+- [AI-assisted investigation](docs/usage_docs/ai-assisted-analysis.md) · [Privacy](docs/usage_docs/privacy.md)
 - [Schema discovery](docs/schema-discovery.md)
 - [Implementation plan and handoff](docs/implementation-plan.md)
 - [Implementation status](docs/implementation-status.md)

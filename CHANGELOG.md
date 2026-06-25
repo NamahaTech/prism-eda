@@ -10,6 +10,26 @@ stabilizes.
 
 ### Added
 
+- **Optional AI-assisted investigation** (`prism_eda.assisted_analysis`, behind
+  the `ai-gemini` extra): an LLM plans and explains an analysis by calling only
+  Prism's deterministic tools. The model never sees raw data, never runs code,
+  and every reported finding is dropped unless it cites real evidence. Returns
+  the standard `AnalysisResult`.
+  - Provider-neutral `LLMProvider` interface; `GeminiProvider` over the
+    `google-genai` SDK using a portable prompted-JSON protocol that works with
+    both Gemma and Gemini models (default `gemma-4-31b-it`).
+  - `FakeProvider` for deterministic, offline tests and documentation examples.
+  - Deterministic tool registry (`list_tables`, `describe_table`,
+    `profile_dataset`, `discover_schema`, `detect_anomalies`,
+    `assess_classification`) returning compact, privacy-filtered summaries.
+  - LangGraph flow: intake → bounded agent/tool loop → evidence-citation
+    validation → synthesis, with `insufficient_evidence` and non-convergence
+    fallback handling.
+  - `PrivacyPolicy` now governs the dataset overview/schema description sent to a
+    provider; raw cell values are withheld by default and HMAC/API keys never
+    leave memory.
+  - Report footer shows AI provenance (provider, model, tool-call count).
+- Usage documentation for the AI-assisted layer and privacy controls.
 - Initial `prism_eda` package and session-based public API.
 - DataFrame, CSV, Parquet, multi-table mapping, and directory loading.
 - Deterministic dataset fingerprints and baseline table/column catalogs.

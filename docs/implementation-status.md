@@ -86,10 +86,31 @@ removed, or materially re-scoped.
 - One-to-one relationship candidates require key-name agreement, suppressing
   coincidental ID-range overlap; relationship titles name their tables/columns
 
-### Privacy (foundation for 0.2)
+### Privacy
 
 - `PrivacyPolicy`/`ColumnPolicy` allow/redact/alias/exclude controls with keyed
   HMAC aliasing, now lint-clean, type-clean, and tested
+- Wired into the AI-assisted layer: governs the dataset overview / schema
+  description sent to a provider; raw values withheld by default
+
+### AI-assisted investigation (`ai-gemini` extra)
+
+- `assisted_analysis/` leaf package; the deterministic core imports no LLM library
+- Provider-neutral `LLMProvider` interface with neutral request/decision types
+- `GeminiProvider` over the `google-genai` SDK using a portable prompted-JSON
+  protocol (works with Gemma and Gemini; default model `gemma-4-31b-it`)
+- `FakeProvider` for deterministic, offline tests and docs
+- Deterministic tool registry the model may call (`list_tables`, `describe_table`,
+  `profile_dataset`, `discover_schema`, `detect_anomalies`,
+  `assess_classification`); tools return compact summaries, never raw rows
+- LangGraph flow: intake → bounded agent/tool loop → citation validation →
+  synthesis; returns the standard `AnalysisResult`
+- Evidence-citation validation drops any finding that doesn't cite real evidence;
+  `insufficient_evidence` and non-convergence fallback handled
+- Event emission through the existing callback system; report footer shows AI
+  provenance
+- Tests: FakeProvider flow, citation rejection, privacy, insufficient/unknown-tool
+  paths, mocked-SDK provider, and core-import isolation (no LLM deps leak in)
 
 ### Engineering
 
@@ -122,8 +143,10 @@ removed, or materially re-scoped.
 - Chunked CSV execution and a general execution planner
 - Functional dependencies and denormalization analysis
 - Plotly interactive artifact implementations
-- Gemini-assisted investigation through LangChain and LangGraph
-- Wiring the privacy policy into an actual model-payload builder
+- Assisted-analysis follow-ups: critique/clarification nodes, an interactive
+  question/answer loop, async `astart`/`arun`, and additional provider adapters
+- Extending the privacy policy into a fuller model-payload builder (beyond the
+  overview/schema description it governs today)
 - Persistent investigation checkpoints
 - Additional DataFrame backends
 

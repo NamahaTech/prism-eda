@@ -10,14 +10,15 @@ Status: Living public contract. Implemented behavior is tracked in
 - PyPI distribution: `prism-eda`
 - Python package: `prism_eda`
 - Base install: `pip install prism-eda`
-- Gemini support in 0.2: `pip install prism-eda[ai-gemini]`
+- Gemini/Gemma-assisted investigation: `pip install prism-eda[ai-gemini]`
 - Interactive Plotly artifacts: `pip install prism-eda[plotly]`
 - Python support: 3.11 and newer
 - License: MIT
 
-Version 0.1 contains deterministic loading, cataloging, analysis, evidence, and
-reporting. Version 0.2 adds Gemini-assisted investigation through LangChain and
-LangGraph without changing the deterministic result contract.
+The base install contains deterministic loading, cataloging, analysis, evidence,
+and reporting. The `ai-gemini` extra adds an optional LLM-assisted investigator
+(LangGraph + the `google-genai` SDK) that plans over the deterministic tools
+without changing the deterministic result contract.
 
 ## 2. Public API principles
 
@@ -302,36 +303,44 @@ result = dataset.analyze(
 The optional terminal adapter subscribes to events and handles questions. Core
 analysis never calls `input()` or assumes a notebook, terminal, or GUI.
 
-## 11. Assisted analysis in version 0.2
+## 11. Assisted analysis (`ai-gemini` extra)
+
+Implemented. The investigator plans over the deterministic tools; it does not
+change the result contract — `run()` returns the same `AnalysisResult`.
 
 ```python
-from prism_eda.assisted_analysis import GeminiProvider, Investigator
-from prism_eda.adapters import TerminalInterviewAdapter
+from prism_eda.assisted_analysis import Investigator, GeminiProvider
 
 investigator = Investigator(
     dataset,
-    provider=GeminiProvider.from_env(),
-    callbacks=[TerminalInterviewAdapter()],
+    provider=GeminiProvider.from_env(),   # reads GEMINI_API_KEY
+    privacy=None,                          # optional PrivacyPolicy
+    callbacks=[...],                       # optional event observers
+    max_steps=8,
 )
-
-session = investigator.start(goal="anomaly_detection")
+session = investigator.start(goal="classification", context={"target": "churned"})
 result = session.run()
 ```
 
-Asynchronous API:
+`GeminiProvider` defaults to a small Gemma model and uses a portable
+prompted-JSON protocol, so it works with both Gemma and Gemini models. A
+deterministic `FakeProvider` drives the same flow offline for tests and docs. Any
+backend can be supported by implementing the `LLMProvider.decide` method.
 
-```python
-session = await investigator.astart(goal="anomaly_detection")
-result = await session.arun()
-```
+Hard contract (enforced in code):
 
-The interview may be paused and resumed while the session remains in memory.
-Version 0.2 does not promise resume after process termination. Later persistence
-must use dataset fingerprints and must never checkpoint complete raw rows.
+- The agent may choose only registered deterministic tools. It cannot execute
+  arbitrary Python and never receives raw rows — tools return aggregate summaries.
+- Every reported finding must cite real evidence IDs; uncited findings are dropped
+  during a validation step before synthesis.
+- `insufficient_evidence` is a valid terminal status; if the model cannot converge
+  within `max_steps`, the run falls back to the deterministic findings gathered so
+  far and records a warning.
+- The session is held in memory and is re-runnable.
 
-The agent may choose only registered deterministic tools. It cannot execute
-arbitrary Python. Its conclusions must cite evidence IDs and pass semantic
-validation before entering a report.
+Deferred (see the implementation status): critique/clarification nodes, an
+interactive question/answer loop, an asynchronous `astart`/`arun` API, and
+cross-process resume. The orchestration is a LangGraph state machine.
 
 ## 12. Privacy API
 
@@ -388,20 +397,25 @@ src/prism_eda/
   analysis/
     profile.py
     schema_discovery.py
+    anomaly.py
+    classification.py
   transformations/
     models.py
   reporting/
     renderer.py
     templates/
-  assisted_analysis/       # planned for the ai-gemini extra in 0.2
-    investigator.py
-    graph.py
-    state.py
-    tools.py
+  privacy/                  # allow/redact/alias/exclude policy for AI payloads
+    models.py
+  assisted_analysis/        # optional, the ai-gemini extra
+    investigator.py         # Investigator / InvestigationSession (public entry)
+    graph.py                # LangGraph flow: intake -> agent loop -> finalize
+    state.py                # graph state (no raw rows, no keys)
+    tools.py                # deterministic tool registry the model may call
     providers/
-      base.py
-      gemini.py
-  privacy/                  # planned before assisted analysis ships
+      base.py               # provider-neutral interface + neutral types
+      _protocol.py          # portable prompted-JSON render/parse
+      gemini.py             # GeminiProvider (google-genai)
+      fake.py               # FakeProvider (deterministic, offline)
 ```
 
 The deterministic core must never import LangChain, LangGraph, or a provider SDK.
