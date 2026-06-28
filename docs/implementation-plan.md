@@ -475,7 +475,8 @@ Before starting a new feature:
 ## Known Limitations as of 2026-06-20
 
 - Baseline profiling is eager and can be expensive for very large files.
-- Directory loading supports CSV and Parquet only.
+- Directory loading supports CSV, Parquet, and Excel (Excel via the `excel`
+  extra; one sheet per workbook).
 - Schema discovery does not search self-referential relationships.
 - Schema discovery does not yet infer functional dependencies or denormalization.
 - Anomaly detection is diagnostic and does not train production detectors.

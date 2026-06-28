@@ -175,6 +175,20 @@ To see which model ids your key can access:
 print(GeminiProvider.from_env().available_models())
 ```
 
+### Reliability
+
+Transient API failures (HTTP 429/500/503, timeouts) are retried automatically
+with exponential backoff (`max_retries=3`, `retry_backoff=2.0` by default). If the
+provider still can't respond, Prism raises a clear `ProviderError` (importable
+from `prism_eda.assisted_analysis`) telling you to retry or switch models — rather
+than surfacing a raw SDK traceback. A persistent 500 usually means the model is
+momentarily overloaded; retrying or moving to `gemini-2.5-flash` typically clears
+it.
+
+```python
+GeminiProvider.from_env(model="gemma-4-31b-it", max_retries=5, retry_backoff=3.0)
+```
+
 Prism talks to the model through a portable **prompted-JSON protocol** rather than
 native function-calling, so small open models like Gemma — which don't reliably
 support function-calling — work just as well as Gemini models.

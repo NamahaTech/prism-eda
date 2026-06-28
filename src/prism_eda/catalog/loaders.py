@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeAlias
@@ -18,7 +19,10 @@ DataSource: TypeAlias = (
     pd.DataFrame | PathLike | Sequence[PathLike] | Mapping[str, TableSource]
 )
 
-SUPPORTED_SUFFIXES = {".csv", ".parquet"}
+CSV_SUFFIXES = {".csv"}
+PARQUET_SUFFIXES = {".parquet"}
+EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xls"}
+SUPPORTED_SUFFIXES = CSV_SUFFIXES | PARQUET_SUFFIXES | EXCEL_SUFFIXES
 
 
 def _matches(path: Path, patterns: Sequence[str] | None) -> bool:
@@ -49,32 +53,74 @@ def _discover(
     return sorted(paths)
 
 
+_FORMAT_KEYS = ("csv", "parquet", "excel")
+
+
+def _format_name(suffix: str) -> str:
+    if suffix in CSV_SUFFIXES:
+        return "csv"
+    if suffix in PARQUET_SUFFIXES:
+        return "parquet"
+    return "excel"
+
+
 def _format_options(
     suffix: str, read_options: Mapping[str, Any] | None
 ) -> dict[str, Any]:
     if not read_options:
         return {}
-    format_name = "csv" if suffix == ".csv" else "parquet"
-    nested = read_options.get(format_name)
+    nested = read_options.get(_format_name(suffix))
     if isinstance(nested, Mapping):
         return dict(nested)
-    if any(key in read_options for key in ("csv", "parquet")):
+    if any(key in read_options for key in _FORMAT_KEYS):
         return {}
     return dict(read_options)
+
+
+def _read_excel(path: Path, options: dict[str, Any]) -> pd.DataFrame:
+    try:
+        with warnings.catch_warnings():
+            # openpyxl warns "Workbook contains no default style" for many files
+            # exported by other tools; it is harmless and just noise to users.
+            warnings.filterwarnings(
+                "ignore",
+                message="Workbook contains no default style",
+                category=UserWarning,
+            )
+            frame = pd.read_excel(path, **options)
+    except ImportError as error:
+        # pandas raises this when the Excel engine (e.g. openpyxl for .xlsx,
+        # xlrd for legacy .xls) is not installed. Keep Excel an opt-in extra.
+        raise DataLoadError(
+            f"Reading Excel files requires an Excel engine. Install it with "
+            f"\"pip install 'prism-eda[excel]'\", or the engine pandas names "
+            f"below. Original error: {error}"
+        ) from error
+    if isinstance(frame, dict):
+        sheets = ", ".join(map(str, frame))
+        raise DataLoadError(
+            f"{path} resolved to multiple sheets ({sheets}). Read one at a time, "
+            f"e.g. read_options={{'excel': {{'sheet_name': '<sheet>'}}}}."
+        )
+    return frame
 
 
 def _read(path: Path, read_options: Mapping[str, Any] | None) -> pd.DataFrame:
     suffix = path.suffix.lower()
     options = _format_options(suffix, read_options)
     try:
-        if suffix == ".csv":
+        if suffix in CSV_SUFFIXES:
             return pd.read_csv(path, **options)
-        if suffix == ".parquet":
+        if suffix in PARQUET_SUFFIXES:
             return pd.read_parquet(path, **options)
+        if suffix in EXCEL_SUFFIXES:
+            return _read_excel(path, options)
+    except DataLoadError:
+        raise
     except Exception as error:
         raise DataLoadError(f"Could not load {path}: {error}") from error
     raise UnsupportedSourceError(
-        f"Unsupported file format {suffix!r}; expected CSV or Parquet."
+        f"Unsupported file format {suffix!r}; expected CSV, Parquet, or Excel."
     )
 
 

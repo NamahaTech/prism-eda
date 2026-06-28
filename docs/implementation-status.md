@@ -10,7 +10,8 @@ removed, or materially re-scoped.
 ### Foundation
 
 - Python 3.11+ package using Hatchling and a `src` layout
-- DataFrame, CSV, Parquet, path-list, named mapping, and directory loading
+- DataFrame, CSV, Parquet, Excel (via the `excel` extra), path-list, named
+  mapping, and directory loading
 - Optional recursive directory discovery
 - Dataset and table fingerprints
 - Physical and initial semantic column typing

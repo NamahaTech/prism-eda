@@ -1,8 +1,8 @@
 # Schema Discovery
 
 Prism EDA schema discovery infers candidate primary keys, composite keys, and
-directional cross-table relationships from related pandas tables, CSV files, or
-Parquet files.
+directional cross-table relationships from related pandas tables, CSV files,
+Parquet files, or Excel files.
 
 It does not modify data or declare database constraints. Every output is a
 candidate with supporting evidence and confidence.

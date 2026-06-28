@@ -39,6 +39,7 @@ from prism_eda.assisted_analysis.providers import (
     GeminiProvider,
     LLMProvider,
     ProviderDecision,
+    ProviderError,
     ToolInvocation,
     ToolSpec,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "Investigator",
     "LLMProvider",
     "ProviderDecision",
+    "ProviderError",
     "ToolInvocation",
     "ToolSpec",
 ]

@@ -12,6 +12,7 @@ Install with the extra::
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 from prism_eda.assisted_analysis.providers._protocol import (
@@ -22,7 +23,24 @@ from prism_eda.assisted_analysis.providers.base import (
     DecisionRequest,
     LLMProvider,
     ProviderDecision,
+    ProviderError,
 )
+
+#: HTTP-ish status codes worth retrying (rate limit + transient server errors).
+_TRANSIENT_CODES = {408, 429, 500, 502, 503, 504}
+
+
+def _is_transient(error: Exception) -> bool:
+    """Heuristically decide whether an SDK error is worth retrying."""
+    code = getattr(error, "code", None) or getattr(error, "status_code", None)
+    if code in _TRANSIENT_CODES:
+        return True
+    name = type(error).__name__.lower()
+    return any(
+        token in name
+        for token in ("timeout", "connection", "servererror", "unavailable")
+    )
+
 
 #: Default model. Gemma is small and fast with a generous rate limit, which makes
 #: it a good fit for iterating on the investigation flow. Override per instance.
@@ -53,11 +71,15 @@ class GeminiProvider(LLMProvider):
         model: str = DEFAULT_MODEL,
         temperature: float = 0.1,
         max_output_tokens: int = 2048,
+        max_retries: int = 3,
+        retry_backoff: float = 2.0,
         client: Any | None = None,
     ) -> None:
         self.model = model
         self._temperature = temperature
         self._max_output_tokens = max_output_tokens
+        self._max_retries = max(1, max_retries)
+        self._retry_backoff = retry_backoff
         if client is not None:
             self._client = client
         else:
@@ -76,6 +98,8 @@ class GeminiProvider(LLMProvider):
         model: str = DEFAULT_MODEL,
         temperature: float = 0.1,
         max_output_tokens: int = 2048,
+        max_retries: int = 3,
+        retry_backoff: float = 2.0,
     ) -> GeminiProvider:
         """Build a provider, reading the API key from the environment.
 
@@ -95,6 +119,8 @@ class GeminiProvider(LLMProvider):
             model=model,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
+            max_retries=max_retries,
+            retry_backoff=retry_backoff,
         )
 
     def available_models(self) -> list[str]:
@@ -107,24 +133,47 @@ class GeminiProvider(LLMProvider):
         return parse_decision(text)
 
     def _generate(self, prompt: str) -> str:
+        last_error: Exception | None = None
+        for attempt in range(self._max_retries):
+            try:
+                return self._generate_once(prompt)
+            except Exception as error:  # noqa: BLE001 - re-raised below as clean error
+                last_error = error
+                if not _is_transient(error) or attempt == self._max_retries - 1:
+                    break
+                time.sleep(self._retry_backoff * (2**attempt))
+        raise ProviderError(
+            f"Gemini request to model {self.model!r} failed after "
+            f"{self._max_retries} attempt(s): {last_error}. "
+            "If this is a 500/503 it is usually transient — retry, or try a "
+            "different model (e.g. model='gemini-2.5-flash')."
+        ) from last_error
+
+    def _generate_once(self, prompt: str) -> str:
         genai_types = _import_genai_types()
-        config = genai_types.GenerateContentConfig(
-            temperature=self._temperature,
-            max_output_tokens=self._max_output_tokens,
-            response_mime_type="application/json",
-        )
         try:
             response = self._client.models.generate_content(
-                model=self.model, contents=prompt, config=config
+                model=self.model,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    temperature=self._temperature,
+                    max_output_tokens=self._max_output_tokens,
+                    response_mime_type="application/json",
+                ),
             )
-        except Exception:
-            # Some Gemma models reject response_mime_type; retry without it.
-            config = genai_types.GenerateContentConfig(
-                temperature=self._temperature,
-                max_output_tokens=self._max_output_tokens,
-            )
+        except Exception as error:
+            # Some models reject response_mime_type with a 4xx; for that case
+            # only, retry once without it. Transient errors propagate to the
+            # retry loop in _generate.
+            if _is_transient(error):
+                raise
             response = self._client.models.generate_content(
-                model=self.model, contents=prompt, config=config
+                model=self.model,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    temperature=self._temperature,
+                    max_output_tokens=self._max_output_tokens,
+                ),
             )
         text = getattr(response, "text", None)
         if not text:

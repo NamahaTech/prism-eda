@@ -191,6 +191,24 @@ def test_exports_work_on_assisted_result() -> None:
     assert payload["metadata"]["engine"] == "assisted"
 
 
+@pytest.mark.parametrize(
+    "goal", ["profile", "anomaly_detection", "schema_discovery", "classification"]
+)
+def test_assisted_result_renders_for_every_goal(goal: str) -> None:
+    # The report template branches on result.goal for some metadata; an assisted
+    # result must render for every goal even though it lacks recipe-specific
+    # metadata keys (e.g. candidate_signals).
+    dataset = pe.load(_sample())
+    context = {"target": "churned"} if goal == "classification" else None
+    result = (
+        Investigator(dataset, provider=FakeProvider())
+        .start(goal=goal, context=context)
+        .run()
+    )
+    html = result.render_html()
+    assert html.startswith("<!doctype html>")
+
+
 # --- protocol -------------------------------------------------------------
 
 
@@ -270,6 +288,58 @@ def test_gemini_provider_with_mocked_client() -> None:
     assert decision.kind == "call_tool"
     assert decision.tool_calls[0].tool == "list_tables"
     assert client.models.calls[0]["model"] == "gemma-4-31b-it"
+
+
+class _FlakyModels:
+    """Raises a transient-looking error a few times, then succeeds."""
+
+    def __init__(self, text: str, fail_times: int) -> None:
+        self._text = text
+        self._fail_times = fail_times
+        self.attempts = 0
+
+    def generate_content(self, *, model, contents, config=None):  # noqa: ANN001
+        self.attempts += 1
+        if self.attempts <= self._fail_times:
+            error = RuntimeError("Internal error encountered.")
+            error.code = 500  # type: ignore[attr-defined]
+            raise error
+
+        class _Response:
+            text = self._text
+
+        return _Response()
+
+
+class _FlakyClient:
+    def __init__(self, text: str, fail_times: int) -> None:
+        self.models = _FlakyModels(text, fail_times)
+
+
+def test_gemini_retries_transient_errors() -> None:
+    client = _FlakyClient(
+        '{"action": "finish", "status": "completed", "summary": "ok", "findings": []}',
+        fail_times=2,
+    )
+    provider = GeminiProvider(
+        client=client, model="gemma-4-31b-it", max_retries=3, retry_backoff=0.0
+    )
+    decision = provider.decide(
+        DecisionRequest(goal="profile", dataset_overview="x", tools=())
+    )
+    assert decision.kind == "finish"
+    assert client.models.attempts == 3  # failed twice, succeeded on the third
+
+
+def test_gemini_raises_clean_error_after_exhausting_retries() -> None:
+    from prism_eda.assisted_analysis import ProviderError
+
+    client = _FlakyClient("unused", fail_times=99)
+    provider = GeminiProvider(
+        client=client, model="gemma-4-31b-it", max_retries=2, retry_backoff=0.0
+    )
+    with pytest.raises(ProviderError, match="failed after 2 attempt"):
+        provider.decide(DecisionRequest(goal="profile", dataset_overview="x", tools=()))
 
 
 def test_gemini_from_env_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -25,9 +25,10 @@ result.to_html("profile.html")
 result.to_json("profile.json")
 ```
 
-DataFrames, CSV files, Parquet files, mappings of related tables, and directories
-are accepted. Analysis does not mutate input DataFrames and does not write files
-until an explicit export method is called.
+DataFrames, CSV files, Parquet files, Excel files, mappings of related tables, and
+directories are accepted. Analysis does not mutate input DataFrames and does not
+write files until an explicit export method is called. (Excel needs the optional
+`excel` extra: `pip install "prism-eda[excel]"`.)
 
 ## Analyze a folder
 
@@ -73,7 +74,8 @@ dataset = pe.load(
 )
 ```
 
-Directory loading currently supports CSV and Parquet files. Use `names=` when
+Directory loading supports CSV, Parquet, and Excel files (Excel via the `excel`
+extra). Use `names=` when
 you need to override the table names derived from filenames, and `read_options=`
 to pass options through to pandas readers.
 

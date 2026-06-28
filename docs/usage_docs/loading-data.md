@@ -18,13 +18,22 @@ dataset = pe.load(source)
 | Source | Example | Resulting tables |
 |--------|---------|------------------|
 | A pandas DataFrame | `pe.load(df)` | one table named `"table"` |
-| A CSV or Parquet file | `pe.load("customers.parquet")` | one table named after the file stem |
-| A list of files | `pe.load(["customers.csv", "orders.parquet"])` | one table per file |
+| A CSV, Parquet, or Excel file | `pe.load("customers.parquet")` | one table named after the file stem |
+| A list of files | `pe.load(["customers.csv", "orders.xlsx"])` | one table per file |
 | A folder | `pe.load("data/")` | one table per supported file in the folder |
 | A name→table mapping | `pe.load({"customers": df, "orders": "orders.csv"})` | one table per entry |
 | An existing `Dataset` | `pe.load(dataset)` | returned unchanged |
 
-Supported file formats are **CSV** and **Parquet** (`.csv`, `.parquet`).
+Supported file formats are **CSV** (`.csv`), **Parquet** (`.parquet`), and
+**Excel** (`.xlsx`, `.xlsm`, `.xls`).
+
+> **Excel needs an optional extra.** Reading Excel files requires an engine, just
+> like pandas: install it with `pip install "prism-eda[excel]"` (which adds
+> `openpyxl` for `.xlsx`/`.xlsm`; legacy `.xls` needs `xlrd`). If you only work
+> with CSV/Parquet you don't need it — and if you try to load an Excel file
+> without an engine, Prism raises a clear `DataLoadError` telling you what to
+> install. By default the **first sheet** of a workbook is read; see
+> [reader options](#passing-options-to-the-pandas-reader) to choose a sheet.
 
 > **Non-mutation guarantee.** Prism never modifies the DataFrames you hand it,
 > and never writes a file until you call an explicit export method like
@@ -132,8 +141,16 @@ pe.load(
     read_options={
         "csv": {"sep": ";", "na_values": ["NA", "-"]},
         "parquet": {"columns": ["id", "amount"]},
+        "excel": {"sheet_name": "Sheet2"},
     },
 )
+```
+
+For an Excel workbook with more than one sheet, the first sheet is read by
+default. Pick a different one with the `excel` reader options:
+
+```python
+pe.load("report.xlsx", read_options={"excel": {"sheet_name": "transactions"}})
 ```
 
 ## Inspecting what you loaded
@@ -171,7 +188,9 @@ catalog's structure.
 
 ## Current limitations
 
-- **Formats:** CSV and Parquet only. Other formats raise `UnsupportedSourceError`.
+- **Formats:** CSV, Parquet, and Excel. Other formats raise
+  `UnsupportedSourceError`. Excel requires the `excel` extra (see above), and only
+  one sheet per file is loaded (the first by default).
 - **Backend:** pandas is the only in-memory backend today.
 - **Eager loading:** CSV files are read fully into memory; chunked/streaming
   execution is on the roadmap.

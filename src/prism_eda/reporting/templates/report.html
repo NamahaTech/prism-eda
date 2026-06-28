@@ -176,7 +176,7 @@
       <div class="metric"><strong>{{ result.catalog.table_count | format_value }}</strong><span>Tables</span></div>
       <div class="metric"><strong>{{ result.catalog.row_count | format_value }}</strong><span>Rows</span></div>
       <div class="metric"><strong>{{ result.catalog.column_count | format_value }}</strong><span>Columns</span></div>
-      <div class="metric"><strong>{% if result.goal == 'schema_discovery' %}{{ result.metadata.candidate_relationships | format_value }}{% elif result.goal == 'anomaly_detection' %}{{ result.metadata.candidate_signals | format_value }}{% else %}{{ result.findings | length | format_value }}{% endif %}</strong><span>{% if result.goal == 'schema_discovery' %}Candidate relationships{% elif result.goal == 'anomaly_detection' %}Candidate signals{% else %}Prioritized findings{% endif %}</span></div>
+      <div class="metric"><strong>{% if result.goal == 'schema_discovery' %}{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}{% elif result.goal == 'anomaly_detection' %}{{ result.metadata.get('candidate_signals', result.findings | length) | format_value }}{% else %}{{ result.findings | length | format_value }}{% endif %}</strong><span>{% if result.goal == 'schema_discovery' %}Candidate relationships{% elif result.goal == 'anomaly_detection' %}Candidate signals{% else %}Prioritized findings{% endif %}</span></div>
     </section>
 
     {% if result.warnings %}

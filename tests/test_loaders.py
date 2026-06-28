@@ -68,3 +68,52 @@ def test_duplicate_dataframe_columns_are_rejected() -> None:
 
     with pytest.raises(DataLoadError, match="duplicate columns"):
         pe.load(frame)
+
+
+def test_load_excel_file(tmp_path) -> None:
+    pytest.importorskip("openpyxl")
+    frame = pd.DataFrame({"id": [1, 2, 3], "value": [10.0, 20.0, 30.0]})
+    path = tmp_path / "records.xlsx"
+    frame.to_excel(path, index=False)
+
+    dataset = pe.load(path)
+
+    assert list(dataset.tables) == ["records"]
+    # Excel stores all numbers as floats and pandas may re-infer dtypes on read,
+    # so compare values rather than exact dtypes.
+    pd.testing.assert_frame_equal(dataset.table("records"), frame, check_dtype=False)
+
+
+def test_load_directory_mixes_excel_and_csv(tmp_path) -> None:
+    pytest.importorskip("openpyxl")
+    pd.DataFrame({"a": [1]}).to_csv(tmp_path / "from_csv.csv", index=False)
+    pd.DataFrame({"b": [2]}).to_excel(tmp_path / "from_excel.xlsx", index=False)
+
+    dataset = pe.load(tmp_path)
+
+    assert set(dataset.tables) == {"from_csv", "from_excel"}
+
+
+def test_excel_read_options_select_sheet(tmp_path) -> None:
+    pytest.importorskip("openpyxl")
+    path = tmp_path / "book.xlsx"
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame({"a": [1]}).to_excel(writer, sheet_name="first", index=False)
+        pd.DataFrame({"b": [2]}).to_excel(writer, sheet_name="second", index=False)
+
+    dataset = pe.load(path, read_options={"excel": {"sheet_name": "second"}})
+
+    assert list(dataset.table("book").columns) == ["b"]
+
+
+def test_excel_without_engine_raises_helpful_error(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "records.xlsx"
+    path.write_bytes(b"not a real workbook")  # never actually parsed
+
+    def _missing_engine(*args, **kwargs):
+        raise ImportError("Missing optional dependency 'openpyxl'.")
+
+    monkeypatch.setattr(pd, "read_excel", _missing_engine)
+
+    with pytest.raises(DataLoadError, match=r"prism-eda\[excel\]"):
+        pe.load(path)

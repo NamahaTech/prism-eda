@@ -10,6 +10,12 @@ stabilizes.
 
 ### Added
 
+- **Excel input support** (`.xlsx`, `.xlsm`, `.xls`) for file, list, mapping, and
+  directory loading. The Excel engine is an optional extra
+  (`pip install "prism-eda[excel]"`); loading an Excel file without it raises a
+  clear `DataLoadError`, so CSV/Parquet users need no extra dependency. The first
+  sheet is read by default; choose another with
+  `read_options={"excel": {"sheet_name": ...}}`.
 - **Optional AI-assisted investigation** (`prism_eda.assisted_analysis`, behind
   the `ai-gemini` extra): an LLM plans and explains an analysis by calling only
   Prism's deterministic tools. The model never sees raw data, never runs code,
@@ -29,6 +35,9 @@ stabilizes.
     provider; raw cell values are withheld by default and HMAC/API keys never
     leave memory.
   - Report footer shows AI provenance (provider, model, tool-call count).
+  - `GeminiProvider` retries transient API errors (429/5xx/timeouts) with
+    exponential backoff and otherwise raises a clean `ProviderError` instead of a
+    raw SDK traceback. Excel "no default style" reader warnings are suppressed.
 - Usage documentation for the AI-assisted layer and privacy controls.
 - Initial `prism_eda` package and session-based public API.
 - DataFrame, CSV, Parquet, multi-table mapping, and directory loading.

@@ -13,6 +13,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+class ProviderError(RuntimeError):
+    """Raised when a provider cannot produce a decision (e.g. the API is down).
+
+    Carries a clean, user-facing message instead of a raw SDK traceback.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class ToolSpec:
     """A deterministic tool the model is allowed to call.

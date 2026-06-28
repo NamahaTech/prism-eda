@@ -53,6 +53,9 @@ test = [
 plotly = [
     "plotly>=5.18.0",
 ]
+excel = [
+    "openpyxl>=3.1.0",
+]
 ai-gemini = [
     "langgraph>=1.0.0",
     "langchain-core>=1.0.0",
