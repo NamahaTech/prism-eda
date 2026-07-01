@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict, deque
 from collections.abc import Mapping
+from typing import Any
 
 import pandas as pd
 
@@ -288,11 +289,138 @@ def _findings(
     return tuple(sort_findings(findings))
 
 
+def _schema_verdict(
+    catalog: DatasetCatalog,
+    relationships: tuple[RelationshipCandidate, ...],
+    analysis: dict[str, dict[str, Any]],
+) -> str | None:
+    """One plain-language headline that leads with the schema's structure.
+
+    Signal over noise: name the hub tables everything hangs off, rather than
+    make the analyst infer them from a flat list of dozens of relationships.
+    """
+    if not relationships:
+        return None
+    hubs = sorted(
+        (name for name, info in analysis.items() if info["referenced_by"] >= 2),
+        key=lambda name: (-analysis[name]["referenced_by"], name),
+    )
+    rel_count = len(relationships)
+    if hubs:
+        top = hubs[:2]
+        names = " and ".join(_truncate(name, 32) for name in top)
+        ref = analysis[top[0]]["referenced_by"]
+        lead = (
+            f"{names} {'are' if len(top) > 1 else 'is'} the hub"
+            f"{'s' if len(top) > 1 else ''} — referenced by "
+            f"{ref} of {catalog.table_count} tables."
+        )
+        return (
+            f"{lead} {rel_count} candidate relationship(s) across "
+            f"{catalog.table_count} tables; filter or focus the diagram to read them."
+        )
+    return (
+        f"{rel_count} candidate relationship(s) across {catalog.table_count} tables — "
+        "no single hub table; review them by pair."
+    )
+
+
+def _pagerank(
+    nodes: list[str],
+    out_edges: dict[str, set[str]],
+    *,
+    damping: float = 0.85,
+    iterations: int = 60,
+) -> dict[str, float]:
+    """Plain power-iteration PageRank (no third-party dependency).
+
+    Edges run child -> parent, so importance accumulates on the tables that many
+    others reference — the schema's structural anchors.
+    """
+    count = len(nodes)
+    if count == 0:
+        return {}
+    rank = {node: 1.0 / count for node in nodes}
+    base = (1.0 - damping) / count
+    for _ in range(iterations):
+        updated = dict.fromkeys(nodes, base)
+        dangling = damping * sum(
+            rank[node] for node in nodes if not out_edges.get(node)
+        ) / count
+        for node in nodes:
+            updated[node] += dangling
+        for node in nodes:
+            targets = out_edges.get(node)
+            if targets:
+                share = damping * rank[node] / len(targets)
+                for target in targets:
+                    updated[target] += share
+        rank = updated
+    return rank
+
+
+def _graph_analysis(
+    catalog: DatasetCatalog,
+    relationships: tuple[RelationshipCandidate, ...],
+) -> dict[str, dict[str, Any]]:
+    """Classify each table's role in the candidate FK graph and rank importance.
+
+    Referenced-by count (in-degree) marks lookup/dimension/hub tables; the
+    references count (out-degree) marks fact/transaction tables. This is what
+    lets the report lead with the few tables that actually structure the schema
+    instead of dumping every inclusion dependency as an equal peer.
+    """
+    table_names = [table.name for table in catalog.tables]
+    column_counts = {table.name: table.column_count for table in catalog.tables}
+    referenced_by: dict[str, set[str]] = {name: set() for name in table_names}
+    references: dict[str, set[str]] = {name: set() for name in table_names}
+    for relationship in relationships:
+        parent, child = relationship.parent_table, relationship.child_table
+        if parent in referenced_by and child in references:
+            referenced_by[parent].add(child)
+            references[child].add(parent)
+
+    rank = _pagerank(table_names, references)
+    max_rank = max(rank.values(), default=0.0) or 1.0
+    hub_threshold = max(3, math.ceil(len(table_names) * 0.4))
+
+    analysis: dict[str, dict[str, Any]] = {}
+    for name in table_names:
+        in_degree = len(referenced_by[name])
+        out_degree = len(references[name])
+        if in_degree == 0 and out_degree == 0:
+            role = "standalone"
+        elif in_degree >= hub_threshold:
+            # Referenced by many tables is the defining hub signature, even if it
+            # also references a peer (e.g. two mutually-keyed dimension tables).
+            role = "hub"
+        elif out_degree == 0:
+            role = "dimension"
+        elif in_degree == 0:
+            # A thin table that only points at others is a junction/bridge.
+            role = (
+                "junction"
+                if out_degree >= 2 and column_counts.get(name, 99) <= out_degree + 3
+                else "fact"
+            )
+        else:
+            role = "bridge"
+        analysis[name] = {
+            "role": role,
+            "referenced_by": in_degree,
+            "references": out_degree,
+            "is_hub": role == "hub",
+            "importance": rank.get(name, 0.0) / max_rank,
+        }
+    return analysis
+
+
 def _graph_artifact(
     catalog: DatasetCatalog,
     keys: tuple[KeyCandidate, ...],
     relationships: tuple[RelationshipCandidate, ...],
     evidence: tuple[Evidence, ...],
+    analysis: dict[str, dict[str, Any]],
 ) -> Artifact:
     key_by_table: dict[str, list[KeyCandidate]] = {}
     for key in keys:
@@ -332,6 +460,7 @@ def _graph_artifact(
         )
         visible_rows = key_role_rows[:5]
         overflow_count = len(key_role_rows) - len(visible_rows)
+        table_analysis = analysis.get(table.name, {})
         node_data[table.name] = {
             "table": table.name,
             "display_table": _truncate(table.name, 33),
@@ -342,7 +471,13 @@ def _graph_artifact(
             "row_count": table.row_count,
             "column_count": table.column_count,
             "rows": visible_rows,
+            "all_rows": key_role_rows,
             "overflow_count": overflow_count,
+            "role": table_analysis.get("role", "standalone"),
+            "referenced_by": table_analysis.get("referenced_by", 0),
+            "references": table_analysis.get("references", 0),
+            "is_hub": table_analysis.get("is_hub", False),
+            "importance": table_analysis.get("importance", 0.0),
         }
 
     table_names = [table.name for table in catalog.tables]
@@ -531,6 +666,10 @@ def _graph_artifact(
             "bottom": (0, 25),
         }
         label_dx, label_dy = label_offsets[target_side]
+        confidence = relationship.confidence
+        confidence_bin = (
+            "high" if confidence >= 0.85 else "medium" if confidence >= 0.7 else "low"
+        )
         edges.append(
             {
                 "parent_table": relationship.parent_table,
@@ -538,7 +677,11 @@ def _graph_artifact(
                 "parent_columns": relationship.parent_columns,
                 "child_columns": relationship.child_columns,
                 "cardinality": relationship.cardinality,
-                "confidence": relationship.confidence,
+                "confidence": confidence,
+                "confidence_bin": confidence_bin,
+                "inclusion_rate": relationship.inclusion_rate,
+                "name_similarity": relationship.name_similarity,
+                "type_compatibility": relationship.type_compatibility,
                 "path": path,
                 "source_marks": source_marks,
                 "target_marks": target_marks,
@@ -656,8 +799,9 @@ def discover_schema_dataset(
             f"{catalog.table_count} tables."
         )
 
+    analysis = _graph_analysis(catalog, discovery.relationships)
     artifact = _graph_artifact(
-        catalog, discovery.keys, discovery.relationships, evidence
+        catalog, discovery.keys, discovery.relationships, evidence, analysis
     )
     result = AnalysisResult(
         goal="schema_discovery",
@@ -681,6 +825,10 @@ def discover_schema_dataset(
             ),
             "candidate_keys": len(discovery.keys),
             "candidate_relationships": len(discovery.relationships),
+            "verdict": _schema_verdict(catalog, discovery.relationships, analysis),
+            "table_roles": {
+                name: info["role"] for name, info in analysis.items()
+            },
         },
     )
     emit(

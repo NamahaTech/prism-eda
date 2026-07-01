@@ -132,3 +132,13 @@ class LLMProvider(ABC):
     @abstractmethod
     def decide(self, request: DecisionRequest) -> ProviderDecision:
         """Return the next step for the given request."""
+
+    def respond(self, prompt: str) -> str:
+        """Free-form text completion for grounded interpretation micro-tasks.
+
+        Separate from :meth:`decide` (which drives the tool loop). The
+        interpretation pass asks the model to reason in prose over already-gathered
+        evidence — semantic reads, a root-cause narrative, next steps. Providers
+        that do not implement this simply yield no interpretation layer.
+        """
+        raise NotImplementedError

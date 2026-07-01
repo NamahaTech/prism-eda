@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from prism_eda.assisted_analysis.graph import GraphDeps, build_graph
+from prism_eda.assisted_analysis.interpretation import interpret
 from prism_eda.assisted_analysis.providers.base import LLMProvider
 from prism_eda.assisted_analysis.state import GraphState
 from prism_eda.assisted_analysis.tools import build_tool_registry
@@ -123,7 +124,32 @@ class InvestigationSession:
         final: GraphState = graph.invoke(
             initial, config={"recursion_limit": recursion_limit}
         )
-        return self._to_result(final)
+        result = self._to_result(final)
+        interpretation = self._interpret(final)
+        if interpretation:
+            result.metadata["ai_interpretation"] = interpretation
+        return result
+
+    def _interpret(self, state: GraphState) -> dict[str, Any]:
+        """Grounded value-add layer: semantic reads, narrative, next steps.
+
+        Kept out of the tool loop on purpose — it reasons over the evidence the
+        loop already gathered, so a slow or unsupported text endpoint degrades to
+        no interpretation rather than derailing the investigation.
+        """
+        inv = self._investigator
+        try:
+            return interpret(
+                inv.provider,
+                catalog=inv.dataset.catalog(),
+                privacy=inv.privacy,
+                findings=state.get("findings", []),
+                evidence=state.get("evidence", []),
+                goal=self.goal,
+                summary=state.get("summary", ""),
+            )
+        except Exception:  # noqa: BLE001 - interpretation is best-effort
+            return {}
 
     def _to_result(self, state: GraphState) -> AnalysisResult:
         status = _STATUS_MAP.get(

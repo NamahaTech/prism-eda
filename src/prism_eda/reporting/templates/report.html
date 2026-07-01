@@ -63,9 +63,7 @@
     .brand-sub { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
     .mast-meta { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin-top: 18px; }
     .mast-meta .k { color: var(--ink-3); letter-spacing: .04em; }
-    .recipes { display: flex; gap: 2px; align-items: center; }
-    .recipes span { font-size: 13px; color: var(--ink-3); padding: 6px 13px; border-radius: 99px; }
-    .recipes span[aria-current] { color: var(--ink); background: var(--fill); font-weight: 600; }
+    .recipe-pill { font-size: 13px; font-weight: 600; color: var(--accent-ink); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 7px 15px; }
     .status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--accent-ink); text-transform: capitalize; }
     .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(51,112,122,.16); }
     .spectrum-rule { height: 2px; margin-top: 22px; border-radius: 2px; background: var(--spectrum); opacity: .85; }
@@ -81,6 +79,7 @@
       font-weight: 700;
       max-width: 24ch;
       text-wrap: balance;
+      overflow-wrap: anywhere;
     }
     .verdict h1 em { font-style: normal; color: var(--accent-ink); }
     .verdict .lede { margin: 20px 0 0; font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 64ch; }
@@ -125,6 +124,20 @@
     code { font-family: var(--mono); background: var(--fill); padding: 2px 6px; border-radius: 5px; font-size: .86em; overflow-wrap: anywhere; word-break: break-word; }
     .tbl-wrap code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
     .empty { padding: 22px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--ink-2); text-align: center; }
+    /* AI interpretation layer — visibly distinct from deterministic sections */
+    .ai-layer { border: 1px solid var(--accent); border-radius: var(--radius); background: rgba(51,112,122,.05); padding: 22px 24px; position: relative; }
+    .ai-layer::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--spectrum); }
+    .ai-head { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); }
+    .ai-chip { display: inline-grid; place-items: center; width: 26px; height: 20px; border-radius: 5px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0; }
+    .ai-narrative { margin: 14px 0 0; font-size: 17px; line-height: 1.6; color: var(--ink); max-width: 70ch; }
+    .ai-sub { margin: 20px 0 10px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+    .ai-reads { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px 20px; }
+    .ai-read { font-size: 13.5px; line-height: 1.5; }
+    .ai-read code { margin-right: 6px; }
+    .ai-read span { color: var(--ink-2); }
+    .ai-steps { margin: 0; padding-left: 20px; }
+    .ai-steps li { font-size: 14px; color: var(--ink); margin: 4px 0; max-width: 70ch; }
+    .ai-note { margin: 18px 0 0; font-size: 12px; color: var(--ink-3); max-width: 80ch; }
     .notice { padding: 14px 16px; border-radius: var(--radius); background: var(--med-bg); color: #7a4d12; }
     .notice + .notice { margin-top: 10px; }
 
@@ -233,28 +246,71 @@
     .legend-pk { color: #075f49; background: #dff4ed; }
     .legend-fk { color: #33546d; background: #e5eef5; }
     .legend-line { width: 30px; border-top: 2px solid #668178; }
-    .schema-canvas {
-      overflow: auto;
-      min-height: 480px;
-      padding: 24px;
+    /* interactive ER-diagram viewport */
+    .erd {
+      position: relative;
+      height: min(72vh, 660px);
+      border-radius: var(--radius);
+      overflow: hidden;
       background-color: #f7faf8;
       background-image: radial-gradient(#d3dfda 1px, transparent 1px);
       background-size: 22px 22px;
+      touch-action: none;
     }
-    .schema-canvas svg { display: block; min-width: 760px; max-width: none; }
+    .erd-svg { display: block; width: 100%; height: 100%; cursor: grab; }
+    .erd-svg.grabbing { cursor: grabbing; }
+    .erd-toolbar { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; gap: 6px; align-items: flex-start; }
+    .erd-toolbar button, .erd-tables > summary {
+      font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+      background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+      padding: 6px 11px; cursor: pointer; box-shadow: 0 1px 2px rgba(30,46,40,.06);
+      list-style: none;
+    }
+    .erd-toolbar button:hover, .erd-tables > summary:hover { border-color: var(--ink-3); }
+    .erd-tables > summary::-webkit-details-marker { display: none; }
+    .erd-tables { position: relative; }
+    .erd-tables-list {
+      position: absolute; top: calc(100% + 6px); right: 0; width: 280px; max-height: 320px;
+      overflow: auto; background: var(--surface); border: 1px solid var(--line);
+      border-radius: 10px; box-shadow: var(--shadow, 0 12px 30px rgba(30,46,40,.14)); padding: 8px;
+    }
+    .erd-tables-list label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
+    .erd-tables-list label:hover { background: var(--fill); }
+    .erd-hint { position: absolute; left: 12px; bottom: 10px; z-index: 2; font-size: 11.5px; color: var(--ink-3); background: rgba(251,249,243,.8); padding: 3px 8px; border-radius: 6px; pointer-events: none; }
+    .erd-popover {
+      position: absolute; z-index: 4; min-width: 220px; max-width: 300px; max-height: 260px; overflow: auto;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+      box-shadow: 0 12px 30px rgba(30,46,40,.16); padding: 10px 12px; font-size: 12px;
+    }
+    .erd-popover .pop-title { font-weight: 700; font-size: 12.5px; margin-bottom: 8px; overflow-wrap: anywhere; }
+    .erd-popover .pop-row { display: flex; align-items: baseline; gap: 7px; padding: 3px 0; }
+    .erd-popover .pop-kind { font-family: var(--mono); font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; }
+    .erd-popover .pop-kind.pk { color: #07624b; background: #dff4ed; }
+    .erd-popover .pop-kind.fk { color: #345b74; background: #e8f0f6; }
+    .erd-popover .pop-label { font-weight: 600; overflow-wrap: anywhere; }
+    .erd-popover .pop-detail { margin-left: auto; color: var(--ink-3); white-space: nowrap; }
+    /* diagram element states (JS-driven) */
+    .schema-entity, .schema-relationship { transition: opacity .15s; }
+    .schema-entity { cursor: pointer; }
+    .schema-entity.dim, .schema-relationship.dim { opacity: .12; }
+    .schema-entity.hidden, .schema-relationship.hidden { display: none; }
+    .schema-entity.focus .schema-node { stroke: var(--accent); stroke-width: 2.4; }
     .schema-relationship { color: #668178; }
-    .schema-edge { stroke: currentColor; stroke-width: 1.8; fill: none; opacity: .72; stroke-linecap: round; stroke-linejoin: round; }
+    .schema-edge { stroke: currentColor; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 5 4; }
     .schema-cardinality { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; }
+    .conf-high .schema-edge { stroke-width: 2; opacity: .8; }
+    .conf-medium .schema-edge { stroke-width: 1.6; opacity: .6; }
+    .conf-low .schema-edge { stroke-width: 1.2; opacity: .42; }
     .schema-relationship:hover { color: var(--accent); }
-    .schema-relationship:hover .schema-edge { stroke-width: 2.5; opacity: 1; }
-    .schema-edge-label-bg { fill: #fff; stroke: #c9d7d1; stroke-width: 1; }
-    .schema-edge-label { fill: #42544d; font-size: 10px; font-weight: 800; }
+    .schema-relationship:hover .schema-edge { stroke-width: 3; opacity: 1; }
     .schema-node { fill: #fff; stroke: #b7c9c2; stroke-width: 1.4; filter: drop-shadow(0 9px 16px rgba(30, 46, 40, .10)); }
     .schema-node-header { fill: #123d32; }
+    .schema-node-header.is-hub { fill: #0d5f4a; }
     .schema-node-header-rule { fill: #0d7a5f; }
     .schema-node-icon { stroke: #9de0ca; stroke-width: 1.4; fill: none; }
     .schema-node-title { fill: #fff; font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
     .schema-node-meta { fill: #b9d8ce; font-size: 10.5px; }
+    .schema-role { fill: #cfeee2; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
     .schema-section-label { fill: #7a8984; font-size: 9.5px; font-weight: 800; letter-spacing: .09em; }
     .schema-row-rule { stroke: #e5ece9; stroke-width: 1; }
     .schema-row-label { fill: #23312c; font-size: 11.5px; font-weight: 700; }
@@ -265,7 +321,30 @@
     .schema-key-badge-text { font-size: 9px; font-weight: 850; text-anchor: middle; }
     .schema-key-badge-text.pk { fill: #07624b; }
     .schema-key-badge-text.fk { fill: #345b74; }
-    .schema-empty-state, .schema-overflow { fill: #7a8984; font-size: 10.5px; }
+    .schema-empty-state { fill: #7a8984; font-size: 10.5px; }
+    .schema-more { fill: var(--accent-ink); font-size: 10.5px; font-weight: 700; cursor: pointer; }
+    .schema-more:hover { text-decoration: underline; }
+    /* role legend + confidence legend swatches */
+    .role-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+    .role-swatch.hub { background: #0d5f4a; } .role-swatch.dimension { background: #6aa393; }
+    .role-swatch.fact { background: #c4b9a1; } .role-swatch.junction { background: #b3792a; }
+    .role-swatch.bridge { background: #4272a3; } .role-swatch.standalone { background: #cdd8d3; }
+    .conf-swatch { width: 26px; border-top-style: dashed; border-top-width: 2px; }
+    .conf-swatch.high { border-color: #4c7d70; } .conf-swatch.medium { border-color: #94b0a6; opacity:.7; } .conf-swatch.low { border-color: #b9c7c1; opacity:.55; }
+    /* relationship filter controls */
+    .rel-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .rel-controls label { font-size: 12px; color: var(--ink-3); }
+    .rel-controls select { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); max-width: 260px; }
+    .rel-count { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+    .conf-badge { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; }
+    .conf-badge.high { color: #0a5f49; background: #dff4ed; } .conf-badge.medium { color: #7a4d12; background: var(--med-bg); } .conf-badge.low { color: var(--ink-2); background: var(--fill); }
+    .role-tag { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 1px 7px; border-radius: 5px; color: #fff; }
+    .role-tag.hub { background: #0d5f4a; } .role-tag.dimension { background: #6aa393; } .role-tag.fact { background: #8a7f68; } .role-tag.junction { background: #b3792a; } .role-tag.bridge { background: #4272a3; } .role-tag.standalone { background: #a7b0ab; }
+    .schema-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+    .schema-summary .chip-tbl { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; }
+    .tbl-wrap.tall { max-height: 70vh; overflow: auto; }
+    .rel-table thead th { position: sticky; top: 0; z-index: 1; }
+    .rel-table tr.rel-hidden { display: none; }
 
     /* ---------- footer ---------- */
     footer { padding: 40px 0 64px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13px; }
@@ -280,12 +359,16 @@
       .finding { grid-template-columns: auto 1fr; }
       .finding .conf { grid-column: 2; text-align: left; margin-top: 12px; }
       .conf .meter { margin-left: 0; }
-      .verdict h1 { font-size: 28px; }
-      .stats { flex-direction: row; }
+      .verdict h1 { font-size: 26px; }
+      .mast-row { flex-wrap: wrap; }
+      .recipe-pill { order: 3; }
+      .mast-meta { gap: 8px 14px; font-size: 11.5px; }
+      .stat { min-width: 40%; }
+      .rel-controls select { max-width: 44vw; }
     }
     @media print {
       body { background: #fff; }
-      .controls, .recipes { display: none; }
+      .controls, .erd-controls, .erd-tables { display: none; }
       section, .finding { break-inside: avoid; }
     }
   </style>
@@ -313,12 +396,9 @@
           <div class="brand-sub">Exploratory data analysis</div>
         </div>
       </div>
-      <nav class="recipes" aria-label="Report recipe">
-        <span{% if result.goal not in ['schema_discovery', 'anomaly_detection', 'classification'] %} aria-current="page"{% endif %}>Profile</span>
-        <span{% if result.goal == 'schema_discovery' %} aria-current="page"{% endif %}>Schema</span>
-        <span{% if result.goal == 'anomaly_detection' %} aria-current="page"{% endif %}>Anomalies</span>
-        <span{% if result.goal == 'classification' %} aria-current="page"{% endif %}>Classification</span>
-      </nav>
+      <div class="recipe-pill" aria-label="Report recipe">
+        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% else %}Data profile{% endif %}
+      </div>
     </div>
     <div class="mast-meta">
       <span><span class="k">Recipe</span>&nbsp; <span class="mono">{{ result.goal }}</span></span>
@@ -362,6 +442,37 @@
     </div>
   </section>
 
+  {% set ai = result.metadata.get('ai_interpretation') %}
+  {% if ai %}
+  <section class="page">
+    <div class="ai-layer">
+      <div class="ai-head"><span class="ai-chip">AI</span> Interpretation</div>
+      {% if ai.narrative %}<p class="ai-narrative">{{ ai.narrative }}</p>{% endif %}
+      {% if ai.column_reads %}
+      <div class="ai-sub">What the key columns mean</div>
+      <div class="ai-reads">
+        {% for read in ai.column_reads %}
+        <div class="ai-read"><code>{{ read.column }}</code><span>{{ read.meaning }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if ai.relationship_reads %}
+      <div class="ai-sub">What the relationships mean</div>
+      <div class="ai-reads">
+        {% for read in ai.relationship_reads %}
+        <div class="ai-read"><code>{{ read.child }} → {{ read.parent }}</code><span>{{ read.reading }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if ai.next_steps %}
+      <div class="ai-sub">Suggested next steps</div>
+      <ul class="ai-steps">{% for step in ai.next_steps %}<li>{{ step }}</li>{% endfor %}</ul>
+      {% endif %}
+      <p class="ai-note">Interpretation by the AI investigator ({{ result.metadata.get('model', 'model') }}) over the deterministic evidence{% if ai.shared_labels %}, with column value samples shared per your privacy setting{% endif %} — judgment layered on the measurements above, not new measurements. Verify against the evidence.</p>
+    </div>
+  </section>
+  {% endif %}
+
   {% if result.warnings %}
   <section class="page">
     <div class="sec-head"><div class="sec-idx">!</div><div class="sec-title"><h2>Evidence warnings</h2></div></div>
@@ -382,22 +493,45 @@
           <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
           <div class="sec-title">
             <h2>{{ artifact.title }}</h2>
-            <p>Evidence-backed candidates, not declared constraints.</p>
+            <p>Evidence-backed candidates, not declared constraints. Scroll to zoom, drag to pan, click a table to focus its relationships; toggle tables to declutter.</p>
             <div class="er-legend" aria-label="Entity relationship diagram legend">
               <span><b class="legend-key legend-pk">PK</b> candidate primary key</span>
               <span><b class="legend-key legend-fk">FK</b> inferred foreign key</span>
-              <span><b class="legend-line"></b> candidate relationship</span>
-              <span><svg viewBox="0 0 28 16" aria-hidden="true"><line x1="10" y1="2" x2="10" y2="14"></line><line x1="17" y1="2" x2="17" y2="14"></line><line x1="17" y1="8" x2="27" y2="8"></line></svg> exactly one</span>
-              <span><svg viewBox="0 0 28 16" aria-hidden="true"><line x1="6" y1="2" x2="6" y2="14"></line><line x1="12" y1="8" x2="27" y2="2"></line><line x1="12" y1="8" x2="27" y2="8"></line><line x1="12" y1="8" x2="27" y2="14"></line></svg> many</span>
+              <span><b class="role-swatch hub"></b> hub</span>
+              <span><b class="role-swatch dimension"></b> dimension</span>
+              <span><b class="role-swatch fact"></b> fact</span>
+              <span><b class="role-swatch junction"></b> junction</span>
+              <span><b class="conf-swatch high"></b> high conf.</span>
+              <span><b class="conf-swatch medium"></b> medium</span>
+              <span><b class="conf-swatch low"></b> low</span>
             </div>
           </div>
         </div>
-        <div class="schema-wrap">
-          <div class="schema-canvas">
-            <svg viewBox="0 0 {{ artifact.data.width }} {{ artifact.data.height }}" width="{{ artifact.data.width }}" height="{{ artifact.data.height }}" role="img" aria-label="Candidate entity relationship diagram" preserveAspectRatio="xMinYMin meet">
+        {% set nodes_by_importance = artifact.data.nodes | sort(attribute='referenced_by', reverse=true) %}
+        <div class="schema-summary" aria-label="Table roles">
+          {% for node in nodes_by_importance[:12] %}
+          <span class="chip-tbl"><span class="role-tag {{ node.role }}">{{ node.role }}</span> {{ node.display_table }}{% if node.referenced_by %} · ref by {{ node.referenced_by }}{% endif %}</span>
+          {% endfor %}
+        </div>
+        <div class="erd" data-erd-root>
+          <div class="erd-toolbar">
+            <button type="button" data-erd="fit">Fit</button>
+            <button type="button" data-erd="zoom-in" aria-label="Zoom in">+</button>
+            <button type="button" data-erd="zoom-out" aria-label="Zoom out">−</button>
+            <details class="erd-tables">
+              <summary>Tables</summary>
+              <div class="erd-tables-list">
+                {% for node in artifact.data.nodes %}
+                <label><input type="checkbox" data-erd-toggle="{{ node.table }}" checked> {{ node.display_table }}</label>
+                {% endfor %}
+              </div>
+            </details>
+          </div>
+          <svg id="erd-svg" class="erd-svg" viewBox="0 0 {{ artifact.data.width }} {{ artifact.data.height }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Candidate entity relationship diagram">
+            <g id="erd-content">
               {% for edge in artifact.data.edges %}
-              <g class="schema-relationship">
-                <title>{{ edge.parent_table }}.{{ edge.parent_columns | join(' + ') }} to {{ edge.child_table }}.{{ edge.child_columns | join(' + ') }} · {{ "%.1f%%" | format(edge.confidence * 100) }} confidence · {{ edge.cardinality | replace('_', '–') }}</title>
+              <g class="schema-relationship conf-{{ edge.confidence_bin }}" data-parent="{{ edge.parent_table }}" data-child="{{ edge.child_table }}">
+                <title>{{ edge.child_table }}.{{ edge.child_columns | join(' + ') }} → {{ edge.parent_table }}.{{ edge.parent_columns | join(' + ') }} · {{ edge.cardinality | replace('_', '–') }} · {{ "%.0f%%" | format(edge.confidence * 100) }} confidence (inclusion {{ "%.0f%%" | format(edge.inclusion_rate * 100) }}, name match {{ "%.0f%%" | format(edge.name_similarity * 100) }}, type {{ "%.0f%%" | format(edge.type_compatibility * 100) }})</title>
                 <path class="schema-edge" d="{{ edge.path }}"></path>
                 {% for mark in edge.source_marks %}
                 <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
@@ -405,16 +539,14 @@
                 {% for mark in edge.target_marks %}
                 <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
                 {% endfor %}
-                <rect class="schema-edge-label-bg" x="{{ edge.label_x - 21 }}" y="{{ edge.label_y - 10 }}" width="42" height="20" rx="10"></rect>
-                <text class="schema-edge-label" x="{{ edge.label_x }}" y="{{ edge.label_y + 3.5 }}" text-anchor="middle">{{ "%.0f%%" | format(edge.confidence * 100) }}</text>
               </g>
               {% endfor %}
               {% for node in artifact.data.nodes %}
-              <g class="schema-entity">
-                <title>{{ node.table }} · {{ node.row_count }} rows · {{ node.column_count }} columns</title>
+              <g class="schema-entity role-{{ node.role }}" data-table="{{ node.table }}">
+                <title>{{ node.table }} · {{ node.row_count }} rows · {{ node.column_count }} columns · role: {{ node.role }}{% if node.referenced_by %} (referenced by {{ node.referenced_by }}){% endif %}</title>
                 <rect class="schema-node" x="{{ node.x }}" y="{{ node.y }}" width="{{ node.width }}" height="{{ node.height }}" rx="16"></rect>
-                <rect class="schema-node-header" x="{{ node.x }}" y="{{ node.y }}" width="{{ node.width }}" height="68" rx="16"></rect>
-                <rect class="schema-node-header" x="{{ node.x }}" y="{{ node.y + 40 }}" width="{{ node.width }}" height="28"></rect>
+                <rect class="schema-node-header{% if node.is_hub %} is-hub{% endif %}" x="{{ node.x }}" y="{{ node.y }}" width="{{ node.width }}" height="68" rx="16"></rect>
+                <rect class="schema-node-header{% if node.is_hub %} is-hub{% endif %}" x="{{ node.x }}" y="{{ node.y + 40 }}" width="{{ node.width }}" height="28"></rect>
                 <rect class="schema-node-header-rule" x="{{ node.x }}" y="{{ node.y + 66 }}" width="{{ node.width }}" height="3"></rect>
                 <g class="schema-node-icon">
                   <rect x="{{ node.x + 17 }}" y="{{ node.y + 18 }}" width="20" height="17" rx="3"></rect>
@@ -423,6 +555,7 @@
                 </g>
                 <text class="schema-node-title" x="{{ node.x + 48 }}" y="{{ node.y + 30 }}">{{ node.display_table }}</text>
                 <text class="schema-node-meta" x="{{ node.x + 48 }}" y="{{ node.y + 49 }}">{{ node.row_count | format_value }} rows · {{ node.column_count }} columns</text>
+                <text class="schema-role" x="{{ node.x + node.width - 16 }}" y="{{ node.y + 30 }}" text-anchor="end">{{ node.role }}{% if node.role in ['hub', 'dimension'] and node.referenced_by %} · ref {{ node.referenced_by }}{% elif node.references %} · refs {{ node.references }}{% endif %}</text>
                 <text class="schema-section-label" x="{{ node.x + 17 }}" y="{{ node.y + 94 }}">INFERRED KEY ROLES</text>
                 <line class="schema-row-rule" x1="{{ node.x + 16 }}" y1="{{ node.y + 104 }}" x2="{{ node.x + node.width - 16 }}" y2="{{ node.y + 104 }}"></line>
                 {% if node.rows %}
@@ -440,13 +573,24 @@
                   <text class="schema-empty-state" x="{{ node.x + 17 }}" y="{{ node.y + 126 }}">No candidate key roles met the evidence threshold</text>
                 {% endif %}
                 {% if node.overflow_count %}
-                <text class="schema-overflow" x="{{ node.x + 17 }}" y="{{ node.y + node.height - 13 }}">+ {{ node.overflow_count }} more inferred key role{% if node.overflow_count != 1 %}s{% endif %}</text>
+                <text class="schema-more" data-table="{{ node.table }}" x="{{ node.x + 17 }}" y="{{ node.y + node.height - 13 }}" role="button" tabindex="0">+ {{ node.overflow_count }} more — show all</text>
                 {% endif %}
               </g>
               {% endfor %}
-            </svg>
-          </div>
+            </g>
+          </svg>
+          <div class="erd-popover" hidden></div>
+          <div class="erd-hint">Click a table to focus · click empty space to reset</div>
         </div>
+        <script type="application/json" id="erd-data">{"tables":{
+        {%- for node in artifact.data.nodes -%}
+        {{ node.table | tojson }}:{"role":{{ node.role | tojson }},"referenced_by":{{ node.referenced_by }},"references":{{ node.references }},"roles":[
+        {%- for r in node.all_rows -%}
+        {"kind":{{ r.kind | tojson }},"label":{{ r.full_label | tojson }},"detail":{{ r.detail | tojson }}}{% if not loop.last %},{% endif %}
+        {%- endfor -%}
+        ]}{% if not loop.last %},{% endif %}
+        {%- endfor -%}
+        }}</script>
       </section>
       {% endif %}
     {% endfor %}
@@ -471,20 +615,32 @@
       </div>
     </section>
 
+    {% set relationships = result.evidence | selectattr('kind', 'equalto', 'candidate_relationship') | sort(attribute='confidence', reverse=true) | list %}
     {% set section_index.n = section_index.n + 1 %}
     <section class="page">
       <div class="sec-head">
         <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
-        <div class="sec-title"><h2>Candidate relationships</h2><p>Direction runs from the unique parent key to the referencing child columns.</p></div>
+        <div class="sec-title"><h2>Candidate relationships</h2><p>Direction runs from the unique parent key to the referencing child columns. Sorted by confidence — filter by table to focus a pair.</p></div>
       </div>
-      <div class="tbl-wrap">
-        <table>
+      <div class="rel-controls" data-rel-controls>
+        <label>Parent <select data-rel-parent><option value="">all</option></select></label>
+        <label>Child <select data-rel-child><option value="">all</option></select></label>
+        <span class="rel-count" data-rel-count></span>
+      </div>
+      <div class="tbl-wrap tall">
+        <table id="relTable" class="rel-table">
           <thead><tr><th>Parent</th><th>Child</th><th>Cardinality</th><th class="num">Included</th><th class="num">Orphan rows</th><th class="num">Confidence</th></tr></thead>
           <tbody>
-            {% for item in result.evidence %}
-              {% if item.kind == 'candidate_relationship' %}
-              <tr><td>{{ item.value.parent_table }}.<code>{{ item.value.parent_columns | join(' + ') }}</code></td><td>{{ item.value.child_table }}.<code>{{ item.value.child_columns | join(' + ') }}</code></td><td>{{ item.value.cardinality | replace('_', '–') }}</td><td class="num">{{ "%.1f%%" | format(item.value.inclusion_rate * 100) }}</td><td class="num">{{ item.value.orphan_row_count }}</td><td class="num">{{ "%.1f%%" | format(item.confidence * 100) }}{% if item.value.sampled %}<br><span class="mono" style="color:var(--ink-3);font-size:11px">sampled</span>{% endif %}</td></tr>
-              {% endif %}
+            {% for item in relationships %}
+            {% set bin = 'high' if item.confidence >= 0.85 else 'medium' if item.confidence >= 0.7 else 'low' %}
+            <tr data-parent="{{ item.value.parent_table }}" data-child="{{ item.value.child_table }}">
+              <td>{{ item.value.parent_table }}.<code>{{ item.value.parent_columns | join(' + ') }}</code></td>
+              <td>{{ item.value.child_table }}.<code>{{ item.value.child_columns | join(' + ') }}</code></td>
+              <td>{{ item.value.cardinality | replace('_', '–') }}</td>
+              <td class="num">{{ "%.1f%%" | format(item.value.inclusion_rate * 100) }}</td>
+              <td class="num">{{ item.value.orphan_row_count }}</td>
+              <td class="num"><span class="conf-badge {{ bin }}">{{ "%.0f%%" | format(item.confidence * 100) }}</span>{% if item.value.sampled %}<br><span class="mono" style="color:var(--ink-3);font-size:11px">sampled</span>{% endif %}</td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -799,6 +955,196 @@
     });
 
     apply(0);
+  })();
+  </script>
+
+  <script>
+  // Interactive ER diagram: viewBox pan/zoom (zoom-to-cursor), fit, focus/dim,
+  // hide tables, and a popover for the full inferred-key-role list. Progressive
+  // enhancement — the static SVG already renders without any of this.
+  (function () {
+    "use strict";
+    var root = document.querySelector("[data-erd-root]");
+    if (!root) return;
+    var svg = root.querySelector("#erd-svg");
+    var content = root.querySelector("#erd-content");
+    var popover = root.querySelector(".erd-popover");
+    var metaEl = document.getElementById("erd-data");
+    var META = {};
+    try { META = metaEl ? JSON.parse(metaEl.textContent).tables : {}; } catch (e) { META = {}; }
+    var nodes = Array.prototype.slice.call(content.querySelectorAll(".schema-entity"));
+    var edges = Array.prototype.slice.call(content.querySelectorAll(".schema-relationship"));
+
+    function vb() { return svg.getAttribute("viewBox").split(/\s+/).map(Number); }
+    function setVB(v) { svg.setAttribute("viewBox", v.join(" ")); }
+
+    function fit() {
+      var b;
+      try { b = content.getBBox(); } catch (e) { return; }
+      if (!b || !b.width) return;
+      var p = 40;
+      setVB([b.x - p, b.y - p, b.width + 2 * p, b.height + 2 * p]);
+    }
+
+    function zoomBy(factor, fx, fy) {
+      var v = vb();
+      var nw = v[2] * factor, nh = v[3] * factor;
+      // clamp so we neither zoom into a pixel nor out past ~8x the content
+      if (nw < 60 || nw > (v[2] > v[3] ? 60000 : 40000)) return;
+      setVB([v[0] + fx * (v[2] - nw), v[1] + fy * (v[3] - nh), nw, nh]);
+    }
+
+    svg.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      var r = svg.getBoundingClientRect();
+      zoomBy(e.deltaY > 0 ? 1.1 : 1 / 1.1,
+             (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    }, { passive: false });
+
+    var dragging = false, lastX = 0, lastY = 0, moved = false;
+    svg.addEventListener("pointerdown", function (e) {
+      if (e.target.closest(".schema-more")) return;
+      dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+      svg.setPointerCapture(e.pointerId); svg.classList.add("grabbing");
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      var r = svg.getBoundingClientRect(); var v = vb();
+      var dx = (e.clientX - lastX) * v[2] / r.width;
+      var dy = (e.clientY - lastY) * v[3] / r.height;
+      if (Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY) > 3) moved = true;
+      lastX = e.clientX; lastY = e.clientY;
+      setVB([v[0] - dx, v[1] - dy, v[2], v[3]]);
+    });
+    function endDrag() { dragging = false; svg.classList.remove("grabbing"); }
+    svg.addEventListener("pointerup", endDrag);
+    svg.addEventListener("pointercancel", endDrag);
+
+    root.querySelectorAll("[data-erd]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var a = btn.getAttribute("data-erd");
+        if (a === "fit") { clearFocus(); fit(); }
+        else zoomBy(a === "zoom-in" ? 1 / 1.25 : 1.25, 0.5, 0.5);
+      });
+    });
+
+    function clearFocus() {
+      nodes.forEach(function (n) { n.classList.remove("dim", "focus"); });
+      edges.forEach(function (e) { e.classList.remove("dim"); });
+    }
+    function focus(table) {
+      var keep = {}; keep[table] = 1;
+      edges.forEach(function (e) {
+        if (e.dataset.parent === table || e.dataset.child === table) {
+          keep[e.dataset.parent] = 1; keep[e.dataset.child] = 1;
+        }
+      });
+      nodes.forEach(function (n) {
+        n.classList.toggle("dim", !keep[n.dataset.table]);
+        n.classList.toggle("focus", n.dataset.table === table);
+      });
+      edges.forEach(function (e) {
+        e.classList.toggle("dim", !(e.dataset.parent === table || e.dataset.child === table));
+      });
+    }
+    nodes.forEach(function (n) {
+      n.addEventListener("click", function (e) {
+        if (moved || e.target.closest(".schema-more")) return;
+        if (n.classList.contains("focus")) clearFocus(); else focus(n.dataset.table);
+        e.stopPropagation();
+      });
+    });
+    svg.addEventListener("click", function (e) {
+      if (e.target === svg || e.target === content) clearFocus();
+    });
+
+    root.querySelectorAll("[data-erd-toggle]").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var t = cb.getAttribute("data-erd-toggle"), on = cb.checked;
+        nodes.forEach(function (n) { if (n.dataset.table === t) n.classList.toggle("hidden", !on); });
+        edges.forEach(function (e) {
+          if (e.dataset.parent === t || e.dataset.child === t) e.classList.toggle("hidden", !on);
+        });
+      });
+    });
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    }
+    function showRoles(table, clientX, clientY) {
+      var meta = META[table];
+      if (!meta) return;
+      var html = '<div class="pop-title">' + esc(table) + "</div>";
+      (meta.roles || []).forEach(function (r) {
+        html += '<div class="pop-row"><span class="pop-kind ' + r.kind.toLowerCase() +
+          '">' + esc(r.kind) + '</span> <span class="pop-label">' + esc(r.label) +
+          '</span> <span class="pop-detail">' + esc(r.detail) + "</span></div>";
+      });
+      popover.innerHTML = html;
+      popover.hidden = false;
+      var rr = root.getBoundingClientRect();
+      var px = Math.min(Math.max(clientX - rr.left, 8), rr.width - popover.offsetWidth - 8);
+      var py = Math.min(clientY - rr.top + 10, rr.height - popover.offsetHeight - 8);
+      popover.style.left = px + "px";
+      popover.style.top = Math.max(py, 8) + "px";
+    }
+    content.querySelectorAll(".schema-more").forEach(function (el) {
+      function open(e) { e.stopPropagation(); e.preventDefault();
+        showRoles(el.getAttribute("data-table"), e.clientX || 0, e.clientY || 0); }
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") open(e); });
+    });
+    document.addEventListener("click", function (e) {
+      if (!popover.hidden && !e.target.closest(".erd-popover") && !e.target.closest(".schema-more")) {
+        popover.hidden = true;
+      }
+    });
+
+    fit();
+    window.addEventListener("resize", function () { /* viewBox keeps it responsive */ });
+  })();
+
+  // Candidate-relationships filter: pick a parent and/or child table to focus a
+  // pair instead of scrolling the full list.
+  (function () {
+    "use strict";
+    var controls = document.querySelector("[data-rel-controls]");
+    var table = document.getElementById("relTable");
+    if (!controls || !table) return;
+    var rows = Array.prototype.slice.call(table.querySelectorAll("tbody tr"));
+    var parentSel = controls.querySelector("[data-rel-parent]");
+    var childSel = controls.querySelector("[data-rel-child]");
+    var count = controls.querySelector("[data-rel-count]");
+
+    function options(attr) {
+      var seen = {};
+      rows.forEach(function (r) { seen[r.getAttribute(attr)] = 1; });
+      return Object.keys(seen).sort();
+    }
+    function fill(sel, attr) {
+      options(attr).forEach(function (v) {
+        var o = document.createElement("option"); o.value = v; o.textContent = v;
+        sel.appendChild(o);
+      });
+    }
+    fill(parentSel, "data-parent");
+    fill(childSel, "data-child");
+
+    function apply() {
+      var p = parentSel.value, c = childSel.value, shown = 0;
+      rows.forEach(function (r) {
+        var ok = (!p || r.getAttribute("data-parent") === p) &&
+                 (!c || r.getAttribute("data-child") === c);
+        r.classList.toggle("rel-hidden", !ok);
+        if (ok) shown++;
+      });
+      count.textContent = "Showing " + shown + " of " + rows.length + " relationships";
+    }
+    parentSel.addEventListener("change", apply);
+    childSel.addEventListener("change", apply);
+    apply();
   })();
   </script>
 </body>

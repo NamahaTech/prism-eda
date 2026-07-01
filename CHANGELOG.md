@@ -19,6 +19,43 @@ stabilizes.
   "unusual for its peer group"). The redundant per-detector findings
   (multivariate / Isolation Forest / LOF / conditional / agreement) now feed the
   consensus rather than each becoming its own finding.
+- **AI investigator now adds a real interpretation layer — not a reword.** After
+  the tool loop gathers deterministic evidence, a new grounded *interpretation*
+  pass asks the model for the judgment statistics can't supply: a plain-English
+  **semantic read of each column** (meaning / likely unit / caveat), **business-term
+  naming of inferred relationships** (schema goal — e.g. *"Each order is placed by
+  one customer"*), a **root-cause narrative** tying the findings together, and
+  **prioritized next steps**. Each is a small focused prompt, reasoned in prose (JSON-mode degrades
+  small models), grounded only in the gathered evidence and privacy-gated column
+  aggregates, and allowed to **abstain** rather than fabricate — column reads that
+  name a column we never disclosed are dropped. It renders as a visibly distinct
+  "AI interpretation" panel so the added value is obvious versus the deterministic
+  sections. Providers gained a `respond()` text endpoint (`FakeProvider` is
+  scriptable via `responses=`); a provider without one simply yields no layer.
+- **Opt-in richer LLM context.** The interpretation pass sends column *aggregates*
+  (type, range, missingness, cardinality) always, but the actual category
+  **labels/value samples** only when `PrivacyPolicy(allow_raw_values=True)` — off
+  by default, preserving the strict "no raw values to the LLM" boundary unless you
+  opt in.
+- **Schema report overhaul — from a flat dump to a navigable map.** The schema
+  graph now runs a lightweight FK-graph analysis: each table is classified
+  (hub / dimension / fact / junction / bridge) from its referenced-by and
+  references degree, and PageRank ranks structural importance — so the report
+  leads with a synthesized **verdict** ("X and Y are the hubs — referenced by N
+  of M tables") and role-tagged summary chips instead of an undifferentiated
+  list. The **ER diagram is now interactive** (progressive-enhancement vanilla
+  JS, still a single self-contained file with a static fallback): scroll/pinch to
+  zoom (zoom-to-cursor), drag to pan, fit-to-screen, click a table to focus and
+  dim the rest, toggle tables to declutter, and click "+N more" to open a popover
+  with the full inferred-key-role list. Edges encode confidence (dashed, weight
+  binned high/medium/low) with the evidence breakdown in the tooltip. The
+  **candidate-relationships** table gained parent/child dropdown filters, a
+  confidence sort, confidence badges, and a sticky header so a large schema's
+  relationships are readable by pair instead of one long scroll. The whole report
+  is now responsive.
+- **Report recipe indicator.** The masthead's misleading Profile/Schema/…
+  tab strip (which implied a multi-page app) is replaced by a single non-clickable
+  recipe pill naming the current report.
 - **Per-method evidence behind every review row.** Each consensus row now
   carries an `explanations` block so a *multivariate* tag is backed by the full
   per-column joint-deviation profile (every column's distance from its own

@@ -204,6 +204,24 @@ def test_non_string_column_names_are_skipped_with_warning() -> None:
     )
 
 
+def test_schema_graph_analysis_marks_roles_and_verdict(related_tables) -> None:
+    result = pe.discover_schema(related_tables)
+
+    roles = result.metadata["table_roles"]
+    # A referenced parent reads as a dimension; a referencing child as a fact.
+    assert roles["customers"] == "dimension"
+    assert roles["orders"] in {"fact", "junction"}
+    assert result.metadata.get("verdict")
+
+    graph = result.artifacts[0].data
+    customers = next(node for node in graph["nodes"] if node["table"] == "customers")
+    assert customers["referenced_by"] >= 1
+    assert "all_rows" in customers and "role" in customers
+    edge = graph["edges"][0]
+    assert edge["confidence_bin"] in {"high", "medium", "low"}
+    assert "inclusion_rate" in edge and "name_similarity" in edge
+
+
 def test_schema_exports_include_graph_and_evidence(tmp_path, related_tables) -> None:
     result = pe.discover_schema(related_tables)
     graph = result.artifacts[0].data
@@ -213,7 +231,9 @@ def test_schema_exports_include_graph_and_evidence(tmp_path, related_tables) -> 
     html = html_path.read_text(encoding="utf-8")
     payload = json.loads(json_path.read_text(encoding="utf-8"))
 
-    assert "Candidate schema map" in html
+    # The hero now leads with the synthesized verdict; the report is identified
+    # by its recipe pill and the schema-graph section.
+    assert "Schema discovery" in html
     assert "Candidate schema graph" in html
     assert "Evidence-backed candidates" in html
     assert "candidate primary key" in html

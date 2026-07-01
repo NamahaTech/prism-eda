@@ -47,14 +47,33 @@ class FakeProvider(LLMProvider):
     name = "fake"
     model = "fake-deterministic"
 
-    def __init__(self, *, script: Sequence[ScriptStep] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        script: Sequence[ScriptStep] | None = None,
+        responses: Sequence[str] | None = None,
+    ) -> None:
         self._script = list(script) if script is not None else None
         self._cursor = 0
+        # Scripted free-text replies for interpretation micro-tasks, consumed in
+        # order. With none supplied, respond() yields "" so the interpretation
+        # pass abstains cleanly (default flows stay unchanged).
+        self._responses = list(responses) if responses is not None else None
+        self._response_cursor = 0
 
     def decide(self, request: DecisionRequest) -> ProviderDecision:
         if self._script is not None:
             return self._next_scripted(request)
         return self._default_policy(request)
+
+    def respond(self, prompt: str) -> str:
+        if self._responses is None:
+            return ""
+        if self._response_cursor >= len(self._responses):
+            return ""
+        reply = self._responses[self._response_cursor]
+        self._response_cursor += 1
+        return reply
 
     def _next_scripted(self, request: DecisionRequest) -> ProviderDecision:
         assert self._script is not None

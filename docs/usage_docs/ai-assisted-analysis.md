@@ -111,6 +111,33 @@ for failing citation validation.
 3. When the model decides to finish, **citation validation** keeps only the
    findings that cite evidence IDs which actually exist; the rest are dropped.
 4. **Synthesis** assembles the standard `AnalysisResult`.
+5. **Interpretation** — a grounded value-add pass runs over the gathered evidence
+   (see below).
+
+### The interpretation layer (what the AI adds over the stats)
+
+Statistics already own detection, magnitude, and confidence — restating them is
+where an LLM adds nothing. So after the evidence is gathered, a separate
+interpretation pass asks the model for the judgment a number can't give, as small
+focused prompts reasoned in prose:
+
+- **Semantic column reads** — what each column most likely means, its likely unit,
+  and any data-quality caveat.
+- **Relationship naming** (schema-discovery goal) — each inferred foreign key
+  described in plain business terms, e.g. *orders → customers: "Each order is
+  placed by exactly one customer."* Only the highest-confidence candidates are
+  named, so a hub-heavy schema with hundreds of candidates stays readable.
+- **A root-cause narrative** — what the findings mean *together* and the most
+  likely cause or action.
+- **Prioritized next steps** — concrete follow-up analyses.
+
+Each is grounded only in the gathered evidence plus privacy-gated column
+aggregates, and may **abstain** rather than fabricate (a column read that names a
+column that was never disclosed is dropped). The result renders as a distinct
+"AI interpretation" panel. By default the model sees column *aggregates* only;
+set `PrivacyPolicy(allow_raw_values=True)` to also share category labels / value
+samples for stronger semantic inference. A provider that doesn't implement the
+`respond()` text endpoint simply yields no interpretation layer.
 
 The orchestration is a [LangGraph](https://langchain-ai.github.io/langgraph/)
 state machine; you don't interact with it directly.

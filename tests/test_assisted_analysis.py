@@ -377,3 +377,116 @@ def test_core_import_does_not_pull_in_llm_dependencies() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     assert "ok" in completed.stdout
+
+
+# --- interpretation layer (the AI value-add) ------------------------------
+
+
+def _run_with_responses(goal, responses, *, privacy=None):
+    dataset = pe.load(_sample())
+    session = Investigator(
+        dataset, provider=FakeProvider(responses=responses), privacy=privacy
+    ).start(goal=goal)
+    return session.run()
+
+
+def test_interpretation_layer_is_attached_and_rendered() -> None:
+    from prism_eda.reporting import render_html
+
+    responses = [
+        "plan: subscription tier (free vs pro)\nchurned: whether the customer left",
+        "The constant source column carries no signal and should be dropped before "
+        "modeling.",
+        "- Drop the constant source column\n- Confirm the target definition",
+    ]
+    result = _run_with_responses("profile", responses)
+
+    ai = result.metadata.get("ai_interpretation")
+    assert ai, "interpretation layer should be attached when the model responds"
+    assert ai["narrative"]
+    assert {read["column"] for read in ai["column_reads"]} >= {"plan"}
+    assert ai["next_steps"]
+
+    html = render_html(result)
+    assert "Interpretation" in html
+    assert "subscription tier" in html
+
+
+def test_interpretation_drops_ungrounded_columns() -> None:
+    # 'revenue' is not a real column; grounding must discard it.
+    responses = [
+        "revenue: fabricated\nplan: subscription tier",
+        "NONE",
+        "NONE",
+    ]
+    result = _run_with_responses("profile", responses)
+    ai = result.metadata["ai_interpretation"]
+    columns = {read["column"] for read in ai["column_reads"]}
+    assert "plan" in columns
+    assert "revenue" not in columns
+    assert ai["narrative"] is None  # abstained
+    assert ai["next_steps"] == []
+
+
+def test_no_interpretation_layer_without_text_endpoint() -> None:
+    # The default FakeProvider returns "" from respond(); nothing to interpret.
+    result = (
+        Investigator(pe.load(_sample()), provider=FakeProvider())
+        .start(goal="profile")
+        .run()
+    )
+    assert "ai_interpretation" not in result.metadata
+
+
+def test_interpretation_labels_are_gated_by_privacy() -> None:
+    from prism_eda.assisted_analysis.interpretation import _columns_block
+
+    catalog = pe.load(_sample()).catalog()
+    off, _ = _columns_block(catalog, PrivacyPolicy(allow_raw_values=False))
+    on, _ = _columns_block(catalog, PrivacyPolicy(allow_raw_values=True))
+    # Aggregates are always shared; the actual category labels only on opt-in.
+    assert "distinct" in off
+    assert "top:" not in off
+    assert "top:" in on
+
+
+def test_interpretation_names_relationships_for_schema() -> None:
+    dataset = pe.load(
+        {
+            "customers": pd.DataFrame(
+                {"customer_id": list(range(1, 21)), "segment": ["a", "b"] * 10}
+            ),
+            "orders": pd.DataFrame(
+                {
+                    "order_id": list(range(1, 41)),
+                    "customer_id": [i % 20 + 1 for i in range(40)],
+                    "amount": [float(i) for i in range(40)],
+                }
+            ),
+        }
+    )
+    responses = [
+        "customer_id: unique customer id\norder_id: unique order id",  # columns
+        "1: Each order is placed by exactly one customer.",  # relationships
+        "Orders reference customers via customer_id.",  # narrative
+        "- Confirm no orphan orders",  # next steps
+    ]
+    result = (
+        Investigator(dataset, provider=FakeProvider(responses=responses))
+        .start(goal="schema_discovery")
+        .run()
+    )
+    reads = result.metadata["ai_interpretation"]["relationship_reads"]
+    assert reads, "schema interpretation should name candidate relationships"
+    first = reads[0]
+    # Grounded: parent/child come from real evidence, not the model's free text.
+    assert first["parent"] == "customers"
+    assert first["child"] == "orders"
+    assert "customer" in first["reading"].lower()
+
+
+def test_relationship_reads_absent_without_relationships() -> None:
+    # A single-table profile has no candidate relationships -> no naming task.
+    responses = ["customer_id: id", "NONE", "NONE"]
+    result = _run_with_responses("profile", responses)
+    assert result.metadata["ai_interpretation"]["relationship_reads"] == []

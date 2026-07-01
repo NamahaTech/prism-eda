@@ -132,11 +132,20 @@ class GeminiProvider(LLMProvider):
         text = self._generate(prompt)
         return parse_decision(text)
 
-    def _generate(self, prompt: str) -> str:
+    def respond(self, prompt: str) -> str:
+        """Prose completion for interpretation micro-tasks (no JSON-mode).
+
+        Research on small models is consistent that JSON-mode degrades reasoning,
+        so the interpretation pass reasons in free text; we parse the shape we
+        need afterwards.
+        """
+        return self._generate(prompt, json_mode=False)
+
+    def _generate(self, prompt: str, *, json_mode: bool = True) -> str:
         last_error: Exception | None = None
         for attempt in range(self._max_retries):
             try:
-                return self._generate_once(prompt)
+                return self._generate_once(prompt, json_mode=json_mode)
             except Exception as error:  # noqa: BLE001 - re-raised below as clean error
                 last_error = error
                 if not _is_transient(error) or attempt == self._max_retries - 1:
@@ -149,17 +158,20 @@ class GeminiProvider(LLMProvider):
             "different model (e.g. model='gemini-2.5-flash')."
         ) from last_error
 
-    def _generate_once(self, prompt: str) -> str:
+    def _generate_once(self, prompt: str, *, json_mode: bool = True) -> str:
         genai_types = _import_genai_types()
+        base_kwargs: dict[str, Any] = {
+            "temperature": self._temperature,
+            "max_output_tokens": self._max_output_tokens,
+        }
+        json_kwargs = dict(base_kwargs)
+        if json_mode:
+            json_kwargs["response_mime_type"] = "application/json"
         try:
             response = self._client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    temperature=self._temperature,
-                    max_output_tokens=self._max_output_tokens,
-                    response_mime_type="application/json",
-                ),
+                config=genai_types.GenerateContentConfig(**json_kwargs),
             )
         except Exception as error:
             # Some models reject response_mime_type with a 4xx; for that case
@@ -170,10 +182,7 @@ class GeminiProvider(LLMProvider):
             response = self._client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    temperature=self._temperature,
-                    max_output_tokens=self._max_output_tokens,
-                ),
+                config=genai_types.GenerateContentConfig(**base_kwargs),
             )
         text = getattr(response, "text", None)
         if not text:
