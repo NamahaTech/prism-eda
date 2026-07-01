@@ -53,6 +53,47 @@ _UNIVARIATE_FINDING_MIN_RATE = 0.05
 # report does not drown in pairwise combinations.
 _MAX_CONDITIONAL_FINDINGS = 3
 
+# Row-centric consensus. Instead of one finding per detector (the same rows
+# described six ways), we collect every flagged row and lead with the rows
+# themselves: what they are, how unusual, and which checks agreed. A row only
+# earns a place on the review list if a threshold-based detector caught it
+# (univariate/multivariate/conditional) — the ranked detectors (Isolation
+# Forest, LOF) always emit their top-k, so they corroborate but never originate.
+_CONSENSUS_MAX_ROWS = 15
+_CONTRIBUTOR_MIN_Z = 2.0
+_MAX_CONTRIBUTORS = 3
+# A single conditional hit this strong is a genuine in-context anomaly worth the
+# review list on its own; weaker single conditional hits only corroborate.
+_CONSENSUS_STRONG_CONDITIONAL = 5.0
+# Even when two detectors agree, require some real extremity so the ordinary tails
+# of a clean distribution (a few points just past 3.5σ, which any normal column
+# has) do not manufacture a review list out of noise.
+_CONSENSUS_MIN_AGREE_Z = 4.5
+_THRESHOLD_SIGNAL_KINDS = {
+    "anomaly_univariate_outlier",
+    "anomaly_multivariate_outlier",
+    "anomaly_conditional_outlier",
+}
+_CORROBORATING_SIGNAL_KINDS = {
+    "anomaly_isolation_forest",
+    "anomaly_local_density_outlier",
+}
+
+# Distribution-shape diagnostics. A column with two separated clusters is not a
+# clean distribution with a few tail outliers — it is two populations, and that
+# reframing is usually the single most useful thing to tell an analyst. We detect
+# it with a robust largest-gap split (on a log axis for heavily skewed positive
+# columns) and only call it when both sides hold a real share of the rows.
+_HIST_BINS = 24
+_BIMODAL_MIN_FRACTION = 0.15
+_BIMODAL_MIN_GROUP = 4
+_BIMODAL_GAP_RATIO = 2.5
+# The separating gap must also span a real share of the column's spread, so that
+# the small ±1 gaps in ordinary discrete/uniform data (e.g. integer tenures) are
+# not mistaken for a true two-population split.
+_BIMODAL_MIN_RANGE_FRACTION = 0.10
+_SCATTER_MAX_POINTS = 2000
+
 
 def _row_budget(mode: AnalysisMode | str) -> int:
     return _ROW_BUDGETS[AnalysisMode(mode)]
@@ -508,6 +549,574 @@ def _candidate_rows(item: Evidence) -> list[str]:
     return []
 
 
+# --------------------------------------------------------------------------- #
+# Row-centric consensus, distribution shape, and relationship context.
+#
+# These power the analyst-facing report: instead of restating the same rows from
+# six detector angles, we name the rows, show their values against the baseline,
+# explain why each is unusual, and surface distribution shape so an analyst can
+# *see* the data behind every claim.
+# --------------------------------------------------------------------------- #
+
+
+def _identifier_column(table: TableCatalog) -> str | None:
+    """The column best suited to label a row in the report (an id if present)."""
+    for column in table.columns:
+        if "identifier_candidate" in column.roles:
+            return column.name
+    for column in table.columns:
+        if column.name.lower() in {"id", "index"} or column.name.lower().endswith(
+            "_id"
+        ):
+            return column.name
+    return None
+
+
+def _numeric_robust_z(
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    *,
+    target: str | None,
+) -> tuple[list[str], dict[str, pd.Series], dict[str, float]]:
+    """Robust z-scores and medians for meaningful (non-identifier) numeric columns."""
+    columns = _numeric_columns(
+        frame, table, exclude={target} if target else None, allow_identifiers=False
+    )
+    z_by_column: dict[str, pd.Series] = {}
+    median_by_column: dict[str, float] = {}
+    for column in columns:
+        series = pd.to_numeric(frame[column], errors="coerce")
+        if series.notna().sum() < 8:
+            continue
+        z_by_column[column] = _robust_z(series)
+        median_by_column[column] = float(series.median())
+    return list(z_by_column), z_by_column, median_by_column
+
+
+def _as_float(value: Any) -> float:
+    """Coerce a pandas/numpy scalar to ``float`` (keeps the type-checker happy)."""
+    return float(value)
+
+
+def _format_number(value: float) -> str:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return "n/a"
+    if abs(value) >= 1000:
+        return f"{value:,.0f}"
+    if float(value).is_integer():
+        return f"{int(value)}"
+    return f"{value:.4g}"
+
+
+def _row_contributors(
+    label: Any,
+    frame: pd.DataFrame,
+    z_by_column: dict[str, pd.Series],
+    median_by_column: dict[str, float],
+    *,
+    min_z: float = _CONTRIBUTOR_MIN_Z,
+    limit: int | None = _MAX_CONTRIBUTORS,
+) -> list[dict[str, Any]]:
+    """The columns that make this row unusual, most extreme first.
+
+    With the defaults this returns only the notable spikes (used for the
+    univariate "why" bars). Called with ``min_z=0.0`` and ``limit=None`` it
+    returns every numeric column's deviation, sorted by magnitude — the full
+    profile behind a multivariate (joint-distance) flag, so the analyst can see
+    whether the row is broadly unusual or dominated by a single column.
+    """
+    scored: list[tuple[float, str, float, float]] = []
+    for column, z_series in z_by_column.items():
+        if label not in z_series.index:
+            continue
+        z = z_series.loc[label]
+        cell = pd.to_numeric(
+            pd.Series([frame.at[label, column]]), errors="coerce"
+        ).iloc[0]
+        if pd.isna(z) or pd.isna(cell):
+            continue
+        scored.append((abs(float(z)), column, float(z), float(cell)))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    contributors: list[dict[str, Any]] = []
+    for abs_z, column, z, cell in scored:
+        if abs_z < min_z and contributors:
+            break
+        contributors.append(
+            {
+                "column": column,
+                "value": cell,
+                "baseline": median_by_column[column],
+                "robust_z": z,
+                "direction": "high" if z >= 0 else "low",
+            }
+        )
+        if limit is not None and len(contributors) >= limit:
+            break
+    return contributors
+
+
+def _why_text(
+    contributors: list[dict[str, Any]], method_count: int, total_methods: int
+) -> str:
+    agreement = (
+        f" Surfaced by {method_count} of {total_methods} checks."
+        if total_methods
+        else ""
+    )
+    if not contributors:
+        return f"Flagged by {method_count} check(s).{agreement}".strip()
+    top = contributors[0]
+    column = top["column"]
+    value = top["value"]
+    baseline = top["baseline"]
+    direction = top["direction"]
+    value_text = _format_number(value)
+    baseline_text = _format_number(baseline)
+    # Only use the "N× the typical" phrasing when the value is genuinely extreme;
+    # otherwise a small-integer ratio (1 vs 6) reads as alarming when it is not.
+    if baseline != 0 and (value / baseline) > 0 and abs(top["robust_z"]) >= 3.0:
+        ratio = value / baseline
+        magnitude = ratio if ratio >= 1 else 1 / ratio
+        if magnitude >= 2:
+            rel = "above" if direction == "high" else "below"
+            return (
+                f"{column} {value_text} is {magnitude:.0f}× the typical "
+                f"{baseline_text} ({rel}).{agreement}"
+            )
+    rel = "above" if direction == "high" else "below"
+    return (
+        f"{column} {value_text} sits {abs(top['robust_z']):.1f}σ {rel} the "
+        f"typical {baseline_text}.{agreement}"
+    )
+
+
+def _conditional_why(
+    condition_column: str,
+    value_column: str,
+    value: float,
+    condition_value: float,
+    method_count: int,
+    total_methods: int,
+) -> str:
+    agreement = (
+        f" Surfaced by {method_count} of {total_methods} checks."
+        if total_methods
+        else ""
+    )
+    return (
+        f"{value_column} {_format_number(value)} is unusual for its "
+        f"{condition_column} peer group (around {condition_column} "
+        f"{_format_number(condition_value)}).{agreement}"
+    )
+
+
+def _row_explanations(
+    row_label: Any,
+    row_str: str,
+    frame: pd.DataFrame,
+    *,
+    contributors: list[dict[str, Any]],
+    methods: set[str],
+    z_by_column: dict[str, pd.Series],
+    median_by_column: dict[str, float],
+    multivariate_score: dict[str, float],
+    multivariate_threshold: float,
+    conditional_context: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Per-detector evidence behind a review row, so each tag is actually shown.
+
+    Every block is present only when that detector flagged the row, so a
+    "multivariate outlier" tag is backed by a visible joint-deviation profile and
+    a "conditional outlier" tag by the peer group it stands out from — instead of
+    all three tags collapsing to a single univariate sigma bar.
+    """
+    explanations: dict[str, Any] = {}
+    if contributors:
+        explanations["univariate"] = {"contributors": contributors}
+    if "multivariate outlier" in methods and row_str in multivariate_score:
+        # The full profile (no min-z cutoff) shows whether the joint distance is
+        # broadly driven or dominated by one column.
+        profile = _row_contributors(
+            row_label,
+            frame,
+            z_by_column,
+            median_by_column,
+            min_z=0.0,
+            limit=None,
+        )
+        explanations["multivariate"] = {
+            "score": multivariate_score[row_str],
+            "threshold": multivariate_threshold,
+            "columns": profile,
+        }
+    if "conditional outlier" in methods and row_str in conditional_context:
+        explanations["conditional"] = conditional_context[row_str]
+    return explanations
+
+
+def _consensus_evidence(
+    evidence: Sequence[Evidence],
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    *,
+    target: str | None,
+) -> Evidence | None:
+    """Collapse all detectors into one ranked, row-centric review list."""
+    methods_by_row: dict[str, set[str]] = {}
+    threshold_by_row: dict[str, set[str]] = {}
+    conditional_strength: dict[str, float] = {}
+    conditional_context: dict[str, dict[str, Any]] = {}
+    multivariate_score: dict[str, float] = {}
+    multivariate_threshold = 0.0
+    for item in evidence:
+        if item.scope.table != table.name:
+            continue
+        if (
+            item.kind not in _THRESHOLD_SIGNAL_KINDS
+            and item.kind not in _CORROBORATING_SIGNAL_KINDS
+        ):
+            continue
+        label = item.kind.replace("anomaly_", "").replace("_", " ")
+        for row in _candidate_rows(item):
+            methods_by_row.setdefault(row, set()).add(label)
+            if item.kind in _THRESHOLD_SIGNAL_KINDS:
+                threshold_by_row.setdefault(row, set()).add(label)
+        if item.kind == "anomaly_conditional_outlier" and len(item.scope.columns) == 2:
+            condition_column, value_column = item.scope.columns
+            for example in item.value.get("examples", ()):
+                row = str(example["row_index"])
+                score = abs(float(example.get("score", 0.0)))
+                # Keep the peer group the row stands out from most strongly.
+                if score >= conditional_strength.get(row, 0.0):
+                    conditional_strength[row] = score
+                    conditional_context[row] = {
+                        "condition_column": condition_column,
+                        "value_column": value_column,
+                        **example,
+                    }
+        elif item.kind == "anomaly_multivariate_outlier":
+            multivariate_threshold = float(
+                item.value.get("threshold", multivariate_threshold)
+            )
+            for record in item.value.get("top_records", ()):
+                multivariate_score[str(record["row_index"])] = float(
+                    record.get("score", 0.0)
+                )
+    if not methods_by_row:
+        return None
+
+    _, z_by_column, median_by_column = _numeric_robust_z(frame, table, target=target)
+    index_by_str: dict[str, Any] = {str(label): label for label in frame.index}
+    total_methods = len(
+        {method for methods in methods_by_row.values() for method in methods}
+    )
+
+    rows_payload: list[dict[str, Any]] = []
+    for row_str, methods in methods_by_row.items():
+        row_label = index_by_str.get(row_str)
+        if row_label is None:
+            continue
+        contributors = _row_contributors(
+            row_label, frame, z_by_column, median_by_column
+        )
+        max_z = max((abs(item["robust_z"]) for item in contributors), default=0.0)
+        threshold_methods = threshold_by_row.get(row_str, set())
+        corroborating = methods - threshold_methods
+        qualifies = (
+            (len(threshold_methods) >= 2 and max_z >= _CONSENSUS_MIN_AGREE_Z)
+            or max_z >= _UNIVARIATE_FINDING_MIN_ROBUST_Z
+            or ("multivariate outlier" in methods and len(corroborating) >= 1)
+            or conditional_strength.get(row_str, 0.0) >= _CONSENSUS_STRONG_CONDITIONAL
+        )
+        if not qualifies:
+            continue
+        # If the row is globally extreme, explain it column-wise; if it was driven
+        # by a conditional (in-context) check, explain the peer-group reason
+        # instead of a weak global deviation.
+        context = conditional_context.get(row_str)
+        if max_z >= 3.0 or context is None:
+            why = _why_text(contributors, len(methods), total_methods)
+        else:
+            why = _conditional_why(
+                context["condition_column"],
+                context["value_column"],
+                _as_float(frame.at[row_label, context["value_column"]]),
+                _as_float(frame.at[row_label, context["condition_column"]]),
+                len(methods),
+                total_methods,
+            )
+        rows_payload.append(
+            {
+                "row_index": row_str,
+                "method_count": len(methods),
+                "methods": sorted(methods),
+                "max_abs_robust_z": max_z,
+                "values": {
+                    str(col): frame.at[row_label, col] for col in frame.columns
+                },
+                "contributors": contributors,
+                "why": why,
+                "explanations": _row_explanations(
+                    row_label,
+                    row_str,
+                    frame,
+                    contributors=contributors,
+                    methods=methods,
+                    z_by_column=z_by_column,
+                    median_by_column=median_by_column,
+                    multivariate_score=multivariate_score,
+                    multivariate_threshold=multivariate_threshold,
+                    conditional_context=conditional_context,
+                ),
+            }
+        )
+    if not rows_payload:
+        return None
+    rows_payload.sort(key=lambda row: (-row["method_count"], -row["max_abs_robust_z"]))
+    rows_payload = rows_payload[:_CONSENSUS_MAX_ROWS]
+    confidence = 0.85 if any(row["method_count"] >= 3 for row in rows_payload) else 0.78
+    return Evidence.create(
+        kind="anomaly_consensus_review",
+        scope=EvidenceScope(table=table.name),
+        value={
+            "evaluated_row_count": int(len(frame)),
+            "review_row_count": len(rows_payload),
+            "total_detectors": total_methods,
+            "id_column": _identifier_column(table),
+            "columns": [str(column) for column in frame.columns],
+            "rows": rows_payload,
+        },
+        method="cross_detector_consensus_v1",
+        description=f"Cross-detector review rows for {table.name}.",
+        confidence=confidence,
+        assumptions=(
+            "Review rows are prioritized by detector agreement and extremity; they "
+            "are candidates for human review, not confirmed anomalies.",
+        ),
+    )
+
+
+def _detect_modality(series: pd.Series) -> dict[str, Any]:
+    """Robust largest-gap test for a two-population split."""
+    values = np.sort(series.to_numpy(dtype="float64"))
+    n = len(values)
+    result: dict[str, Any] = {"is_multimodal": False, "clusters": []}
+    if n < 20:
+        return result
+    work = values
+    log_space = False
+    if float(values.min()) > 0:
+        skew = _as_float(series.skew()) if n > 2 else 0.0
+        spread = values.max() / max(values.min(), 1e-9)
+        if abs(skew) >= 1.0 or spread >= 50:
+            work = np.log10(values)
+            log_space = True
+    gaps = np.diff(work)
+    positive = gaps[gaps > 0]
+    if gaps.size == 0 or positive.size == 0:
+        return result
+    median_gap = float(np.median(positive))
+    work_range = float(work[-1] - work[0])
+    max_idx = int(np.argmax(gaps))
+    max_gap = float(gaps[max_idx])
+    lower_n = max_idx + 1
+    upper_n = n - lower_n
+    if (
+        median_gap > 0
+        and max_gap >= _BIMODAL_GAP_RATIO * median_gap
+        and work_range > 0
+        and max_gap >= _BIMODAL_MIN_RANGE_FRACTION * work_range
+        and lower_n >= _BIMODAL_MIN_GROUP
+        and upper_n >= _BIMODAL_MIN_GROUP
+        and lower_n / n >= _BIMODAL_MIN_FRACTION
+        and upper_n / n >= _BIMODAL_MIN_FRACTION
+    ):
+        boundary_low = float(values[max_idx])
+        boundary_high = float(values[max_idx + 1])
+        result.update(
+            {
+                "is_multimodal": True,
+                "log_space": log_space,
+                "gap": {"low": boundary_low, "high": boundary_high},
+                "clusters": [
+                    {
+                        "min": float(values[0]),
+                        "max": boundary_low,
+                        "count": lower_n,
+                        "fraction": lower_n / n,
+                    },
+                    {
+                        "min": boundary_high,
+                        "max": float(values[-1]),
+                        "count": upper_n,
+                        "fraction": upper_n / n,
+                    },
+                ],
+            }
+        )
+    return result
+
+
+def _distribution_evidence(
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    *,
+    target: str | None,
+    flagged: set[str],
+) -> list[Evidence]:
+    """Per-column distribution shape: histogram, box stats, modality, flagged values."""
+    columns, _, _ = _numeric_robust_z(frame, table, target=target)
+    index_by_str: dict[str, Any] = {str(label): label for label in frame.index}
+    flagged_labels = {index_by_str[item] for item in flagged if item in index_by_str}
+    evidence: list[Evidence] = []
+    for column in columns:
+        series = pd.to_numeric(frame[column], errors="coerce").dropna()
+        if len(series) < 12:
+            continue
+        values = series.to_numpy(dtype="float64")
+        q1 = float(series.quantile(0.25))
+        q3 = float(series.quantile(0.75))
+        iqr = q3 - q1
+        box = {
+            "min": float(series.min()),
+            "q1": q1,
+            "median": float(series.median()),
+            "q3": q3,
+            "max": float(series.max()),
+            "mean": float(series.mean()),
+            "lower_fence": q1 - 1.5 * iqr,
+            "upper_fence": q3 + 1.5 * iqr,
+        }
+        bin_count = min(_HIST_BINS, max(8, len(series) // 2))
+        counts, edges = np.histogram(values, bins=bin_count)
+        flagged_values = [
+            _as_float(frame.at[label, column])
+            for label in flagged_labels
+            if label in frame.index and pd.notna(frame.at[label, column])
+        ]
+        modality = _detect_modality(series)
+        evidence.append(
+            Evidence.create(
+                kind="anomaly_distribution_shape",
+                scope=EvidenceScope(table=table.name, columns=(column,)),
+                value={
+                    "column": column,
+                    "evaluated_row_count": int(len(series)),
+                    "box": box,
+                    "histogram": {
+                        "counts": [int(count) for count in counts],
+                        "edges": [float(edge) for edge in edges],
+                    },
+                    "flagged_values": flagged_values,
+                    "modality": modality,
+                },
+                method="largest_gap_modality_v1",
+                description=f"Distribution shape for {table.name}.{column}.",
+                confidence=0.83 if modality["is_multimodal"] else 0.7,
+                assumptions=(
+                    "Modality is detected with a robust gap split; it is a "
+                    "descriptive summary, not a fitted mixture model.",
+                ),
+            )
+        )
+    return evidence
+
+
+def _scatter_evidence(
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    *,
+    target: str | None,
+    flagged: set[str],
+) -> Evidence | None:
+    """A scatter of the most-associated numeric pair, with flagged rows marked."""
+    columns, z_by_column, _ = _numeric_robust_z(frame, table, target=target)
+    if len(columns) < 2:
+        return None
+    numeric = frame[columns].apply(pd.to_numeric, errors="coerce")
+    usable = numeric.dropna()
+    if len(usable) < 8:
+        return None
+    index_by_str: dict[str, Any] = {str(label): label for label in frame.index}
+    flagged_labels = {index_by_str[item] for item in flagged if item in index_by_str}
+    ranks = usable.rank()
+    correlation = ranks.corr(method="pearson")
+
+    def _best_pair_within(candidates: list[str]) -> tuple[float, str, str] | None:
+        best: tuple[float, str, str] | None = None
+        for left, right in itertools.combinations(candidates, 2):
+            coefficient = abs(float(correlation.loc[left, right]))
+            if math.isnan(coefficient):
+                continue
+            if best is None or coefficient > best[0]:
+                best = (coefficient, left, right)
+        return best
+
+    # Prefer a scatter that explains the flagged rows: anchor on the column that
+    # drives them most, paired with its strongest numeric associate. Fall back to
+    # the most-associated pair overall when there are no flagged rows.
+    focus: str | None = None
+    if flagged_labels:
+        scored = {
+            column: float(
+                sum(
+                    abs(z_by_column[column].loc[label])
+                    for label in flagged_labels
+                    if label in z_by_column[column].index
+                    and pd.notna(z_by_column[column].loc[label])
+                )
+            )
+            for column in columns
+        }
+        focus = max(scored, key=lambda column: scored[column]) if any(
+            scored.values()
+        ) else None
+    if focus is not None:
+        partner = max(
+            (column for column in columns if column != focus),
+            key=lambda column: abs(float(correlation.loc[focus, column]))
+            if not math.isnan(correlation.loc[focus, column])
+            else -1.0,
+            default=None,
+        )
+        best = (
+            (abs(float(correlation.loc[focus, partner])), partner, focus)
+            if partner is not None
+            else None
+        )
+    else:
+        best = _best_pair_within(columns)
+    if best is None:
+        return None
+    _, x_column, y_column = best
+    sample = usable
+    if len(sample) > _SCATTER_MAX_POINTS:
+        sample = sample.sample(n=_SCATTER_MAX_POINTS, random_state=42).sort_index()
+    points = [
+        {
+            "x": float(sample.at[label, x_column]),
+            "y": float(sample.at[label, y_column]),
+            "flagged": label in flagged_labels,
+        }
+        for label in sample.index
+    ]
+    return Evidence.create(
+        kind="anomaly_scatter_pair",
+        scope=EvidenceScope(table=table.name, columns=(x_column, y_column)),
+        value={
+            "x_column": x_column,
+            "y_column": y_column,
+            "association": best[0],
+            "point_count": len(points),
+            "flagged_count": sum(1 for point in points if point["flagged"]),
+            "points": points,
+        },
+        method="spearman_top_pair_scatter_v1",
+        description=f"Scatter of {x_column} vs {y_column} for {table.name}.",
+        confidence=0.7,
+    )
+
+
 def _agreement_evidence(evidence: Sequence[Evidence], *, table: str) -> Evidence | None:
     signal_rows: dict[str, set[str]] = {}
     for item in evidence:
@@ -565,6 +1174,52 @@ def _agreement_evidence(evidence: Sequence[Evidence], *, table: str) -> Evidence
     )
 
 
+def _conditional_examples(
+    pair: pd.DataFrame,
+    bins: pd.Series,
+    scores: pd.Series,
+    candidates: pd.Series,
+    *,
+    condition_column: str,
+    value_column: str,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Enrich each conditional candidate with the peer-group band it stands out from.
+
+    A conditional (in-context) outlier only makes sense against its peers: the
+    rows whose ``condition_column`` falls in the same quantile bin. We carry that
+    peer band (median and middle 50%) plus the row's own value so the report can
+    *show* where the row sits relative to its context, not just assert a score.
+    """
+    examples: list[dict[str, Any]] = []
+    bin_by_index = dict(bins.items())
+    ranked = candidates.abs().sort_values(ascending=False).head(limit)
+    for index, score in ranked.items():
+        bin_label = bin_by_index[index]
+        peers = pair.loc[bins == bin_label, value_column]
+        peers = peers[peers.index != index]
+        if peers.empty:
+            continue
+        interval = bin_label if isinstance(bin_label, pd.Interval) else None
+        examples.append(
+            {
+                "row_index": str(index),
+                "score": float(score),
+                "value": _as_float(pair.at[index, value_column]),
+                "condition_value": _as_float(pair.at[index, condition_column]),
+                "bin_low": float(interval.left) if interval is not None else None,
+                "bin_high": float(interval.right) if interval is not None else None,
+                "peer_count": int(len(peers)),
+                "peer_median": float(peers.median()),
+                "peer_q1": float(peers.quantile(0.25)),
+                "peer_q3": float(peers.quantile(0.75)),
+                "peer_min": float(peers.min()),
+                "peer_max": float(peers.max()),
+            }
+        )
+    return examples
+
+
 def _conditional_evidence(
     frame: pd.DataFrame,
     table: TableCatalog,
@@ -616,7 +1271,14 @@ def _conditional_evidence(
                     "candidate_rate": len(candidates)
                     / max(1, int(scores.notna().sum())),
                     "max_conditional_score": float(candidates.max()),
-                    "examples": _top_index_values(candidates),
+                    "examples": _conditional_examples(
+                        pair,
+                        bins,
+                        scores,
+                        candidates,
+                        condition_column=condition_column,
+                        value_column=value_column,
+                    ),
                 },
                 method="quantile_bin_conditional_modified_z_score_v1",
                 description=(
@@ -755,24 +1417,74 @@ def _findings_and_steps(
 ) -> tuple[list[Finding], list[TransformationStep]]:
     findings: list[Finding] = []
     steps: list[TransformationStep] = []
-    # Surface only the strongest conditional pairs as findings; the rest remain
-    # as evidence in the candidate-signal table.
-    conditional_ranked = sorted(
-        (
-            item
-            for item in evidence
-            if item.kind == "anomaly_conditional_outlier"
-            and item.value.get("candidate_count")
-        ),
-        key=lambda item: item.value.get("max_conditional_score", 0.0),
-        reverse=True,
-    )
-    conditional_finding_ids = {
-        item.id for item in conditional_ranked[:_MAX_CONDITIONAL_FINDINGS]
-    }
+    # Row-centric reporting: the consensus list and distribution-shape findings
+    # lead, and per-detector results (multivariate / isolation forest / LOF /
+    # conditional / agreement) feed the consensus instead of becoming their own
+    # findings, so the same rows are not restated six ways.
     for item in evidence:
         value = item.value
-        if (
+        if item.kind == "anomaly_consensus_review" and value["rows"]:
+            count = value["review_row_count"]
+            findings.append(
+                Finding.create(
+                    title=f"{count} row(s) to review in {item.scope.table}",
+                    summary=(
+                        f"{count} row(s) stand out across multiple checks — each is "
+                        "listed below with its values, the typical baseline, and why "
+                        "it was flagged."
+                    ),
+                    severity="high",
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Open the flagged rows below and decide whether each is a data "
+                        "error, a rare valid case, or a separate regime."
+                    ),
+                )
+            )
+            steps.append(
+                TransformationStep(
+                    operation="review_flagged_rows",
+                    table=item.scope.table or "",
+                    columns=(),
+                    parameters={
+                        "review_row_count": count,
+                        "method": item.method,
+                    },
+                    rationale=(
+                        "Rows surfaced by multiple independent checks are the highest "
+                        "priority for human review."
+                    ),
+                    evidence_ids=(item.id,),
+                    risk="medium",
+                )
+            )
+        elif (
+            item.kind == "anomaly_distribution_shape"
+            and value["modality"]["is_multimodal"]
+        ):
+            column = value["column"]
+            lower, upper = value["modality"]["clusters"]
+            findings.append(
+                Finding.create(
+                    title=f"{item.scope.table}.{column} looks like two populations",
+                    summary=(
+                        "Values split into two separated groups — a lower cluster of "
+                        f"{lower['count']:,} row(s) and an upper cluster of "
+                        f"{upper['count']:,} row(s), with a clear gap between. That is "
+                        "two regimes, not one distribution with a few tail outliers; "
+                        "see the distribution chart for the exact split."
+                    ),
+                    severity="high",
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Check whether the two groups differ by unit, source, or "
+                        "definition before treating either as outliers."
+                    ),
+                )
+            )
+        elif (
             item.kind == "anomaly_univariate_outlier"
             and value["candidate_count"]
             and (
@@ -793,7 +1505,7 @@ def _findings_and_steps(
                     confidence=item.confidence,
                     evidence_ids=(item.id,),
                     recommendation=(
-                        "Review the example rows before capping, filtering, or "
+                        "Review the flagged rows before capping, filtering, or "
                         "modeling them separately."
                     ),
                 )
@@ -813,100 +1525,6 @@ def _findings_and_steps(
                     ),
                     evidence_ids=(item.id,),
                     risk="medium",
-                )
-            )
-        elif item.kind == "anomaly_multivariate_outlier" and value["candidate_count"]:
-            findings.append(
-                Finding.create(
-                    title=f"Multivariate outlier candidates in {item.scope.table}",
-                    summary=(
-                        f"{value['candidate_count']:,} row(s) "
-                        f"({value['candidate_rate']:.1%}) have unusually large "
-                        "robust multivariate scores."
-                    ),
-                    severity="high" if value["candidate_rate"] >= 0.02 else "medium",
-                    confidence=item.confidence,
-                    evidence_ids=(item.id,),
-                    recommendation=(
-                        "Inspect the top contributing columns for the highest-scoring "
-                        "records."
-                    ),
-                )
-            )
-        elif item.kind == "anomaly_isolation_forest" and value["candidate_count"]:
-            findings.append(
-                Finding.create(
-                    title=f"Isolation Forest review candidates in {item.scope.table}",
-                    summary=(
-                        f"{value['candidate_count']:,} row(s) "
-                        f"({value['candidate_rate']:.1%}) ranked highest by the "
-                        "Isolation Forest diagnostic."
-                    ),
-                    severity="medium",
-                    confidence=item.confidence,
-                    evidence_ids=(item.id,),
-                    recommendation=(
-                        "Inspect the ranked rows and contributing numeric features "
-                        "before treating them as anomalous."
-                    ),
-                )
-            )
-        elif item.kind == "anomaly_local_density_outlier" and value["candidate_count"]:
-            findings.append(
-                Finding.create(
-                    title=f"Local-density review candidates in {item.scope.table}",
-                    summary=(
-                        f"{value['candidate_count']:,} row(s) "
-                        f"({value['candidate_rate']:.1%}) ranked highest by local "
-                        "density contrast."
-                    ),
-                    severity="medium",
-                    confidence=item.confidence,
-                    evidence_ids=(item.id,),
-                    recommendation=(
-                        "Compare these rows with nearby records; local-density "
-                        "signals can be sensitive to sparse valid subgroups."
-                    ),
-                )
-            )
-        elif item.kind == "anomaly_detector_agreement" and value["candidate_count"]:
-            findings.append(
-                Finding.create(
-                    title=f"Detector agreement on review rows in {item.scope.table}",
-                    summary=(
-                        f"{value['candidate_count']:,} row(s) appeared in at least "
-                        "two ranked anomaly review sets."
-                    ),
-                    severity="high",
-                    confidence=item.confidence,
-                    evidence_ids=(item.id,),
-                    recommendation=(
-                        "Prioritize agreed rows for human review because independent "
-                        "diagnostics surfaced them together."
-                    ),
-                )
-            )
-        elif (
-            item.kind == "anomaly_conditional_outlier"
-            and item.id in conditional_finding_ids
-        ):
-            condition, observed = item.scope.columns
-            findings.append(
-                Finding.create(
-                    title=(
-                        f"Conditional anomaly candidates: {observed} given {condition}"
-                    ),
-                    summary=(
-                        f"{value['candidate_count']:,} row(s) are unusual for "
-                        f"{observed} within local {condition} bands."
-                    ),
-                    severity="medium",
-                    confidence=item.confidence,
-                    evidence_ids=(item.id,),
-                    recommendation=(
-                        "Use domain rules or deeper modeling to confirm whether the "
-                        "combination is implausible."
-                    ),
                 )
             )
         elif item.kind == "anomaly_rare_category":
@@ -1032,11 +1650,53 @@ def _artifact(evidence: Sequence[Evidence]) -> Artifact | None:
         evidence_ids=tuple(item.id for item in evidence),
         metadata={
             "description": (
-                "Ranked statistical review signals; candidates are not confirmed "
-                "anomalies."
+                "How the review rows were found: each detector's contribution. "
+                "Candidates are not confirmed anomalies."
             )
         },
     )
+
+
+def _verdict(evidence: Sequence[Evidence]) -> str | None:
+    """One plain-language headline: the single most useful thing to say first.
+
+    Signal over noise — lead with the strongest reframing (two populations beats
+    a pile of "outliers"), else the row-review count with a concrete example,
+    else nothing so the hero can fall back to the neutral summary.
+    """
+    multimodal = [
+        str(item.value["column"])
+        for item in evidence
+        if item.kind == "anomaly_distribution_shape"
+        and item.value["modality"]["is_multimodal"]
+    ]
+    if multimodal:
+        if len(multimodal) == 1:
+            subject, verb = multimodal[0], "splits"
+        else:
+            subject = f"{', '.join(multimodal[:-1])} and {multimodal[-1]}"
+            verb = "each split"
+        return (
+            f"{subject} {verb} into two distinct populations — two regimes to "
+            "separate, not scattered outliers."
+        )
+    review = next(
+        (
+            item
+            for item in evidence
+            if item.kind == "anomaly_consensus_review" and item.value["rows"]
+        ),
+        None,
+    )
+    if review is not None:
+        count = review.value["review_row_count"]
+        total = review.value["evaluated_row_count"]
+        top_why = review.value["rows"][0]["why"].split(" Surfaced by")[0].strip()
+        return (
+            f"{count} of {total:,} row(s) warrant review across multiple "
+            f"independent checks — the clearest: {top_why}"
+        )
+    return None
 
 
 def _anomaly_summary(
@@ -1128,6 +1788,26 @@ def anomaly_detection_dataset(
         agreement = _agreement_evidence(evidence, table=table_catalog.name)
         if agreement is not None:
             evidence.append(agreement)
+        # Consolidate every detector into one ranked, row-centric review list,
+        # then describe distribution shape and the strongest pair so the report
+        # can show the data behind each claim.
+        consensus = _consensus_evidence(
+            evidence, sampled, table_catalog, target=active_target
+        )
+        flagged_rows: set[str] = set()
+        if consensus is not None:
+            evidence.append(consensus)
+            flagged_rows = {row["row_index"] for row in consensus.value["rows"]}
+        evidence.extend(
+            _distribution_evidence(
+                sampled, table_catalog, target=active_target, flagged=flagged_rows
+            )
+        )
+        scatter = _scatter_evidence(
+            sampled, table_catalog, target=active_target, flagged=flagged_rows
+        )
+        if scatter is not None:
+            evidence.append(scatter)
 
     for item in evidence:
         emit(
@@ -1185,6 +1865,7 @@ def anomaly_detection_dataset(
             "target": target or context.target,
             "expected_contamination": expected_contamination,
             "candidate_signals": len(findings),
+            "verdict": _verdict(evidence),
         },
     )
     emit(

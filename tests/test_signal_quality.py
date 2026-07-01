@@ -173,6 +173,161 @@ def test_conditional_anomaly_findings_are_capped() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Row-centric reporting: show the data behind the claim
+# --------------------------------------------------------------------------- #
+def test_consensus_review_lists_rows_with_values_and_plain_why() -> None:
+    """The headline must name the rows, their values, the baseline, and the why."""
+    rng = np.random.default_rng(0)
+    salary = list(rng.integers(30_000, 90_000, size=40)) + [5_000_000, 7_000_000]
+    tenure = list(rng.integers(1, 10, size=40)) + [22, 25]
+    frame = pd.DataFrame(
+        {"id": range(len(salary)), "salary": salary, "tenure": tenure}
+    )
+
+    result = pe.anomaly_detection(frame, sampling="disabled")
+
+    review = [e for e in result.evidence if e.kind == "anomaly_consensus_review"]
+    assert review
+    value = review[0].value
+    assert value["id_column"] == "id"
+    assert value["review_row_count"] >= 1
+    row = value["rows"][0]
+    assert row["values"]  # the actual row is carried, not just an index
+    assert "salary" in {c["column"] for c in row["contributors"]}
+    assert "typical" in row["why"]  # plain-language baseline, not just a z-score
+    assert any("to review" in finding.title for finding in result.findings)
+
+
+def test_review_rows_carry_per_method_explanations() -> None:
+    """A multivariate/conditional tag must be backed by visible evidence.
+
+    The report's whole point is that a row flagged "multivariate outlier" shows
+    the joint per-column profile, and a "conditional outlier" shows the peer
+    group it stands out from — not a single univariate sigma bar.
+    """
+    rng = np.random.default_rng(11)
+    size = 120
+    experience = rng.integers(1, 20, size=size)
+    salary = 200_000 + experience * 8_000 + rng.integers(-20_000, 20_000, size=size)
+    frame = pd.DataFrame(
+        {
+            "id": list(range(1, size + 1)),
+            "experience": experience.astype(int),
+            "salary": salary.astype(int),
+        }
+    )
+    extras = [(901, 6, 6_800_000), (902, 16, 9_300_000), (903, 12, 7_600_000)]
+    frame = pd.concat(
+        [frame, pd.DataFrame(extras, columns=["id", "experience", "salary"])],
+        ignore_index=True,
+    )
+
+    result = pe.anomaly_detection(frame, sampling="disabled")
+    review = [e for e in result.evidence if e.kind == "anomaly_consensus_review"]
+    assert review
+    rows = review[0].value["rows"]
+    assert rows and all("explanations" in row for row in rows)
+
+    multivariate_rows = [r for r in rows if "multivariate outlier" in r["methods"]]
+    assert multivariate_rows
+    multivariate = multivariate_rows[0]["explanations"]["multivariate"]
+    assert "score" in multivariate and "threshold" in multivariate
+    # The full profile spans every numeric column, not just the dominant spike —
+    # that is what lets the analyst see the joint (multivariate) picture.
+    assert len(multivariate["columns"]) >= 2
+    assert {"column", "robust_z", "value", "baseline"} <= set(
+        multivariate["columns"][0]
+    )
+
+    conditional_rows = [r for r in rows if "conditional outlier" in r["methods"]]
+    assert conditional_rows
+    conditional = conditional_rows[0]["explanations"]["conditional"]
+    assert {
+        "condition_column",
+        "value_column",
+        "peer_q1",
+        "peer_q3",
+        "peer_median",
+        "value",
+    } <= set(conditional)
+
+
+def test_verdict_headline_is_synthesized() -> None:
+    """The report metadata carries a plain-language verdict to lead the hero."""
+    low = [float(value) for value in np.linspace(10, 30, 25)]
+    high = [float(value) for value in np.linspace(500, 520, 15)]
+    frame = pd.DataFrame({"salary": low + high, "y": list(range(40))})
+
+    result = pe.anomaly_detection(frame, sampling="disabled")
+
+    verdict = result.metadata.get("verdict")
+    assert isinstance(verdict, str) and verdict
+    # A clean two-population split is the strongest reframing, so it must lead.
+    assert "two distinct populations" in verdict
+
+
+def test_bimodal_column_is_reported_as_two_populations() -> None:
+    low = [float(value) for value in np.linspace(10, 30, 25)]
+    high = [float(value) for value in np.linspace(500, 520, 15)]
+    frame = pd.DataFrame({"x": low + high, "y": list(range(40))})
+
+    result = pe.anomaly_detection(frame, sampling="disabled")
+
+    shapes = {
+        item.value["column"]: item
+        for item in result.evidence
+        if item.kind == "anomaly_distribution_shape"
+    }
+    assert shapes["x"].value["modality"]["is_multimodal"]
+    assert not shapes["y"].value["modality"]["is_multimodal"]
+    assert any("two populations" in finding.title for finding in result.findings)
+
+
+def test_consensus_is_quiet_on_clean_data() -> None:
+    """Clean, unimodal data must not manufacture a review list or a regime split."""
+    rng = np.random.default_rng(7)
+    size = 200
+    x = rng.normal(0.0, 1.0, size)
+    frame = pd.DataFrame(
+        {
+            "x": x,
+            "y": x * 2 + rng.normal(0.0, 0.05, size),
+            "z": rng.normal(5.0, 1.0, size),
+        }
+    )
+
+    result = pe.anomaly_detection(frame, sampling="disabled")
+
+    review = [e for e in result.evidence if e.kind == "anomaly_consensus_review"]
+    review_rows = review[0].value["review_row_count"] if review else 0
+    assert review_rows <= 2  # at most the genuinely extreme tail, never a crowd
+    assert not any("two populations" in finding.title for finding in result.findings)
+
+
+def test_distribution_finding_summary_hides_raw_boundary_values() -> None:
+    """Privacy boundary: exact cell values stay in evidence (local report) and must
+    not leak into a finding summary, which the assisted investigator forwards to
+    the LLM."""
+    low = [float(value) for value in np.linspace(10, 30, 25)]
+    high = [1_234_567.0 + index for index in range(15)]
+    frame = pd.DataFrame({"amount": low + high, "row": list(range(40))})
+
+    result = pe.anomaly_detection(frame, sampling="disabled")
+
+    bimodal = [f for f in result.findings if "two populations" in f.title]
+    assert bimodal
+    assert "1,234,567" not in bimodal[0].summary
+    assert "1234567" not in bimodal[0].summary
+    shape = next(
+        item
+        for item in result.evidence
+        if item.kind == "anomaly_distribution_shape"
+        and item.value["column"] == "amount"
+    )
+    assert shape.value["modality"]["clusters"][1]["min"] >= 1_234_567
+
+
+# --------------------------------------------------------------------------- #
 # Schema noise reduction
 # --------------------------------------------------------------------------- #
 def test_spurious_one_to_one_from_range_overlap_is_suppressed() -> None:

@@ -6,6 +6,13 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
+from prism_eda.reporting.charts import (
+    format_cell,
+    histogram_svg,
+    peer_group_svg,
+    scatter_svg,
+    why_bars_svg,
+)
 from prism_eda.results import AnalysisResult
 
 
@@ -32,6 +39,11 @@ def _environment() -> Environment:
         lstrip_blocks=True,
     )
     environment.filters["format_value"] = _format_value
+    environment.filters["format_cell"] = format_cell
+    environment.filters["histogram_svg"] = histogram_svg
+    environment.filters["scatter_svg"] = scatter_svg
+    environment.filters["why_bars_svg"] = why_bars_svg
+    environment.filters["peer_group_svg"] = peer_group_svg
     return environment
 
 

@@ -7,103 +7,226 @@
   <style>
     :root {
       color-scheme: light;
-      --ink: #18201d;
-      --muted: #66736e;
-      --line: #dbe3df;
-      --paper: #f5f7f6;
-      --surface: #ffffff;
-      --accent: #0d7a5f;
-      --accent-soft: #dff4ed;
-      --high: #b42318;
-      --medium: #b54708;
-      --low: #175cd3;
-      --shadow: 0 16px 40px rgba(30, 46, 40, 0.08);
+      --paper: #f4f1e9;
+      --surface: #fbf9f3;
+      --ink: #211d17;
+      --ink-2: #655e51;
+      --ink-3: #948c7c;
+      --muted: #655e51;
+      --line: #e2dccd;
+      --line-2: #eae5d8;
+      --fill: #ece7da;
+      --accent: #33707a;
+      --accent-ink: #245b64;
+      --high: #b0402f;
+      --high-bg: #f6e4df;
+      --med: #b3792a;
+      --med-bg: #f6ecd9;
+      --low: #4272a3;
+      --low-bg: #e2ebf3;
+      --taupe: #c4b9a1;
+      --radius: 10px;
+      /* muted refraction spectrum — the only decorative color in the report */
+      --spectrum: linear-gradient(90deg,#6d5bd0 0%,#4a72c4 20%,#2f8fa6 40%,#4f9e6a 58%,#c9a63f 78%,#c0623f 100%);
+      --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Mono",
+        "Roboto Mono", monospace;
     }
     * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
       margin: 0;
       background: var(--paper);
       color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", sans-serif;
+      font-family: var(--sans);
+      font-size: 16px;
       line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
-    a { color: var(--accent); }
-    .shell { width: min(1180px, calc(100% - 32px)); margin: 32px auto 72px; }
-    .hero {
-      position: relative;
-      overflow: hidden;
-      padding: 36px;
-      border-radius: 24px;
-      color: #f9fffc;
-      background: linear-gradient(135deg, #102820 0%, #0a644e 62%, #0e8c6b 100%);
-      box-shadow: var(--shadow);
-    }
-    .hero::after {
-      content: "";
-      position: absolute;
-      width: 360px;
-      height: 360px;
-      right: -150px;
-      top: -190px;
-      border: 46px solid rgba(255, 255, 255, 0.08);
-      border-radius: 50%;
-    }
-    .eyebrow { font-size: 12px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; opacity: .78; }
-    h1 { margin: 8px 0 10px; font-size: clamp(34px, 6vw, 58px); line-height: 1; letter-spacing: -.04em; }
-    .hero p { max-width: 780px; margin: 0; font-size: 18px; color: #d6eee6; }
-    .status {
-      display: inline-flex;
-      margin-top: 22px;
-      padding: 7px 12px;
-      border: 1px solid rgba(255,255,255,.24);
-      border-radius: 999px;
-      background: rgba(255,255,255,.1);
-      font-size: 13px;
+    .mono, .num { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+    a { color: var(--accent-ink); text-underline-offset: 2px; }
+
+    /* ---------- layout ---------- */
+    .page { width: min(1080px, calc(100% - 48px)); margin: 0 auto; }
+    .wide { width: min(1240px, calc(100% - 48px)); margin: 0 auto; }
+    section { padding: 46px 0; border-top: 1px solid var(--line); }
+    .verdict { border-top: 0; }
+
+    /* ---------- masthead ---------- */
+    .mast { padding: 26px 0 0; }
+    .mast-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand svg { display: block; width: 34px; height: 34px; flex: none; }
+    .brand-name { font-weight: 800; font-size: 19px; letter-spacing: -.02em; line-height: 1; }
+    .brand-sub { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
+    .mast-meta { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin-top: 18px; }
+    .mast-meta .k { color: var(--ink-3); letter-spacing: .04em; }
+    .recipes { display: flex; gap: 2px; align-items: center; }
+    .recipes span { font-size: 13px; color: var(--ink-3); padding: 6px 13px; border-radius: 99px; }
+    .recipes span[aria-current] { color: var(--ink); background: var(--fill); font-weight: 600; }
+    .status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--accent-ink); text-transform: capitalize; }
+    .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(51,112,122,.16); }
+    .spectrum-rule { height: 2px; margin-top: 22px; border-radius: 2px; background: var(--spectrum); opacity: .85; }
+
+    /* ---------- verdict ---------- */
+    .verdict { padding-top: 40px; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); }
+    .verdict h1 {
+      margin: 16px 0 0;
+      font-size: clamp(30px, 4.4vw, 44px);
+      line-height: 1.12;
+      letter-spacing: -.025em;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
+      max-width: 24ch;
+      text-wrap: balance;
     }
-    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
-    .metric, .panel {
-      min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: var(--surface);
-      box-shadow: 0 8px 24px rgba(30, 46, 40, 0.04);
-    }
-    .metric { padding: 20px; }
-    .metric strong { display: block; font-size: 28px; line-height: 1.1; letter-spacing: -.03em; }
-    .metric span { color: var(--muted); font-size: 13px; }
-    .panel { margin-top: 18px; padding: 24px; }
-    .panel h2 { margin: 0 0 14px; font-size: 22px; letter-spacing: -.02em; overflow-wrap: anywhere; }
-    .panel-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 16px; }
-    .panel-heading p, .muted { color: var(--muted); }
-    .finding { padding: 18px 0; border-top: 1px solid var(--line); }
+    .verdict h1 em { font-style: normal; color: var(--accent-ink); }
+    .verdict .lede { margin: 20px 0 0; font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 64ch; }
+
+    /* ---------- stat strip ---------- */
+    .stats { display: flex; flex-wrap: wrap; gap: 0; margin-top: 34px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+    .stat { flex: 1 1 0; min-width: 120px; padding: 16px 20px; border-left: 1px solid var(--line-2); }
+    .stat:first-child { border-left: 0; }
+    .stat .n { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
+    .stat .l { margin-top: 7px; font-size: 12px; letter-spacing: .04em; color: var(--ink-2); }
+    .stat.flag .n { color: var(--high); }
+
+    /* ---------- section headers ---------- */
+    .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 26px; }
+    .sec-idx { font-size: 12.5px; font-weight: 600; color: var(--ink-3); padding-top: 6px; position: relative; padding-left: 14px; }
+    .sec-idx::before { content: ""; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 1px; background: var(--spectrum); background-size: 600% 100%; }
+    .sec-title { flex: 1; min-width: 0; }
+    .sec-title h2 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; }
+    .sec-title p { margin: 6px 0 0; color: var(--ink-2); font-size: 14.5px; max-width: 74ch; }
+
+    /* ---------- findings ---------- */
+    .finding { display: grid; grid-template-columns: auto 1fr auto; gap: 0 22px; padding: 22px 0 22px 20px; border-top: 1px solid var(--line-2); position: relative; }
     .finding:first-of-type { border-top: 0; }
-    .finding-title { display: flex; align-items: center; gap: 10px; }
-    .finding h3 { min-width: 0; margin: 0; font-size: 17px; overflow-wrap: anywhere; }
-    .finding p { margin: 7px 0 0; overflow-wrap: anywhere; }
-    .badge { padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
-    .badge-critical { color: #fff; background: #b42318; }
-    .badge-high { color: var(--high); background: #fee4e2; }
-    .badge-medium { color: var(--medium); background: #ffead5; }
-    .badge-low { color: var(--low); background: #dbeafe; }
-    .recommendation { color: var(--accent); font-weight: 600; }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th, td { padding: 12px 10px; text-align: left; border-top: 1px solid var(--line); vertical-align: top; }
-    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
-    .bar { width: 120px; height: 7px; margin-top: 6px; overflow: hidden; border-radius: 99px; background: #e8eeeb; }
-    .bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
-    details { margin-top: 12px; }
-    summary { cursor: pointer; color: var(--accent); font-weight: 700; }
-    code { padding: 2px 5px; border-radius: 5px; background: #eef3f1; font-size: .9em; overflow-wrap: anywhere; word-break: break-word; }
-    .table-wrap code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
-    .notice, .runtime-warning { padding: 14px 16px; border-radius: 12px; background: #fff4e8; color: #7a2e0e; }
-    .schema-panel { width: min(1600px, calc(100vw - 32px)); margin-left: 50%; padding: 0; transform: translateX(-50%); overflow: hidden; }
-    .schema-panel-header { padding: 24px 26px 18px; }
-    .er-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+    .finding::before { content: ""; position: absolute; left: 0; top: 26px; bottom: 26px; width: 3px; border-radius: 3px; background: var(--sev); }
+    .finding .sev-tag { align-self: start; display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sev); background: var(--sev-bg); white-space: nowrap; margin-top: 2px; }
+    .finding-body { min-width: 0; }
+    .finding-body h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+    .finding-body p { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; max-width: 72ch; overflow-wrap: anywhere; }
+    .finding-body .rec { color: var(--accent-ink); font-weight: 500; display: flex; gap: 9px; align-items: baseline; }
+    .finding-body .rec::before { content: "→"; color: var(--accent); font-family: var(--mono); transform: translateY(1px); }
+    .finding .conf { align-self: start; text-align: right; min-width: 118px; margin-top: 2px; }
+    .conf .cval { font-size: 13px; font-weight: 600; }
+    .conf .clab { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+    .conf .meter { width: 110px; height: 4px; margin: 7px 0 0 auto; border-radius: 99px; background: var(--fill); overflow: hidden; }
+    .conf .meter > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+    .lineage { grid-column: 2 / -1; margin-top: 12px; }
+    .lineage summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ink-2); list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+    .lineage summary::-webkit-details-marker { display: none; }
+    .lineage summary::before { content: "+"; font-family: var(--mono); color: var(--ink-3); }
+    .lineage[open] summary::before { content: "–"; }
+    .lineage .lin-body { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+    code { font-family: var(--mono); background: var(--fill); padding: 2px 6px; border-radius: 5px; font-size: .86em; overflow-wrap: anywhere; word-break: break-word; }
+    .tbl-wrap code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+    .empty { padding: 22px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--ink-2); text-align: center; }
+    .notice { padding: 14px 16px; border-radius: var(--radius); background: var(--med-bg); color: #7a4d12; }
+    .notice + .notice { margin-top: 10px; }
+
+    /* ---------- controls (filter) ---------- */
+    .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .controls .lbl { font-size: 12px; color: var(--ink-3); letter-spacing: .04em; margin-right: 2px; }
+    .chip { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 6px 13px; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+    .chip:hover { border-color: var(--ink-3); }
+    .chip:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+    .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+    .count-note { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+
+    /* ---------- tables ---------- */
+    .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-top: 1px solid var(--line-2); }
+    thead th { border-top: 0; color: var(--ink-3); font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; background: var(--fill); }
+    tbody tr:hover { background: rgba(51,112,122,.035); }
+    td.num, th.num { text-align: right; }
+    .rows-table td.flagcell { color: var(--high); font-weight: 600; background: var(--high-bg); white-space: nowrap; }
+    .rows-table td.idcell { font-weight: 700; }
+    .rows-table td.num { white-space: nowrap; }
+    .agree { display: inline-flex; align-items: center; gap: 8px; }
+    .agree .frac { font-family: var(--mono); font-weight: 600; font-size: 12.5px; padding: 2px 8px; border-radius: 6px; background: var(--fill); }
+    .agree.hi .frac { background: var(--high-bg); color: var(--high); }
+    .methods { display: block; margin-top: 5px; font-size: 11px; color: var(--ink-3); line-height: 1.4; max-width: 190px; }
+    .why { min-width: 320px; color: var(--ink); }
+    .why .wt { font-size: 13px; display: block; max-width: 40ch; }
+
+    /* per-check evidence (multivariate profile + peer group) */
+    .row-detail { margin-top: 10px; }
+    .row-detail > summary { cursor: pointer; list-style: none; font-size: 12px; font-weight: 600; color: var(--accent-ink); display: inline-flex; align-items: center; gap: 6px; }
+    .row-detail > summary::-webkit-details-marker { display: none; }
+    .row-detail > summary::after { content: "→"; font-family: var(--mono); transition: transform .12s; }
+    .row-detail[open] > summary::after { transform: rotate(90deg); }
+    .pc { margin-top: 12px; }
+    .pc + .pc { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+    .pc-cap { font-size: 11.5px; color: var(--ink-2); line-height: 1.45; max-width: 40ch; }
+    .pc-cap b { color: var(--ink); font-weight: 600; }
+
+    /* why-bars (fixed lane: label · rail+bar · σ gutter) */
+    .whybars { display: block; margin-top: 8px; max-width: 300px; }
+    .whybars-label { fill: var(--ink-2); font-size: 10px; font-family: var(--mono); }
+    .whybars-z { fill: var(--ink-2); font-size: 10px; font-family: var(--mono); font-weight: 600; font-feature-settings: "tnum" 1; }
+    .whybars-rail { fill: var(--line-2); }
+    .whybars-bar-high { fill: var(--high); }
+    .whybars-bar-low { fill: var(--low); }
+
+    /* peer-group strip */
+    .peer { display: block; margin-top: 6px; max-width: 300px; }
+    .peer-band { fill: rgba(51,112,122,.14); stroke: var(--accent); stroke-width: 1; }
+    .peer-whisker { stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+    .peer-median { stroke: var(--accent-ink); stroke-width: 2; }
+    .peer-cap { stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+    .peer-value { fill: var(--high); stroke: var(--surface); stroke-width: 1.5; }
+    .peer-value-inside { fill: var(--accent); }
+    .peer-label { fill: var(--ink-3); font-size: 10px; font-family: var(--mono); }
+    .peer-value-label { fill: var(--high); font-size: 10px; font-family: var(--mono); font-weight: 600; }
+
+    /* ---------- charts ---------- */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 24px 30px; }
+    .chart-card { min-width: 0; }
+    .chart-card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .chart-card .chart-note { margin: 3px 0 12px; font-size: 12.5px; color: var(--ink-2); font-family: var(--mono); }
+    .chart-card .chart-note.regime { color: var(--high); }
+    .chart { display: block; width: 100%; height: auto; max-width: 100%; overflow: visible; }
+    .chart-axis { stroke: var(--line); stroke-width: 1; }
+    .chart-bar { fill: var(--taupe); }
+    .chart-bar-flagged { fill: var(--high); }
+    .chart-box { fill: rgba(51,112,122,.13); stroke: var(--accent); stroke-width: 1; }
+    .chart-whisker { stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+    .chart-median { stroke: var(--accent-ink); stroke-width: 2; }
+    .chart-flag-tick { stroke: var(--high); stroke-width: 1.4; opacity: .75; }
+    .chart-label { fill: var(--ink-3); font-size: 10.5px; font-family: var(--mono); }
+    .chart-dot { fill: var(--taupe); opacity: .85; }
+    .chart-dot-flagged { fill: var(--high); stroke: var(--surface); stroke-width: 1; }
+    .chart-legend, .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: var(--ink-2); }
+    .chart-legend span, .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .swatch, .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+    .swatch-normal, .sw.n { background: var(--taupe); }
+    .swatch-flag, .sw.f { background: var(--high); }
+
+    /* ---------- collapsible deep sections ---------- */
+    .deep > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 16px; }
+    .deep > summary::-webkit-details-marker { display: none; }
+    .deep > summary .sec-idx::after { content: " +"; color: var(--ink-3); }
+    .deep[open] > summary .sec-idx::after { content: " –"; }
+    .deep > summary h2 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+    .deep > summary p { margin: 6px 0 0; color: var(--ink-2); font-size: 14.5px; }
+    .deep .deep-body { margin-top: 24px; }
+
+    /* ---------- profile ---------- */
+    .role { display: inline-block; font-size: 11px; color: var(--ink-2); background: var(--fill); border-radius: 5px; padding: 1px 7px; margin: 2px 4px 0 0; }
+    .miss { display: flex; align-items: center; gap: 9px; }
+    .miss .mbar, .bar { width: 70px; height: 5px; border-radius: 99px; background: var(--fill); overflow: hidden; }
+    .miss .mbar > span, .bar > span { display: block; height: 100%; background: var(--accent); }
+    .shape code { margin: 0 3px 3px 0; display: inline-block; background: transparent; padding: 0; color: var(--ink-2); white-space: nowrap; }
+    .shape code b { color: var(--ink); font-weight: 600; }
+
+    /* ---------- schema entity-relationship diagram ---------- */
+    .schema-wrap { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+    .er-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0 0; color: var(--ink-3); font-size: 12px; }
     .er-legend > span { display: inline-flex; align-items: center; gap: 7px; }
     .er-legend svg { width: 28px; height: 16px; stroke: #5f766e; stroke-width: 1.7; fill: none; stroke-linecap: round; }
     .legend-key { display: inline-grid; place-items: center; min-width: 26px; height: 20px; padding: 0 5px; border-radius: 5px; font-size: 10px; font-weight: 850; }
@@ -112,9 +235,8 @@
     .legend-line { width: 30px; border-top: 2px solid #668178; }
     .schema-canvas {
       overflow: auto;
-      min-height: 520px;
+      min-height: 480px;
       padding: 24px;
-      border-top: 1px solid var(--line);
       background-color: #f7faf8;
       background-image: radial-gradient(#d3dfda 1px, transparent 1px);
       background-size: 22px 22px;
@@ -144,59 +266,123 @@
     .schema-key-badge-text.pk { fill: #07624b; }
     .schema-key-badge-text.fk { fill: #345b74; }
     .schema-empty-state, .schema-overflow { fill: #7a8984; font-size: 10.5px; }
-    .runtime-warning { width: min(1180px, calc(100% - 32px)); margin: -48px auto 48px; }
-    .empty { padding: 24px; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); text-align: center; }
-    footer { margin-top: 26px; color: var(--muted); text-align: center; font-size: 13px; }
-    @media (max-width: 760px) {
-      .shell { width: min(100% - 20px, 1180px); margin-top: 10px; }
-      .hero { padding: 26px 22px; border-radius: 18px; }
-      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .panel { padding: 18px; }
-      .schema-panel { width: calc(100vw - 20px); padding: 0; }
-      .schema-panel-header { padding: 20px 18px 16px; }
-      .schema-canvas { min-height: 440px; padding: 14px; }
+
+    /* ---------- footer ---------- */
+    footer { padding: 40px 0 64px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13px; }
+    .repro { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; align-items: baseline; max-width: 820px; }
+    .repro .k { color: var(--ink-3); font-size: 12px; letter-spacing: .04em; white-space: nowrap; }
+    .repro .v { font-family: var(--mono); font-size: 12px; color: var(--ink-2); word-break: break-all; }
+    .foot-note { margin-top: 26px; font-size: 12.5px; color: var(--ink-3); }
+
+    @media (max-width: 720px) {
+      .page, .wide { width: calc(100% - 32px); }
+      section { padding: 34px 0; }
+      .finding { grid-template-columns: auto 1fr; }
+      .finding .conf { grid-column: 2; text-align: left; margin-top: 12px; }
+      .conf .meter { margin-left: 0; }
+      .verdict h1 { font-size: 28px; }
+      .stats { flex-direction: row; }
     }
     @media print {
       body { background: #fff; }
-      .shell { width: 100%; margin: 0; }
-      .hero, .metric, .panel { box-shadow: none; break-inside: avoid; }
+      .controls, .recipes { display: none; }
+      section, .finding { break-inside: avoid; }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="hero">
-      <div class="eyebrow">Prism EDA / {{ result.goal }}</div>
-      <h1>{% if result.goal == 'schema_discovery' %}Candidate schema map{% elif result.goal == 'anomaly_detection' %}Anomaly candidate review{% elif result.goal == 'classification' %}Classification readiness map{% else %}Decision-first data profile{% endif %}</h1>
-      <p>{{ result.summary }}</p>
-      <div class="status">{{ result.status.value | replace('_', ' ') }}</div>
-    </header>
+  {% set verdict = result.metadata.get('verdict') %}
+  {% set consensus = result.evidence | selectattr('kind', 'equalto', 'anomaly_consensus_review') | list %}
+  {% set review_count = consensus[0].value.review_row_count if consensus else 0 %}
 
-    <section class="metrics" aria-label="Dataset overview">
-      <div class="metric"><strong>{{ result.catalog.table_count | format_value }}</strong><span>Tables</span></div>
-      <div class="metric"><strong>{{ result.catalog.row_count | format_value }}</strong><span>Rows</span></div>
-      <div class="metric"><strong>{{ result.catalog.column_count | format_value }}</strong><span>Columns</span></div>
-      <div class="metric"><strong>{% if result.goal == 'schema_discovery' %}{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}{% elif result.goal == 'anomaly_detection' %}{{ result.metadata.get('candidate_signals', result.findings | length) | format_value }}{% else %}{{ result.findings | length | format_value }}{% endif %}</strong><span>{% if result.goal == 'schema_discovery' %}Candidate relationships{% elif result.goal == 'anomaly_detection' %}Candidate signals{% else %}Prioritized findings{% endif %}</span></div>
-    </section>
+  <!-- ============ MASTHEAD ============ -->
+  <header class="page mast">
+    <div class="mast-row">
+      <div class="brand">
+        <svg viewBox="0 0 34 34" fill="none" aria-hidden="true">
+          <path d="M15 4 L28 27 H4 Z" stroke="#211d17" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M2 15 H12" stroke="#211d17" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M18.5 17.4 L31 11.5" stroke="#6d5bd0" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M19.2 19.2 L31.5 15.5" stroke="#2f8fa6" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M19.6 21 L31.5 19.5" stroke="#4f9e6a" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M19.8 22.8 L31 23.5" stroke="#c9a63f" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M19.8 24.4 L30 27.4" stroke="#c0623f" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <div class="brand-name">Prism<span style="color:var(--ink-3);font-weight:500">EDA</span></div>
+          <div class="brand-sub">Exploratory data analysis</div>
+        </div>
+      </div>
+      <nav class="recipes" aria-label="Report recipe">
+        <span{% if result.goal not in ['schema_discovery', 'anomaly_detection', 'classification'] %} aria-current="page"{% endif %}>Profile</span>
+        <span{% if result.goal == 'schema_discovery' %} aria-current="page"{% endif %}>Schema</span>
+        <span{% if result.goal == 'anomaly_detection' %} aria-current="page"{% endif %}>Anomalies</span>
+        <span{% if result.goal == 'classification' %} aria-current="page"{% endif %}>Classification</span>
+      </nav>
+    </div>
+    <div class="mast-meta">
+      <span><span class="k">Recipe</span>&nbsp; <span class="mono">{{ result.goal }}</span></span>
+      <span><span class="k">Tables</span>&nbsp; <span class="mono">{{ result.catalog.table_count | format_value }}</span></span>
+      <span><span class="k">Rows</span>&nbsp; <span class="mono">{{ result.catalog.row_count | format_value }}</span></span>
+      <span class="status"><span class="dot"></span>{{ result.status.value | replace('_', ' ') }}</span>
+    </div>
+    <div class="spectrum-rule"></div>
+  </header>
 
-    {% if result.warnings %}
-    <section class="panel">
-      <h2>Evidence warnings</h2>
-      {% for warning in result.warnings %}
-      <p class="notice"><strong>{{ warning.code }}</strong>: {{ warning.message }}</p>
-      {% endfor %}
-    </section>
-    {% endif %}
+  <!-- ============ VERDICT ============ -->
+  <section class="page verdict">
+    <div class="eyebrow">What we found</div>
+    <h1>
+      {%- if verdict -%}
+        {{ verdict }}
+      {%- elif result.goal == 'schema_discovery' -%}
+        Candidate schema map
+      {%- elif result.goal == 'anomaly_detection' -%}
+        Anomaly candidate review
+      {%- elif result.goal == 'classification' -%}
+        Classification readiness map
+      {%- else -%}
+        Decision-first data profile
+      {%- endif -%}
+    </h1>
+    <p class="lede">{{ result.summary }}</p>
 
-    {% if result.goal == 'schema_discovery' %}
-      {% for artifact in result.artifacts %}
-        {% if artifact.kind == 'schema_graph' %}
-        <section class="panel schema-panel">
-          <div class="schema-panel-header">
-            <div class="panel-heading">
-              <h2>{{ artifact.title }}</h2>
-              <p>Evidence-backed candidates, not declared constraints.</p>
-            </div>
+    <div class="stats" role="list" aria-label="Dataset overview">
+      <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.table_count | format_value }}</div><div class="l">Table{% if result.catalog.table_count != 1 %}s{% endif %}</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.row_count | format_value }}</div><div class="l">Rows</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.column_count | format_value }}</div><div class="l">Columns</div></div>
+      {% if result.goal == 'schema_discovery' %}
+      <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}</div><div class="l">Candidate relationships</div></div>
+      {% else %}
+      <div class="stat" role="listitem"><div class="n mono">{{ result.findings | length | format_value }}</div><div class="l">Finding{% if result.findings | length != 1 %}s{% endif %}</div></div>
+      {% endif %}
+      {% if review_count %}
+      <div class="stat flag" role="listitem"><div class="n mono">{{ review_count | format_value }}</div><div class="l">Rows to review</div></div>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if result.warnings %}
+  <section class="page">
+    <div class="sec-head"><div class="sec-idx">!</div><div class="sec-title"><h2>Evidence warnings</h2></div></div>
+    {% for warning in result.warnings %}
+    <p class="notice"><strong>{{ warning.code }}</strong>: {{ warning.message }}</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% set section_index = namespace(n=0) %}
+
+  {% if result.goal == 'schema_discovery' %}
+    {% for artifact in result.artifacts %}
+      {% if artifact.kind == 'schema_graph' %}
+      {% set section_index.n = section_index.n + 1 %}
+      <section class="wide">
+        <div class="sec-head">
+          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+          <div class="sec-title">
+            <h2>{{ artifact.title }}</h2>
+            <p>Evidence-backed candidates, not declared constraints.</p>
             <div class="er-legend" aria-label="Entity relationship diagram legend">
               <span><b class="legend-key legend-pk">PK</b> candidate primary key</span>
               <span><b class="legend-key legend-fk">FK</b> inferred foreign key</span>
@@ -205,6 +391,8 @@
               <span><svg viewBox="0 0 28 16" aria-hidden="true"><line x1="6" y1="2" x2="6" y2="14"></line><line x1="12" y1="8" x2="27" y2="2"></line><line x1="12" y1="8" x2="27" y2="8"></line><line x1="12" y1="8" x2="27" y2="14"></line></svg> many</span>
             </div>
           </div>
+        </div>
+        <div class="schema-wrap">
           <div class="schema-canvas">
             <svg viewBox="0 0 {{ artifact.data.width }} {{ artifact.data.height }}" width="{{ artifact.data.width }}" height="{{ artifact.data.height }}" role="img" aria-label="Candidate entity relationship diagram" preserveAspectRatio="xMinYMin meet">
               {% for edge in artifact.data.edges %}
@@ -258,61 +446,231 @@
               {% endfor %}
             </svg>
           </div>
-        </section>
-        {% endif %}
-      {% endfor %}
-
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Candidate keys</h2>
-          <p>Minimal combinations only; business confirmation is required.</p>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Table</th><th>Columns</th><th>Unique</th><th>Complete</th><th>Confidence</th></tr></thead>
-            <tbody>
-              {% for item in result.evidence %}
-                {% if item.kind == 'candidate_key' %}
-                <tr><td>{{ item.scope.table }}</td><td><code>{{ item.scope.columns | join(' + ') }}</code></td><td>{{ "%.1f%%" | format(item.value.uniqueness_rate * 100) }}{% if item.value.sampled %}<br><span class="muted">sampled</span>{% endif %}</td><td>{{ "%.1f%%" | format(item.value.completeness_rate * 100) }}</td><td>{{ "%.1f%%" | format(item.confidence * 100) }}</td></tr>
-                {% endif %}
-              {% endfor %}
-            </tbody>
-          </table>
         </div>
       </section>
+      {% endif %}
+    {% endfor %}
 
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Candidate relationships</h2>
-          <p>Direction runs from the unique parent key to the referencing child columns.</p>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Parent</th><th>Child</th><th>Cardinality</th><th>Included</th><th>Orphan rows</th><th>Confidence</th></tr></thead>
-            <tbody>
-              {% for item in result.evidence %}
-                {% if item.kind == 'candidate_relationship' %}
-                <tr><td>{{ item.value.parent_table }}.<code>{{ item.value.parent_columns | join(' + ') }}</code></td><td>{{ item.value.child_table }}.<code>{{ item.value.child_columns | join(' + ') }}</code></td><td>{{ item.value.cardinality | replace('_', '–') }}</td><td>{{ "%.1f%%" | format(item.value.inclusion_rate * 100) }}</td><td>{{ item.value.orphan_row_count }}</td><td>{{ "%.1f%%" | format(item.confidence * 100) }}{% if item.value.sampled %}<br><span class="muted">sampled</span>{% endif %}</td></tr>
-                {% endif %}
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
+    {% set section_index.n = section_index.n + 1 %}
+    <section class="page">
+      <div class="sec-head">
+        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-title"><h2>Candidate keys</h2><p>Minimal combinations only; business confirmation is required.</p></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Table</th><th>Columns</th><th class="num">Unique</th><th class="num">Complete</th><th class="num">Confidence</th></tr></thead>
+          <tbody>
+            {% for item in result.evidence %}
+              {% if item.kind == 'candidate_key' %}
+              <tr><td>{{ item.scope.table }}</td><td><code>{{ item.scope.columns | join(' + ') }}</code></td><td class="num">{{ "%.1f%%" | format(item.value.uniqueness_rate * 100) }}{% if item.value.sampled %}<br><span class="mono" style="color:var(--ink-3);font-size:11px">sampled</span>{% endif %}</td><td class="num">{{ "%.1f%%" | format(item.value.completeness_rate * 100) }}</td><td class="num">{{ "%.1f%%" | format(item.confidence * 100) }}</td></tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {% set section_index.n = section_index.n + 1 %}
+    <section class="page">
+      <div class="sec-head">
+        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-title"><h2>Candidate relationships</h2><p>Direction runs from the unique parent key to the referencing child columns.</p></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Parent</th><th>Child</th><th>Cardinality</th><th class="num">Included</th><th class="num">Orphan rows</th><th class="num">Confidence</th></tr></thead>
+          <tbody>
+            {% for item in result.evidence %}
+              {% if item.kind == 'candidate_relationship' %}
+              <tr><td>{{ item.value.parent_table }}.<code>{{ item.value.parent_columns | join(' + ') }}</code></td><td>{{ item.value.child_table }}.<code>{{ item.value.child_columns | join(' + ') }}</code></td><td>{{ item.value.cardinality | replace('_', '–') }}</td><td class="num">{{ "%.1f%%" | format(item.value.inclusion_rate * 100) }}</td><td class="num">{{ item.value.orphan_row_count }}</td><td class="num">{{ "%.1f%%" | format(item.confidence * 100) }}{% if item.value.sampled %}<br><span class="mono" style="color:var(--ink-3);font-size:11px">sampled</span>{% endif %}</td></tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  {% if result.goal != 'anomaly_detection' %}
+  {% for artifact in result.artifacts %}
+    {% if artifact.kind == 'metric_table' %}
+    {% set section_index.n = section_index.n + 1 %}
+    <section class="page">
+      <div class="sec-head">
+        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-title"><h2>{{ artifact.title }}</h2>{% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}</div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in artifact.data.rows %}
+            <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
     {% endif %}
+  {% endfor %}
+  {% endif %}
 
-    {% for artifact in result.artifacts %}
-      {% if artifact.kind == 'metric_table' %}
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>{{ artifact.title }}</h2>
-          {% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}
+  <!-- ============ FINDINGS ============ -->
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="page">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-title"><h2>Prioritized findings</h2><p>Ranked by severity. Confidence — how strongly the evidence supports the claim — is reported separately.</p></div>
+    </div>
+    {% if result.findings %}
+      {% for finding in result.findings %}
+      {% set sev = finding.severity if finding.severity in ['high', 'medium', 'low'] else 'high' %}
+      <div class="finding" style="--sev: var(--{{ 'high' if sev == 'high' else ('med' if sev == 'medium' else 'low') }}); --sev-bg: var(--{{ 'high-bg' if sev == 'high' else ('med-bg' if sev == 'medium' else 'low-bg') }})">
+        <span class="sev-tag">{{ finding.severity }}</span>
+        <div class="finding-body">
+          <h3>{{ finding.title }}</h3>
+          <p>{{ finding.summary }}</p>
+          {% if finding.recommendation %}<p class="rec">{{ finding.recommendation }}</p>{% endif %}
         </div>
-        <div class="table-wrap">
+        <div class="conf"><div class="cval mono">{{ finding.confidence | format_value }}</div><div class="clab">confidence</div><div class="meter"><span style="width: {{ [(finding.confidence * 100) | round, 100] | min }}%"></span></div></div>
+        <details class="lineage"><summary>Evidence lineage</summary><div class="lin-body">Evidence: {% for evidence_id in finding.evidence_ids %}<code>{{ evidence_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</div></details>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
+    {% endif %}
+  </section>
+
+  <!-- ============ ROWS TO REVIEW ============ -->
+  {% for item in result.evidence if item.kind == 'anomaly_consensus_review' and item.value.rows %}
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="page">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-title">
+        <h2>Rows to review</h2>
+        <p>{{ item.value.review_row_count }} of {{ item.value.evaluated_row_count }} row{% if item.value.evaluated_row_count != 1 %}s{% endif %}, ranked by how many independent checks flagged them. Highlighted cells are the values that stand out; expand a row to see how each check flagged it.</p>
+      </div>
+    </div>
+
+    <div class="controls" role="group" aria-label="Filter by agreement">
+      <span class="lbl">Agreement</span>
+      <button class="chip" data-min="0" aria-pressed="true">All</button>
+      <button class="chip" data-min="2" aria-pressed="false">2+ checks</button>
+      <button class="chip" data-min="3" aria-pressed="false">3+ checks</button>
+      <button class="chip" data-min="4" aria-pressed="false">4+ checks</button>
+      <span class="count-note" id="rowCount"></span>
+    </div>
+
+    <div class="tbl-wrap">
+      <table class="rows-table" id="rowsTable">
+        <thead>
+          <tr>
+            <th>Agreement</th>
+            {% for column in item.value.columns %}<th>{{ column }}</th>{% endfor %}
+            <th>Why it stands out</th>
+          </tr>
+        </thead>
+        <tbody id="rowsBody">
+          {% for row in item.value.rows %}
+          {% set flagged_columns = row.contributors | map(attribute='column') | list %}
+          {% set ex = row.explanations %}
+          {% set mv = ex.get('multivariate') %}
+          {% set cond = ex.get('conditional') %}
+          <tr data-agree="{{ row.method_count }}">
+            <td>
+              <span class="agree{% if row.method_count >= 3 %} hi{% endif %}"><span class="frac">{{ row.method_count }}/{{ item.value.total_detectors }}</span></span>
+              <span class="methods">{{ row.methods | join(' · ') }}</span>
+            </td>
+            {% for column in item.value.columns %}
+            <td class="{% if column in flagged_columns %}flagcell{% elif column == item.value.id_column %}idcell{% endif %}{% if row['values'][column] is number %} num{% endif %}">{{ row['values'][column] | format_cell }}</td>
+            {% endfor %}
+            <td class="why">
+              <span class="wt">{{ row.why }}</span>
+              {% if ex.get('univariate') %}{{ ex.univariate.contributors | why_bars_svg }}{% endif %}
+              {% if mv or cond %}
+              <details class="row-detail">
+                <summary>How each check flagged this</summary>
+                {% if mv %}
+                <div class="pc">
+                  <div class="pc-cap"><b>Multivariate</b> — joint deviation score {{ mv.score | round(1) }} (flags at ≥ {{ mv.threshold | round(1) }}). Every column's distance from its own typical value:</div>
+                  {{ mv['columns'] | why_bars_svg }}
+                </div>
+                {% endif %}
+                {% if cond %}
+                <div class="pc">
+                  <div class="pc-cap"><b>Conditional</b> — {{ cond.value_column }} is unusual for the {{ cond.condition_column }} ≈ {{ cond.condition_value | format_cell }} peer group. Where this row sits vs its peers:</div>
+                  {{ cond | peer_group_svg }}
+                </div>
+                {% endif %}
+              </details>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endfor %}
+
+  <!-- ============ DISTRIBUTIONS ============ -->
+  {% set distributions = result.evidence | selectattr('kind', 'equalto', 'anomaly_distribution_shape') | list %}
+  {% if distributions %}
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="wide">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-title"><h2>Distributions</h2><p>Where each numeric column's values sit. Bars are row counts; the strip below each shows the median, the middle 50%, and the whiskers. Red marks the flagged values.</p></div>
+    </div>
+    <div class="chart-grid">
+      {% for item in distributions %}
+      <div class="chart-card">
+        <h3>{{ item.value.column }}</h3>
+        {% if item.value.modality.is_multimodal %}
+        <p class="chart-note regime">Two populations — {{ item.value.modality.clusters[0].count }} row(s) up to {{ item.value.modality.clusters[0].max | format_cell }}, then {{ item.value.modality.clusters[1].count }} row(s) from {{ item.value.modality.clusters[1].min | format_cell }} up.</p>
+        {% else %}
+        <p class="chart-note">median {{ item.value.box.median | format_cell }} · middle 50% {{ item.value.box.q1 | format_cell }}–{{ item.value.box.q3 | format_cell }}</p>
+        {% endif %}
+        {{ item.value | histogram_svg }}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="legend"><span><span class="sw n"></span>all rows</span><span><span class="sw f"></span>flagged rows</span></div>
+  </section>
+  {% endif %}
+
+  <!-- ============ SCATTER ============ -->
+  {% for item in result.evidence if item.kind == 'anomaly_scatter_pair' and item.value.points %}
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="page">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-title"><h2>{{ item.value.y_column }} vs {{ item.value.x_column }}</h2><p>Each point is a row; red points are the flagged rows. Shows whether a flagged row is also unusual in context, not just on one column.</p></div>
+    </div>
+    <div style="max-width: 760px">{{ item.value | scatter_svg }}</div>
+    <div class="legend"><span><span class="sw n"></span>all rows</span><span><span class="sw f"></span>flagged rows</span></div>
+  </section>
+  {% endfor %}
+
+  <!-- ============ CANDIDATE SIGNALS (deep) ============ -->
+  {% if result.goal == 'anomaly_detection' %}
+  {% for artifact in result.artifacts %}
+    {% if artifact.kind == 'metric_table' %}
+    {% set section_index.n = section_index.n + 1 %}
+    <section class="page">
+      <details class="deep">
+        <summary>
+          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+          <div class="sec-title">
+            <h2>{{ artifact.title }}</h2>
+            {% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}
+          </div>
+        </summary>
+        <div class="deep-body tbl-wrap">
           <table>
-            <thead>
-              <tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr>
-            </thead>
+            <thead><tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
             <tbody>
               {% for row in artifact.data.rows %}
               <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
@@ -320,69 +678,44 @@
             </tbody>
           </table>
         </div>
-      </section>
-      {% endif %}
-    {% endfor %}
-
-    <section class="panel">
-      <div class="panel-heading">
-        <h2>Prioritized findings</h2>
-        <p>Severity and confidence are reported separately.</p>
-      </div>
-      {% if result.findings %}
-        {% for finding in result.findings %}
-        <article class="finding">
-          <div class="finding-title">
-            <span class="badge badge-{{ finding.severity }}">{{ finding.severity }}</span>
-            <h3>{{ finding.title }}</h3>
-          </div>
-          <p>{{ finding.summary }}</p>
-          {% if finding.recommendation %}<p class="recommendation">{{ finding.recommendation }}</p>{% endif %}
-          <details>
-            <summary>Evidence lineage</summary>
-            <p>Confidence: {{ finding.confidence | format_value }} · Evidence: {% for evidence_id in finding.evidence_ids %}<code>{{ evidence_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
-          </details>
-        </article>
-        {% endfor %}
-      {% else %}
-        <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
-      {% endif %}
+      </details>
     </section>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
 
-    {% for table in result.catalog.tables %}
-    <section class="panel">
-      <div class="panel-heading">
-        <h2>{{ table.name }}</h2>
-        <p>{{ table.row_count | format_value }} rows · {{ table.column_count | format_value }} columns · {{ table.duplicate_row_count | format_value }} duplicate row{% if table.duplicate_row_count != 1 %}s{% endif %}</p>
-      </div>
-      <div class="table-wrap">
+  <!-- ============ COLUMN PROFILE (deep) ============ -->
+  {% for table in result.catalog.tables %}
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="page">
+    <details class="deep"{% if result.goal != 'anomaly_detection' %} open{% endif %}>
+      <summary>
+        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-title">
+          <h2>{{ table.name }}</h2>
+          <p>{{ table.row_count | format_value }} rows · {{ table.column_count | format_value }} columns · {{ table.duplicate_row_count | format_value }} duplicate row{% if table.duplicate_row_count != 1 %}s{% endif %}</p>
+        </div>
+      </summary>
+      <div class="deep-body tbl-wrap">
         <table>
           <thead>
-            <tr>
-              <th>Column</th>
-              <th>Type</th>
-              <th>Role candidates</th>
-              <th>Missing</th>
-              <th>Distinct</th>
-              <th>Range / shape</th>
-            </tr>
+            <tr><th>Column</th><th>Type</th><th>Role candidates</th><th>Missing</th><th class="num">Distinct</th><th>Range / shape</th></tr>
           </thead>
           <tbody>
             {% for column in table.columns %}
             <tr>
-              <td><strong>{{ column.name }}</strong><br><span class="muted">{{ column.physical_type }}</span></td>
+              <td><strong>{{ column.name }}</strong><br><span class="mono" style="color:var(--ink-3);font-size:11px">{{ column.physical_type }}</span></td>
               <td>{{ column.semantic_type }}</td>
-              <td>{% if column.roles %}{{ column.roles | join(', ') }}{% else %}<span class="muted">None inferred</span>{% endif %}</td>
+              <td>{% if column.roles %}{% for role in column.roles %}<span class="role">{{ role }}</span>{% endfor %}{% else %}<span style="color:var(--ink-3)">None inferred</span>{% endif %}</td>
               <td>
-                {{ column.missing_count | format_value }} ({{ "%.1f%%" | format(column.missing_rate * 100) }})
-                <div class="bar" aria-label="Missing rate"><span style="width: {{ [column.missing_rate * 100, 100] | min }}%"></span></div>
+                <div class="miss"><span class="num">{{ "%.1f%%" | format(column.missing_rate * 100) }}</span><div class="mbar"><span style="width: {{ [column.missing_rate * 100, 100] | min }}%"></span></div></div>
               </td>
-              <td>{{ column.unique_count | format_value }}{% if column.unique_rate is not none %} ({{ "%.1f%%" | format(column.unique_rate * 100) }}){% endif %}</td>
-              <td>
+              <td class="num">{{ column.unique_count | format_value }}{% if column.unique_rate is not none %} · {{ "%.1f%%" | format(column.unique_rate * 100) }}{% endif %}</td>
+              <td class="shape">
                 {% if column.statistics %}
-                  {% for key, value in column.statistics.items() %}<code>{{ key }}={{ value | format_value }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+                  {% for key, value in column.statistics.items() %}<code>{{ key }} <b>{{ value | format_value }}</b></code>{% endfor %}
                 {% else %}
-                  <span class="muted">No numeric range</span>
+                  <span style="color:var(--ink-3)">No numeric range</span>
                 {% endif %}
               </td>
             </tr>
@@ -390,43 +723,83 @@
           </tbody>
         </table>
       </div>
-      <details>
-        <summary>Fingerprint and methods</summary>
-        <p><code>{{ table.fingerprint }}</code><br><span class="muted">{{ table.fingerprint_method }}</span></p>
-      </details>
-    </section>
-    {% endfor %}
+    </details>
+  </section>
+  {% endfor %}
 
-    {% if result.transformation_plan.steps %}
-    <section class="panel">
-      <h2>Reviewable transformation plan</h2>
-      <p class="muted">These are recommendations only. Prism EDA has not modified the data.</p>
-      {% for step in result.transformation_plan.steps %}
-      <article class="finding">
-        <div class="finding-title"><span class="badge badge-{{ step.risk if step.risk in ['high', 'medium', 'low'] else 'medium' }}">{{ step.risk }}</span><h3>{{ step.operation | replace('_', ' ') | title }}</h3></div>
+  {% if result.transformation_plan.steps %}
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="page">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-title"><h2>Reviewable transformation plan</h2><p>These are recommendations only. Prism EDA has not modified the data.</p></div>
+    </div>
+    {% for step in result.transformation_plan.steps %}
+    {% set risk = step.risk if step.risk in ['high', 'medium', 'low'] else 'medium' %}
+    <div class="finding" style="--sev: var(--{{ 'high' if risk == 'high' else ('med' if risk == 'medium' else 'low') }}); --sev-bg: var(--{{ 'high-bg' if risk == 'high' else ('med-bg' if risk == 'medium' else 'low-bg') }})">
+      <span class="sev-tag">{{ step.risk }}</span>
+      <div class="finding-body">
+        <h3>{{ step.operation | replace('_', ' ') | title }}</h3>
         <p>{{ step.table }}{% if step.columns %}.{{ step.columns | join(', ') }}{% endif %}: {{ step.rationale }}</p>
-      </article>
-      {% endfor %}
-    </section>
-    {% endif %}
+      </div>
+      <div class="conf"></div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
-    <section class="panel">
-      <h2>Reproducibility</h2>
-      <p>Dataset fingerprint: <code>{{ result.catalog.fingerprint }}</code></p>
+  <!-- ============ FOOTER ============ -->
+  <footer class="page">
+    <div class="repro">
+      <span class="k">Dataset fingerprint</span><span class="v">{{ result.catalog.fingerprint }}</span>
       {% if result.metadata.get('engine') == 'assisted' %}
-      <p class="muted">Engine: AI-assisted · Provider: {{ result.metadata.get('provider', 'n/a') }} · Model: {{ result.metadata.get('model', 'n/a') }} · Tool calls: {{ result.metadata.get('tool_calls', 0) }}</p>
+      <span class="k">Engine</span><span class="v">AI-assisted · {{ result.metadata.get('provider', 'n/a') }} / {{ result.metadata.get('model', 'n/a') }} · {{ result.metadata.get('tool_calls', 0) }} tool call(s)</span>
       {% else %}
-      <p class="muted">Mode: {{ result.metadata.get('mode', 'n/a') }} · Sampling: {{ result.metadata.get('sampling', 'n/a') }} · Random seed: {{ result.metadata.get('random_seed', 'n/a') }}</p>
+      <span class="k">Mode</span><span class="v">{{ result.metadata.get('mode', 'n/a') }} · sampling {{ result.metadata.get('sampling', 'n/a') }} · seed {{ result.metadata.get('random_seed', 'n/a') }}</span>
       {% endif %}
-      {% if result.failures %}
-      <details>
-        <summary>{{ result.failures | length }} optional computation failure(s)</summary>
-        {% for failure in result.failures %}<p>{{ failure.stage }}: {{ failure.message }}</p>{% endfor %}
-      </details>
-      {% endif %}
-    </section>
+    </div>
+    {% if result.failures %}
+    <details class="lineage" style="margin-top:20px">
+      <summary>{{ result.failures | length }} optional computation failure(s)</summary>
+      <div class="lin-body">{% for failure in result.failures %}{{ failure.stage }}: {{ failure.message }}<br>{% endfor %}</div>
+    </details>
+    {% endif %}
+    <p class="foot-note">Generated locally by Prism EDA. Every numeric claim is backed by structured evidence — expand any finding's lineage to trace it.</p>
+  </footer>
 
-    <footer>Generated locally by Prism EDA. Numeric claims are backed by structured evidence.</footer>
-  </main>
+  <script>
+  (function () {
+    "use strict";
+    // Progressive enhancement: the agreement chips filter the server-rendered
+    // review rows. With JS off, every row is shown and the chips simply no-op.
+    var body = document.getElementById("rowsBody");
+    if (!body) return;
+    var rows = Array.prototype.slice.call(body.querySelectorAll("tr"));
+    var total = rows.length;
+    var chips = document.querySelectorAll(".controls .chip");
+    var note = document.getElementById("rowCount");
+
+    function apply(min) {
+      var shown = 0;
+      rows.forEach(function (tr) {
+        var agree = parseInt(tr.getAttribute("data-agree"), 10) || 0;
+        var ok = agree >= min;
+        tr.style.display = ok ? "" : "none";
+        if (ok) shown++;
+      });
+      if (note) note.textContent = "Showing " + shown + " of " + total + " flagged rows";
+    }
+
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        chips.forEach(function (c) { c.setAttribute("aria-pressed", "false"); });
+        chip.setAttribute("aria-pressed", "true");
+        apply(parseInt(chip.getAttribute("data-min"), 10) || 0);
+      });
+    });
+
+    apply(0);
+  })();
+  </script>
 </body>
 </html>

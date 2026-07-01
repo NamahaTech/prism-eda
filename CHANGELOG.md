@@ -10,6 +10,48 @@ stabilizes.
 
 ### Added
 
+- **Row-centric anomaly review.** Anomaly detection now leads with the rows
+  themselves instead of one finding per detector. A new cross-detector
+  *consensus* (`anomaly_consensus_review` evidence) ranks rows by how many
+  independent checks agree, and carries each flagged row's actual values, the
+  per-column contribution vs. the typical baseline, and a plain-language *why*
+  ("Salary 10,000,000 is 40× the typical 250,000"; conditional anomalies read as
+  "unusual for its peer group"). The redundant per-detector findings
+  (multivariate / Isolation Forest / LOF / conditional / agreement) now feed the
+  consensus rather than each becoming its own finding.
+- **Per-method evidence behind every review row.** Each consensus row now
+  carries an `explanations` block so a *multivariate* tag is backed by the full
+  per-column joint-deviation profile (every column's distance from its own
+  typical value, not just the dominant spike) and a *conditional* tag by the
+  peer group it stands out from — the condition bin, the peer band (median and
+  middle 50%), and where the row's own value sits. The conditional detector's
+  evidence was extended with that peer-band context. The report renders these as
+  a per-column σ chart and a peer-group strip, so a "multivariate outlier" is
+  actually shown to be multivariate instead of collapsing to one univariate bar.
+- **Synthesized verdict headline** (`metadata["verdict"]`): one plain-language
+  sentence leading with the strongest reframing — a two-population split when
+  present, otherwise the row-review count with a concrete example — surfaced as
+  the report's hero.
+- **Redesigned HTML report.** A refraction-themed design system (verdict-led
+  hero, dataset stat strip, severity-ruled findings with confidence meters,
+  collapsible deep sections, self-contained system-font typography) and an
+  Agreement filter (All / 2+ / 3+ / 4+ checks) on the review table via a small
+  amount of progressive-enhancement inline JavaScript — the file stays a single
+  self-contained document and the rows are server-rendered, so it degrades
+  cleanly with JavaScript disabled.
+- **Distribution-shape diagnostics** (`anomaly_distribution_shape` evidence):
+  per-column histogram and box summary, plus a robust two-population (regime
+  split) detector that reports "looks like two populations" instead of
+  mislabelling a bimodal column's upper cluster as tail outliers.
+- **Inline-SVG charts in the HTML report** (no JavaScript, fully self-contained):
+  per-column histograms with box strips and flagged values marked, a scatter of
+  the most relevant numeric pair with flagged rows highlighted, per-row "why"
+  bars, and a flagged-rows table with the unusual cells highlighted.
+- Finding *summaries* now carry only counts and rates — never raw cell values —
+  so the AI-assisted investigator can forward them to an LLM without leaking
+  data; exact values stay in evidence and the locally-rendered charts. The
+  investigator prompt also forbids speculating about columns or relationships no
+  tool surfaced.
 - **Excel input support** (`.xlsx`, `.xlsm`, `.xls`) for file, list, mapping, and
   directory loading. The Excel engine is an optional extra
   (`pip install "prism-eda[excel]"`); loading an Excel file without it raises a

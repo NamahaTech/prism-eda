@@ -27,17 +27,26 @@ def test_anomaly_detection_finds_conditional_numeric_candidate(tmp_path) -> None
         item for item in result.evidence if item.kind == "anomaly_conditional_outlier"
     ]
     assert conditional
-    assert any(
-        "Conditional anomaly candidates" in finding.title for finding in result.findings
-    )
+    # Per-detector results (including conditional) now feed one row-centric
+    # consensus review instead of producing a finding each; the review list is
+    # the headline and must surface the planted row (age 5, weight 100).
+    review = [
+        item for item in result.evidence if item.kind == "anomaly_consensus_review"
+    ]
+    assert review
+    assert any("to review" in finding.title for finding in result.findings)
+    flagged_weights = {row["values"].get("weight") for row in review[0].value["rows"]}
+    assert 100.0 in flagged_weights
     assert any(
         artifact.title == "Anomaly candidate signals" for artifact in result.artifacts
     )
 
     html = result.to_html(tmp_path / "anomaly.html").read_text(encoding="utf-8")
     payload = json.loads(result.to_json(tmp_path / "anomaly.json").read_text())
-    assert "Anomaly candidate review" in html
-    assert "Anomaly candidate signals" in html
+    # The hero now leads with the synthesized verdict; the anomaly report is
+    # identified by its recipe and the row-review section.
+    assert "anomaly_detection" in html
+    assert "Rows to review" in html
     assert any(
         item["kind"] == "anomaly_conditional_outlier" for item in payload["evidence"]
     )

@@ -35,6 +35,13 @@ Hard rules:
 - Every finding you report MUST cite one or more evidence_ids that appeared in a \
 tool result. Never invent an evidence id. If you cannot support a claim with \
 evidence, do not make the claim.
+- Describe ONLY what the cited evidence states. Do not speculate about specific \
+columns, values, thresholds, or relationships that no tool surfaced. For example, \
+never assert a relationship such as "experience exceeds age" or "salary is \
+decoupled from tenure" unless a tool result explicitly reported it. When unsure, \
+stay general or omit the claim.
+- The tools already prioritize and explain the underlying rows for you; your job \
+is to synthesize and prioritize their findings, not to re-derive or invent detail.
 - If the evidence does not justify any conclusion, finish with \
 status "insufficient_evidence" and an empty findings list.
 - Prefer signal over noise: report only findings that would actually change a \
