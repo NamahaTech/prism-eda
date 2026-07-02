@@ -57,7 +57,8 @@ Any change must keep these true (they're what make Prism trustworthy):
 7. Optional metric failures are recorded and the run continues; foundational
    failures abort it.
 8. The core imports no Plotly / LangChain / provider SDKs.
-9. Reports work without JavaScript, CDNs, or optional packages.
+9. Reports work without CDNs, networks, or optional packages, and stay useful
+   without JavaScript (interactive pieces degrade to static rendering).
 10. Inferred keys, anomalies, and relationships are **candidates** until confirmed.
 
 And the product principle behind all of it: **optimize signal-to-noise, not

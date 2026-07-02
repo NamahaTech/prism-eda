@@ -1,0 +1,177 @@
+{# Schema-discovery ERD section: legend, toolbar, interactive Cytoscape canvas
+   with a static-SVG fallback, and the JSON data island powering both. #}
+
+{# Card-internal styles. Emitted once for the fallback SVG on the page and
+   inlined into every standalone card SVG (SVG-as-image cannot see page CSS). #}
+{% set erd_card_css %}
+    .schema-node { fill: #fff; stroke: #b7c9c2; stroke-width: 1.4; }
+    .schema-node-header { fill: #123d32; }
+    .schema-node-header.is-hub { fill: #0d5f4a; }
+    .schema-node-header-rule { fill: #0d7a5f; }
+    .schema-node-icon { stroke: #9de0ca; stroke-width: 1.4; fill: none; }
+    .schema-node-title { fill: #fff; font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+    .schema-node-meta { fill: #b9d8ce; font-size: 10.5px; }
+    .schema-role { fill: #cfeee2; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .schema-section-label { fill: #7a8984; font-size: 9.5px; font-weight: 800; letter-spacing: .09em; }
+    .schema-row-rule { stroke: #e5ece9; stroke-width: 1; }
+    .schema-row-label { fill: #23312c; font-size: 11.5px; font-weight: 700; }
+    .schema-row-detail { fill: #71817b; font-size: 10px; }
+    .schema-key-badge { stroke-width: 1; }
+    .schema-key-badge.pk { fill: #dff4ed; stroke: #b9e3d5; }
+    .schema-key-badge.fk { fill: #e8f0f6; stroke: #cbdce8; }
+    .schema-key-badge-text { font-size: 9px; font-weight: 850; text-anchor: middle; }
+    .schema-key-badge-text.pk { fill: #07624b; }
+    .schema-key-badge-text.fk { fill: #345b74; }
+    .schema-empty-state { fill: #7a8984; font-size: 10.5px; }
+    .schema-more { fill: #0d5f4a; font-size: 10.5px; font-weight: 700; }
+{% endset %}
+
+{# One table card drawn at local (0,0). Reused by the fallback SVG (wrapped in
+   a translate group) and by card_svg() below for the Cytoscape node image. #}
+{% macro table_card(node) %}
+                <rect class="schema-node" x="0" y="0" width="{{ node.width }}" height="{{ node.height }}" rx="16"></rect>
+                <rect class="schema-node-header{% if node.is_hub %} is-hub{% endif %}" x="0" y="0" width="{{ node.width }}" height="68" rx="16"></rect>
+                <rect class="schema-node-header{% if node.is_hub %} is-hub{% endif %}" x="0" y="40" width="{{ node.width }}" height="28"></rect>
+                <rect class="schema-node-header-rule" x="0" y="66" width="{{ node.width }}" height="3"></rect>
+                <g class="schema-node-icon">
+                  <rect x="17" y="18" width="20" height="17" rx="3"></rect>
+                  <line x1="17" y1="24" x2="37" y2="24"></line>
+                  <line x1="24" y1="24" x2="24" y2="35"></line>
+                </g>
+                <text class="schema-node-title" x="48" y="30">{{ node.display_table }}</text>
+                <text class="schema-node-meta" x="48" y="49">{{ node.row_count | format_value }} rows · {{ node.column_count }} columns</text>
+                <text class="schema-role" x="{{ node.width - 16 }}" y="30" text-anchor="end">{{ node.role }}{% if node.role in ['hub', 'dimension'] and node.referenced_by %} · ref {{ node.referenced_by }}{% elif node.references %} · refs {{ node.references }}{% endif %}</text>
+                <text class="schema-section-label" x="17" y="94">INFERRED KEY ROLES</text>
+                <line class="schema-row-rule" x1="16" y1="104" x2="{{ node.width - 16 }}" y2="104"></line>
+                {% if node.rows %}
+                  {% for row in node.rows %}
+                  <g>
+                    <title>{{ row.kind }} · {{ row.full_label }} · {{ row.detail }}</title>
+                    {% if not loop.first %}<line class="schema-row-rule" x1="16" y1="{{ 104 + loop.index0 * 34 }}" x2="{{ node.width - 16 }}" y2="{{ 104 + loop.index0 * 34 }}"></line>{% endif %}
+                    <rect class="schema-key-badge {{ row.kind | lower }}" x="17" y="{{ 113 + loop.index0 * 34 }}" width="28" height="18" rx="5"></rect>
+                    <text class="schema-key-badge-text {{ row.kind | lower }}" x="31" y="{{ 125.5 + loop.index0 * 34 }}">{{ row.kind }}</text>
+                    <text class="schema-row-label" x="54" y="{{ 125 + loop.index0 * 34 }}">{{ row.label }}</text>
+                    <text class="schema-row-detail" x="{{ node.width - 17 }}" y="{{ 125 + loop.index0 * 34 }}" text-anchor="end">{{ row.detail }}</text>
+                  </g>
+                  {% endfor %}
+                {% else %}
+                  <text class="schema-empty-state" x="17" y="126">No candidate key roles met the evidence threshold</text>
+                {% endif %}
+                {% if node.overflow_count %}
+                <text class="schema-more" data-table="{{ node.table }}" x="17" y="{{ node.height - 13 }}" role="button" tabindex="0">+ {{ node.overflow_count }} more — show all</text>
+                {% endif %}
+{% endmacro %}
+
+{# Standalone SVG document for one card, used as a Cytoscape node image. #}
+{% macro card_svg(node) -%}
+<svg xmlns="http://www.w3.org/2000/svg" width="{{ node.width }}" height="{{ node.height }}" viewBox="0 0 {{ node.width }} {{ node.height }}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"><style>{{ erd_card_css }}</style>{{ table_card(node) }}</svg>
+{%- endmacro %}
+
+      {% set section_index.n = section_index.n + 1 %}
+      <section class="wide">
+        <div class="sec-head">
+          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+          <div class="sec-title">
+            <h2>{{ artifact.title }}</h2>
+            <p>Evidence-backed candidates, not declared constraints. Scroll to zoom, drag the canvas to pan, drag a table to rearrange, click a table to focus its relationships; toggle tables to declutter.</p>
+            <div class="er-legend" aria-label="Entity relationship diagram legend">
+              <span class="lg-group">
+                <span class="lg-title">Keys</span>
+                <span><b class="legend-key legend-pk">PK</b> candidate primary key</span>
+                <span><b class="legend-key legend-fk">FK</b> inferred foreign key</span>
+              </span>
+              <span class="lg-group">
+                <span class="lg-title">Table roles</span>
+                <span><b class="role-swatch hub"></b> hub</span>
+                <span><b class="role-swatch dimension"></b> dimension</span>
+                <span><b class="role-swatch fact"></b> fact</span>
+                <span><b class="role-swatch junction"></b> junction</span>
+              </span>
+              <span class="lg-group">
+                <span class="lg-title">Confidence</span>
+                <span><b class="conf-swatch high"></b> high</span>
+                <span><b class="conf-swatch medium"></b> medium</span>
+                <span><b class="conf-swatch low"></b> low</span>
+              </span>
+              <span class="lg-group">
+                <span class="lg-title">Cardinality</span>
+                <span>
+                  <svg viewBox="0 0 34 16" aria-hidden="true"><line x1="3" y1="8" x2="31" y2="8" stroke-dasharray="5 4"></line><line x1="9" y1="3" x2="9" y2="13"></line></svg>
+                  <b class="lg-mark">1</b> exactly one (parent side)
+                </span>
+                <span>
+                  <svg viewBox="0 0 34 16" aria-hidden="true"><line x1="3" y1="8" x2="31" y2="8" stroke-dasharray="5 4"></line><path d="M31 8 L24 3 M31 8 L24 13"></path></svg>
+                  <b class="lg-mark">N</b> can match many (child side)
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+        {% set nodes_by_importance = artifact.data.nodes | sort(attribute='referenced_by', reverse=true) %}
+        <div class="schema-summary" aria-label="Table roles">
+          {% for node in nodes_by_importance[:12] %}
+          <span class="chip-tbl"><span class="role-tag {{ node.role }}">{{ node.role }}</span> {{ node.display_table }}{% if node.referenced_by %} · ref by {{ node.referenced_by }}{% endif %}</span>
+          {% endfor %}
+        </div>
+        <div class="erd" data-erd-root>
+          <div class="erd-toolbar">
+            <button type="button" data-erd="fit">Fit</button>
+            <button type="button" data-erd="zoom-in" aria-label="Zoom in">+</button>
+            <button type="button" data-erd="zoom-out" aria-label="Zoom out">−</button>
+            <details class="erd-tables">
+              <summary>Tables</summary>
+              <div class="erd-tables-list">
+                {% for node in artifact.data.nodes %}
+                <label><input type="checkbox" data-erd-toggle="{{ node.table }}" checked> {{ node.display_table }}</label>
+                {% endfor %}
+              </div>
+            </details>
+          </div>
+          <div class="erd-warning" hidden>Interactive diagram unavailable — showing the static fallback.</div>
+          <style>{{ erd_card_css }}</style>
+          <svg id="erd-svg" class="erd-svg" viewBox="0 0 {{ artifact.data.width }} {{ artifact.data.height }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Candidate entity relationship diagram">
+            <g id="erd-content">
+              {% for edge in artifact.data.edges %}
+              <g class="schema-relationship conf-{{ edge.confidence_bin }}" data-parent="{{ edge.parent_table }}" data-child="{{ edge.child_table }}">
+                <title>{{ edge.child_table }}.{{ edge.child_columns | join(' + ') }} → {{ edge.parent_table }}.{{ edge.parent_columns | join(' + ') }} · {{ edge.cardinality | replace('_', '–') }} · {{ "%.0f%%" | format(edge.confidence * 100) }} confidence (inclusion {{ "%.0f%%" | format(edge.inclusion_rate * 100) }}, name match {{ "%.0f%%" | format(edge.name_similarity * 100) }}, type {{ "%.0f%%" | format(edge.type_compatibility * 100) }})</title>
+                <path class="schema-edge" d="{{ edge.path }}"></path>
+                {% for mark in edge.source_marks %}
+                <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
+                {% endfor %}
+                {% for mark in edge.target_marks %}
+                <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
+                {% endfor %}
+              </g>
+              {% endfor %}
+              {% for node in artifact.data.nodes %}
+              <g class="schema-entity role-{{ node.role }}" data-table="{{ node.table }}" transform="translate({{ node.x }}, {{ node.y }})">
+                <title>{{ node.table }} · {{ node.row_count }} rows · {{ node.column_count }} columns · role: {{ node.role }}{% if node.referenced_by %} (referenced by {{ node.referenced_by }}){% endif %}</title>
+                {{ table_card(node) }}
+              </g>
+              {% endfor %}
+            </g>
+          </svg>
+          <div id="erd-cy" hidden></div>
+          <div class="erd-popover" hidden></div>
+          <div class="erd-hint">Drag tables to rearrange · click a table to focus · click empty space to reset</div>
+        </div>
+        <script type="application/json" id="erd-graph">{"nodes":[
+        {%- for node in artifact.data.nodes -%}
+        {"table":{{ node.table | tojson }},"role":{{ node.role | tojson }},"x":{{ node.x }},"y":{{ node.y }},"w":{{ node.width }},"h":{{ node.height }},"referenced_by":{{ node.referenced_by }},"references":{{ node.references }},"card":{{ card_svg(node) | tojson }},"roles":[
+        {%- for r in node.all_rows -%}
+        {"kind":{{ r.kind | tojson }},"label":{{ r.full_label | tojson }},"detail":{{ r.detail | tojson }}}{% if not loop.last %},{% endif %}
+        {%- endfor -%}
+        ]}{% if not loop.last %},{% endif %}
+        {%- endfor -%}
+        ],"edges":[
+        {%- for edge in artifact.data.edges -%}
+        {"parent":{{ edge.parent_table | tojson }},"child":{{ edge.child_table | tojson }},"parent_columns":{{ edge.parent_columns | list | tojson }},"child_columns":{{ edge.child_columns | list | tojson }},"cardinality":{{ edge.cardinality | tojson }},"bin":{{ edge.confidence_bin | tojson }},"confidence":{{ edge.confidence }},"inclusion_rate":{{ edge.inclusion_rate }},"name_similarity":{{ edge.name_similarity }},"type_compatibility":{{ edge.type_compatibility }}}{% if not loop.last %},{% endif %}
+        {%- endfor -%}
+        ]}</script>
+        {% if cytoscape_js %}
+        <script id="cytoscape-lib">/*! Cytoscape.js — MIT License — © The Cytoscape Consortium — vendored, see reporting/assets/README.md */
+{{ cytoscape_js | safe }}</script>
+        {% endif %}
+        {% include "_erd_cytoscape.html" %}
+        {% include "_erd_fallback.html" %}
+      </section>

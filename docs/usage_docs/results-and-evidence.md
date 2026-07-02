@@ -196,7 +196,9 @@ float64 numeric ('measure_candidate',)
 ```
 
 Key fields: `ColumnCatalog` carries `physical_type`, `semantic_type`, `roles`,
-missingness, distinctness, `statistics`, and `top_values`; `TableCatalog` adds
+missingness, distinctness, `statistics`, `top_values`, and `warnings`
+(analyst-facing caveats such as half-missing, constant, or high-cardinality
+categorical columns — also shown as chips in the HTML report); `TableCatalog` adds
 shape, `memory_bytes`, `duplicate_row_count`, and a `fingerprint`. The
 fingerprint detects likely data changes; it is a bounded-cost signal, not a
 cryptographic commitment to every row.

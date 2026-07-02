@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pandas as pd
 import pytest
@@ -245,3 +246,55 @@ def test_schema_exports_include_graph_and_evidence(tmp_path, related_tables) -> 
     assert any(row["kind"] == "FK" for node in graph["nodes"] for row in node["rows"])
     assert payload["artifacts"][0]["kind"] == "schema_graph"
     assert any(item["kind"] == "candidate_relationship" for item in payload["evidence"])
+    # Interactive ERD: vendored library, data island, canvas mount point, and
+    # the static SVG fallback all ship in the same document.
+    assert 'id="cytoscape-lib"' in html
+    assert 'id="erd-graph"' in html
+    assert 'id="erd-cy"' in html
+    assert 'id="erd-svg"' in html
+    assert "exactly one (parent side)" in html
+    assert "can match many (child side)" in html
+
+
+def test_erd_graph_island_is_valid_json(tmp_path, related_tables) -> None:
+    result = pe.discover_schema(related_tables)
+    html = result.to_html(tmp_path / "schema.html").read_text(encoding="utf-8")
+
+    match = re.search(
+        r'<script type="application/json" id="erd-graph">(.*?)</script>', html, re.S
+    )
+    assert match is not None
+    graph = json.loads(match.group(1))
+    assert graph["nodes"] and graph["edges"]
+    node = graph["nodes"][0]
+    assert node["card"].startswith('<svg xmlns="http://www.w3.org/2000/svg"')
+    assert {"table", "x", "y", "w", "h", "roles"} <= set(node)
+    assert {"parent", "child", "cardinality", "bin"} <= set(graph["edges"][0])
+
+
+def test_schema_report_degrades_without_vendored_cytoscape(
+    tmp_path, related_tables, monkeypatch
+) -> None:
+    import prism_eda.reporting.renderer as renderer
+
+    monkeypatch.setattr(renderer, "_load_cytoscape_js", lambda: None)
+    result = pe.discover_schema(related_tables)
+    html = result.to_html(tmp_path / "schema.html").read_text(encoding="utf-8")
+
+    assert 'id="cytoscape-lib"' not in html
+    assert 'id="erd-svg"' in html
+    assert "Interactive diagram unavailable" in html
+
+
+def test_vendored_cytoscape_asset_is_packaged() -> None:
+    from importlib import resources
+
+    asset = resources.files("prism_eda.reporting").joinpath(
+        "assets/cytoscape.min.js"
+    )
+    text = asset.read_text(encoding="utf-8")
+    assert len(text) > 100_000
+    # A raw close-tag inside the inlined payload would truncate the report.
+    from prism_eda.reporting.renderer import _load_cytoscape_js
+
+    assert "</script" not in _load_cytoscape_js()

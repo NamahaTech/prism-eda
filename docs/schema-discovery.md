@@ -117,8 +117,10 @@ Schema reports contain:
 - candidate-key evidence;
 - candidate-relationship evidence;
 - orphan-row findings when a relationship clears the threshold;
-- a self-contained inline SVG ER diagram with layered table cards, candidate
-  `PK`/`FK` roles, routed connectors, confidence badges, and cardinality marks;
+- a self-contained interactive ER diagram (embedded Cytoscape.js, offline)
+  with draggable layered table cards, candidate `PK`/`FK` roles, routed
+  connectors, confidence badges, and `1`/`N` cardinality labels — degrading
+  to a static SVG when JavaScript is unavailable;
 - sampling and reproducibility metadata;
 - the normal table and column catalog.
 

@@ -4,6 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Prism EDA Report</title>
+  {#- Brand mark: a beam enters an equilateral prism and the spectrum emerges
+      staggered along the right face, each ray fanning out at its own angle. -#}
+  {% set prism_logo %}<svg viewBox="0 0 34 34" fill="none" aria-hidden="true">
+    <path d="M17 7 L27.4 25 H6.6 Z" stroke="#211d17" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M2.2 18 H9.6" stroke="#211d17" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M22.6 16.2 L30.6 12.4" stroke="#6d5bd0" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M23.3 17.4 L31.5 14.9" stroke="#2f8fa6" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M24.0 18.6 L32.2 17.6" stroke="#4f9e6a" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M24.7 19.8 L32.2 20.3" stroke="#c9a63f" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M25.4 21.0 L31.6 23.0" stroke="#c0623f" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>{% endset %}
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,{{ prism_logo | trim | urlencode }}">
   <style>
     :root {
       color-scheme: light;
@@ -236,11 +248,17 @@
     .miss .mbar > span, .bar > span { display: block; height: 100%; background: var(--accent); }
     .shape code { margin: 0 3px 3px 0; display: inline-block; background: transparent; padding: 0; color: var(--ink-2); white-space: nowrap; }
     .shape code b { color: var(--ink); font-weight: 600; }
+    .shape .shape-note { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-3); }
+    .chip-warn { display: block; max-width: 220px; margin-top: 4px; font-size: 11px; line-height: 1.35; color: #7a4d12; background: var(--med-bg); border-radius: 5px; padding: 2px 7px; }
 
     /* ---------- schema entity-relationship diagram ---------- */
     .schema-wrap { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
-    .er-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0 0; color: var(--ink-3); font-size: 12px; }
-    .er-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+    .er-legend { display: flex; flex-wrap: wrap; gap: 10px 0; margin: 12px 0 0; color: var(--ink-3); font-size: 12px; }
+    .er-legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .er-legend .lg-group { gap: 12px; padding: 0 16px; border-left: 1px solid var(--line); }
+    .er-legend .lg-group:first-child { border-left: 0; padding-left: 0; }
+    .er-legend .lg-title { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+    .er-legend .lg-mark { font-family: var(--mono); font-style: normal; font-weight: 700; color: var(--ink-2); }
     .er-legend svg { width: 28px; height: 16px; stroke: #5f766e; stroke-width: 1.7; fill: none; stroke-linecap: round; }
     .legend-key { display: inline-grid; place-items: center; min-width: 26px; height: 20px; padding: 0 5px; border-radius: 5px; font-size: 10px; font-weight: 850; }
     .legend-pk { color: #075f49; background: #dff4ed; }
@@ -277,6 +295,9 @@
     .erd-tables-list label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
     .erd-tables-list label:hover { background: var(--fill); }
     .erd-hint { position: absolute; left: 12px; bottom: 10px; z-index: 2; font-size: 11.5px; color: var(--ink-3); background: rgba(251,249,243,.8); padding: 3px 8px; border-radius: 6px; pointer-events: none; }
+    #erd-cy { position: absolute; inset: 0; z-index: 1; }
+    .erd--cy .erd-svg { display: none; }
+    .erd-warning { position: absolute; top: 12px; left: 12px; z-index: 3; font-size: 12px; color: #7a4d12; background: var(--med-bg); border: 1px solid #e8d9b8; border-radius: 8px; padding: 6px 10px; }
     .erd-popover {
       position: absolute; z-index: 4; min-width: 220px; max-width: 300px; max-height: 260px; overflow: auto;
       background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
@@ -303,27 +324,12 @@
     .conf-low .schema-edge { stroke-width: 1.2; opacity: .42; }
     .schema-relationship:hover { color: var(--accent); }
     .schema-relationship:hover .schema-edge { stroke-width: 3; opacity: 1; }
-    .schema-node { fill: #fff; stroke: #b7c9c2; stroke-width: 1.4; filter: drop-shadow(0 9px 16px rgba(30, 46, 40, .10)); }
-    .schema-node-header { fill: #123d32; }
-    .schema-node-header.is-hub { fill: #0d5f4a; }
-    .schema-node-header-rule { fill: #0d7a5f; }
-    .schema-node-icon { stroke: #9de0ca; stroke-width: 1.4; fill: none; }
-    .schema-node-title { fill: #fff; font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
-    .schema-node-meta { fill: #b9d8ce; font-size: 10.5px; }
-    .schema-role { fill: #cfeee2; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-    .schema-section-label { fill: #7a8984; font-size: 9.5px; font-weight: 800; letter-spacing: .09em; }
-    .schema-row-rule { stroke: #e5ece9; stroke-width: 1; }
-    .schema-row-label { fill: #23312c; font-size: 11.5px; font-weight: 700; }
-    .schema-row-detail { fill: #71817b; font-size: 10px; }
-    .schema-key-badge { stroke-width: 1; }
-    .schema-key-badge.pk { fill: #dff4ed; stroke: #b9e3d5; }
-    .schema-key-badge.fk { fill: #e8f0f6; stroke: #cbdce8; }
-    .schema-key-badge-text { font-size: 9px; font-weight: 850; text-anchor: middle; }
-    .schema-key-badge-text.pk { fill: #07624b; }
-    .schema-key-badge-text.fk { fill: #345b74; }
-    .schema-empty-state { fill: #7a8984; font-size: 10.5px; }
-    .schema-more { fill: var(--accent-ink); font-size: 10.5px; font-weight: 700; cursor: pointer; }
-    .schema-more:hover { text-decoration: underline; }
+    /* Card visuals live in _erd_section.html (erd_card_css) so the same rules
+       can be inlined into the standalone card images used by the Cytoscape
+       view. Page-only extras for the static fallback SVG: */
+    #erd-svg .schema-node { filter: drop-shadow(0 9px 16px rgba(30, 46, 40, .10)); }
+    #erd-svg .schema-more { cursor: pointer; }
+    #erd-svg .schema-more:hover { text-decoration: underline; }
     /* role legend + confidence legend swatches */
     .role-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
     .role-swatch.hub { background: #0d5f4a; } .role-swatch.dimension { background: #6aa393; }
@@ -369,6 +375,9 @@
     @media print {
       body { background: #fff; }
       .controls, .erd-controls, .erd-tables { display: none; }
+      /* canvas rendering prints poorly — fall back to the static SVG */
+      #erd-cy, .erd-warning, .erd-toolbar { display: none !important; }
+      .erd--cy .erd-svg { display: block !important; }
       section, .finding { break-inside: avoid; }
     }
   </style>
@@ -382,15 +391,7 @@
   <header class="page mast">
     <div class="mast-row">
       <div class="brand">
-        <svg viewBox="0 0 34 34" fill="none" aria-hidden="true">
-          <path d="M15 4 L28 27 H4 Z" stroke="#211d17" stroke-width="1.6" stroke-linejoin="round"/>
-          <path d="M2 15 H12" stroke="#211d17" stroke-width="1.6" stroke-linecap="round"/>
-          <path d="M18.5 17.4 L31 11.5" stroke="#6d5bd0" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M19.2 19.2 L31.5 15.5" stroke="#2f8fa6" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M19.6 21 L31.5 19.5" stroke="#4f9e6a" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M19.8 22.8 L31 23.5" stroke="#c9a63f" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M19.8 24.4 L30 27.4" stroke="#c0623f" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
+        {{ prism_logo }}
         <div>
           <div class="brand-name">Prism<span style="color:var(--ink-3);font-weight:500">EDA</span></div>
           <div class="brand-sub">Exploratory data analysis</div>
@@ -487,111 +488,7 @@
   {% if result.goal == 'schema_discovery' %}
     {% for artifact in result.artifacts %}
       {% if artifact.kind == 'schema_graph' %}
-      {% set section_index.n = section_index.n + 1 %}
-      <section class="wide">
-        <div class="sec-head">
-          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
-          <div class="sec-title">
-            <h2>{{ artifact.title }}</h2>
-            <p>Evidence-backed candidates, not declared constraints. Scroll to zoom, drag to pan, click a table to focus its relationships; toggle tables to declutter.</p>
-            <div class="er-legend" aria-label="Entity relationship diagram legend">
-              <span><b class="legend-key legend-pk">PK</b> candidate primary key</span>
-              <span><b class="legend-key legend-fk">FK</b> inferred foreign key</span>
-              <span><b class="role-swatch hub"></b> hub</span>
-              <span><b class="role-swatch dimension"></b> dimension</span>
-              <span><b class="role-swatch fact"></b> fact</span>
-              <span><b class="role-swatch junction"></b> junction</span>
-              <span><b class="conf-swatch high"></b> high conf.</span>
-              <span><b class="conf-swatch medium"></b> medium</span>
-              <span><b class="conf-swatch low"></b> low</span>
-            </div>
-          </div>
-        </div>
-        {% set nodes_by_importance = artifact.data.nodes | sort(attribute='referenced_by', reverse=true) %}
-        <div class="schema-summary" aria-label="Table roles">
-          {% for node in nodes_by_importance[:12] %}
-          <span class="chip-tbl"><span class="role-tag {{ node.role }}">{{ node.role }}</span> {{ node.display_table }}{% if node.referenced_by %} · ref by {{ node.referenced_by }}{% endif %}</span>
-          {% endfor %}
-        </div>
-        <div class="erd" data-erd-root>
-          <div class="erd-toolbar">
-            <button type="button" data-erd="fit">Fit</button>
-            <button type="button" data-erd="zoom-in" aria-label="Zoom in">+</button>
-            <button type="button" data-erd="zoom-out" aria-label="Zoom out">−</button>
-            <details class="erd-tables">
-              <summary>Tables</summary>
-              <div class="erd-tables-list">
-                {% for node in artifact.data.nodes %}
-                <label><input type="checkbox" data-erd-toggle="{{ node.table }}" checked> {{ node.display_table }}</label>
-                {% endfor %}
-              </div>
-            </details>
-          </div>
-          <svg id="erd-svg" class="erd-svg" viewBox="0 0 {{ artifact.data.width }} {{ artifact.data.height }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Candidate entity relationship diagram">
-            <g id="erd-content">
-              {% for edge in artifact.data.edges %}
-              <g class="schema-relationship conf-{{ edge.confidence_bin }}" data-parent="{{ edge.parent_table }}" data-child="{{ edge.child_table }}">
-                <title>{{ edge.child_table }}.{{ edge.child_columns | join(' + ') }} → {{ edge.parent_table }}.{{ edge.parent_columns | join(' + ') }} · {{ edge.cardinality | replace('_', '–') }} · {{ "%.0f%%" | format(edge.confidence * 100) }} confidence (inclusion {{ "%.0f%%" | format(edge.inclusion_rate * 100) }}, name match {{ "%.0f%%" | format(edge.name_similarity * 100) }}, type {{ "%.0f%%" | format(edge.type_compatibility * 100) }})</title>
-                <path class="schema-edge" d="{{ edge.path }}"></path>
-                {% for mark in edge.source_marks %}
-                <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
-                {% endfor %}
-                {% for mark in edge.target_marks %}
-                <line class="schema-cardinality" x1="{{ mark.x1 }}" y1="{{ mark.y1 }}" x2="{{ mark.x2 }}" y2="{{ mark.y2 }}"></line>
-                {% endfor %}
-              </g>
-              {% endfor %}
-              {% for node in artifact.data.nodes %}
-              <g class="schema-entity role-{{ node.role }}" data-table="{{ node.table }}">
-                <title>{{ node.table }} · {{ node.row_count }} rows · {{ node.column_count }} columns · role: {{ node.role }}{% if node.referenced_by %} (referenced by {{ node.referenced_by }}){% endif %}</title>
-                <rect class="schema-node" x="{{ node.x }}" y="{{ node.y }}" width="{{ node.width }}" height="{{ node.height }}" rx="16"></rect>
-                <rect class="schema-node-header{% if node.is_hub %} is-hub{% endif %}" x="{{ node.x }}" y="{{ node.y }}" width="{{ node.width }}" height="68" rx="16"></rect>
-                <rect class="schema-node-header{% if node.is_hub %} is-hub{% endif %}" x="{{ node.x }}" y="{{ node.y + 40 }}" width="{{ node.width }}" height="28"></rect>
-                <rect class="schema-node-header-rule" x="{{ node.x }}" y="{{ node.y + 66 }}" width="{{ node.width }}" height="3"></rect>
-                <g class="schema-node-icon">
-                  <rect x="{{ node.x + 17 }}" y="{{ node.y + 18 }}" width="20" height="17" rx="3"></rect>
-                  <line x1="{{ node.x + 17 }}" y1="{{ node.y + 24 }}" x2="{{ node.x + 37 }}" y2="{{ node.y + 24 }}"></line>
-                  <line x1="{{ node.x + 24 }}" y1="{{ node.y + 24 }}" x2="{{ node.x + 24 }}" y2="{{ node.y + 35 }}"></line>
-                </g>
-                <text class="schema-node-title" x="{{ node.x + 48 }}" y="{{ node.y + 30 }}">{{ node.display_table }}</text>
-                <text class="schema-node-meta" x="{{ node.x + 48 }}" y="{{ node.y + 49 }}">{{ node.row_count | format_value }} rows · {{ node.column_count }} columns</text>
-                <text class="schema-role" x="{{ node.x + node.width - 16 }}" y="{{ node.y + 30 }}" text-anchor="end">{{ node.role }}{% if node.role in ['hub', 'dimension'] and node.referenced_by %} · ref {{ node.referenced_by }}{% elif node.references %} · refs {{ node.references }}{% endif %}</text>
-                <text class="schema-section-label" x="{{ node.x + 17 }}" y="{{ node.y + 94 }}">INFERRED KEY ROLES</text>
-                <line class="schema-row-rule" x1="{{ node.x + 16 }}" y1="{{ node.y + 104 }}" x2="{{ node.x + node.width - 16 }}" y2="{{ node.y + 104 }}"></line>
-                {% if node.rows %}
-                  {% for row in node.rows %}
-                  <g>
-                    <title>{{ row.kind }} · {{ row.full_label }} · {{ row.detail }}</title>
-                    {% if not loop.first %}<line class="schema-row-rule" x1="{{ node.x + 16 }}" y1="{{ node.y + 104 + loop.index0 * 34 }}" x2="{{ node.x + node.width - 16 }}" y2="{{ node.y + 104 + loop.index0 * 34 }}"></line>{% endif %}
-                    <rect class="schema-key-badge {{ row.kind | lower }}" x="{{ node.x + 17 }}" y="{{ node.y + 113 + loop.index0 * 34 }}" width="28" height="18" rx="5"></rect>
-                    <text class="schema-key-badge-text {{ row.kind | lower }}" x="{{ node.x + 31 }}" y="{{ node.y + 125.5 + loop.index0 * 34 }}">{{ row.kind }}</text>
-                    <text class="schema-row-label" x="{{ node.x + 54 }}" y="{{ node.y + 125 + loop.index0 * 34 }}">{{ row.label }}</text>
-                    <text class="schema-row-detail" x="{{ node.x + node.width - 17 }}" y="{{ node.y + 125 + loop.index0 * 34 }}" text-anchor="end">{{ row.detail }}</text>
-                  </g>
-                  {% endfor %}
-                {% else %}
-                  <text class="schema-empty-state" x="{{ node.x + 17 }}" y="{{ node.y + 126 }}">No candidate key roles met the evidence threshold</text>
-                {% endif %}
-                {% if node.overflow_count %}
-                <text class="schema-more" data-table="{{ node.table }}" x="{{ node.x + 17 }}" y="{{ node.y + node.height - 13 }}" role="button" tabindex="0">+ {{ node.overflow_count }} more — show all</text>
-                {% endif %}
-              </g>
-              {% endfor %}
-            </g>
-          </svg>
-          <div class="erd-popover" hidden></div>
-          <div class="erd-hint">Click a table to focus · click empty space to reset</div>
-        </div>
-        <script type="application/json" id="erd-data">{"tables":{
-        {%- for node in artifact.data.nodes -%}
-        {{ node.table | tojson }}:{"role":{{ node.role | tojson }},"referenced_by":{{ node.referenced_by }},"references":{{ node.references }},"roles":[
-        {%- for r in node.all_rows -%}
-        {"kind":{{ r.kind | tojson }},"label":{{ r.full_label | tojson }},"detail":{{ r.detail | tojson }}}{% if not loop.last %},{% endif %}
-        {%- endfor -%}
-        ]}{% if not loop.last %},{% endif %}
-        {%- endfor -%}
-        }}</script>
-      </section>
+      {% include "_erd_section.html" %}
       {% endif %}
     {% endfor %}
 
@@ -861,17 +758,27 @@
             {% for column in table.columns %}
             <tr>
               <td><strong>{{ column.name }}</strong><br><span class="mono" style="color:var(--ink-3);font-size:11px">{{ column.physical_type }}</span></td>
-              <td>{{ column.semantic_type }}</td>
+              <td>
+                {{ column.semantic_type }}
+                {% for warning in column.warnings %}<span class="chip-warn">{{ warning }}</span>{% endfor %}
+              </td>
               <td>{% if column.roles %}{% for role in column.roles %}<span class="role">{{ role }}</span>{% endfor %}{% else %}<span style="color:var(--ink-3)">None inferred</span>{% endif %}</td>
               <td>
                 <div class="miss"><span class="num">{{ "%.1f%%" | format(column.missing_rate * 100) }}</span><div class="mbar"><span style="width: {{ [column.missing_rate * 100, 100] | min }}%"></span></div></div>
               </td>
               <td class="num">{{ column.unique_count | format_value }}{% if column.unique_rate is not none %} · {{ "%.1f%%" | format(column.unique_rate * 100) }}{% endif %}</td>
               <td class="shape">
-                {% if column.statistics %}
+                {% if column.semantic_type in ('categorical', 'boolean') and column.top_values and column.row_count %}
+                  {% set shown = column.top_values[:5] %}
+                  {% set covered = shown | sum(attribute='count') %}
+                  {% for item in shown %}<code>{% if item.value is none %}(missing){% else %}{{ item.value | string | truncate(24, true, '…') }}{% endif %} <b>{{ "%.0f%%" | format(item.count / column.row_count * 100) }}</b></code>{% endfor %}
+                  {% if column.unique_count is not none and column.unique_count > shown | length %}
+                  <span class="shape-note">+{{ (column.unique_count - (shown | length)) | format_value }} more · top {{ shown | length }} cover {{ "%.0f%%" | format(covered / column.row_count * 100) }} of rows</span>
+                  {% endif %}
+                {% elif column.statistics %}
                   {% for key, value in column.statistics.items() %}<code>{{ key }} <b>{{ value | format_value }}</b></code>{% endfor %}
                 {% else %}
-                  <span style="color:var(--ink-3)">No numeric range</span>
+                  <span style="color:var(--ink-3)">No values</span>
                 {% endif %}
               </td>
             </tr>
@@ -959,152 +866,6 @@
   </script>
 
   <script>
-  // Interactive ER diagram: viewBox pan/zoom (zoom-to-cursor), fit, focus/dim,
-  // hide tables, and a popover for the full inferred-key-role list. Progressive
-  // enhancement — the static SVG already renders without any of this.
-  (function () {
-    "use strict";
-    var root = document.querySelector("[data-erd-root]");
-    if (!root) return;
-    var svg = root.querySelector("#erd-svg");
-    var content = root.querySelector("#erd-content");
-    var popover = root.querySelector(".erd-popover");
-    var metaEl = document.getElementById("erd-data");
-    var META = {};
-    try { META = metaEl ? JSON.parse(metaEl.textContent).tables : {}; } catch (e) { META = {}; }
-    var nodes = Array.prototype.slice.call(content.querySelectorAll(".schema-entity"));
-    var edges = Array.prototype.slice.call(content.querySelectorAll(".schema-relationship"));
-
-    function vb() { return svg.getAttribute("viewBox").split(/\s+/).map(Number); }
-    function setVB(v) { svg.setAttribute("viewBox", v.join(" ")); }
-
-    function fit() {
-      var b;
-      try { b = content.getBBox(); } catch (e) { return; }
-      if (!b || !b.width) return;
-      var p = 40;
-      setVB([b.x - p, b.y - p, b.width + 2 * p, b.height + 2 * p]);
-    }
-
-    function zoomBy(factor, fx, fy) {
-      var v = vb();
-      var nw = v[2] * factor, nh = v[3] * factor;
-      // clamp so we neither zoom into a pixel nor out past ~8x the content
-      if (nw < 60 || nw > (v[2] > v[3] ? 60000 : 40000)) return;
-      setVB([v[0] + fx * (v[2] - nw), v[1] + fy * (v[3] - nh), nw, nh]);
-    }
-
-    svg.addEventListener("wheel", function (e) {
-      e.preventDefault();
-      var r = svg.getBoundingClientRect();
-      zoomBy(e.deltaY > 0 ? 1.1 : 1 / 1.1,
-             (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
-    }, { passive: false });
-
-    var dragging = false, lastX = 0, lastY = 0, moved = false;
-    svg.addEventListener("pointerdown", function (e) {
-      if (e.target.closest(".schema-more")) return;
-      dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
-      svg.setPointerCapture(e.pointerId); svg.classList.add("grabbing");
-    });
-    svg.addEventListener("pointermove", function (e) {
-      if (!dragging) return;
-      var r = svg.getBoundingClientRect(); var v = vb();
-      var dx = (e.clientX - lastX) * v[2] / r.width;
-      var dy = (e.clientY - lastY) * v[3] / r.height;
-      if (Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY) > 3) moved = true;
-      lastX = e.clientX; lastY = e.clientY;
-      setVB([v[0] - dx, v[1] - dy, v[2], v[3]]);
-    });
-    function endDrag() { dragging = false; svg.classList.remove("grabbing"); }
-    svg.addEventListener("pointerup", endDrag);
-    svg.addEventListener("pointercancel", endDrag);
-
-    root.querySelectorAll("[data-erd]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var a = btn.getAttribute("data-erd");
-        if (a === "fit") { clearFocus(); fit(); }
-        else zoomBy(a === "zoom-in" ? 1 / 1.25 : 1.25, 0.5, 0.5);
-      });
-    });
-
-    function clearFocus() {
-      nodes.forEach(function (n) { n.classList.remove("dim", "focus"); });
-      edges.forEach(function (e) { e.classList.remove("dim"); });
-    }
-    function focus(table) {
-      var keep = {}; keep[table] = 1;
-      edges.forEach(function (e) {
-        if (e.dataset.parent === table || e.dataset.child === table) {
-          keep[e.dataset.parent] = 1; keep[e.dataset.child] = 1;
-        }
-      });
-      nodes.forEach(function (n) {
-        n.classList.toggle("dim", !keep[n.dataset.table]);
-        n.classList.toggle("focus", n.dataset.table === table);
-      });
-      edges.forEach(function (e) {
-        e.classList.toggle("dim", !(e.dataset.parent === table || e.dataset.child === table));
-      });
-    }
-    nodes.forEach(function (n) {
-      n.addEventListener("click", function (e) {
-        if (moved || e.target.closest(".schema-more")) return;
-        if (n.classList.contains("focus")) clearFocus(); else focus(n.dataset.table);
-        e.stopPropagation();
-      });
-    });
-    svg.addEventListener("click", function (e) {
-      if (e.target === svg || e.target === content) clearFocus();
-    });
-
-    root.querySelectorAll("[data-erd-toggle]").forEach(function (cb) {
-      cb.addEventListener("change", function () {
-        var t = cb.getAttribute("data-erd-toggle"), on = cb.checked;
-        nodes.forEach(function (n) { if (n.dataset.table === t) n.classList.toggle("hidden", !on); });
-        edges.forEach(function (e) {
-          if (e.dataset.parent === t || e.dataset.child === t) e.classList.toggle("hidden", !on);
-        });
-      });
-    });
-
-    function esc(s) {
-      return String(s).replace(/[&<>"]/g, function (c) {
-        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
-      });
-    }
-    function showRoles(table, clientX, clientY) {
-      var meta = META[table];
-      if (!meta) return;
-      var html = '<div class="pop-title">' + esc(table) + "</div>";
-      (meta.roles || []).forEach(function (r) {
-        html += '<div class="pop-row"><span class="pop-kind ' + r.kind.toLowerCase() +
-          '">' + esc(r.kind) + '</span> <span class="pop-label">' + esc(r.label) +
-          '</span> <span class="pop-detail">' + esc(r.detail) + "</span></div>";
-      });
-      popover.innerHTML = html;
-      popover.hidden = false;
-      var rr = root.getBoundingClientRect();
-      var px = Math.min(Math.max(clientX - rr.left, 8), rr.width - popover.offsetWidth - 8);
-      var py = Math.min(clientY - rr.top + 10, rr.height - popover.offsetHeight - 8);
-      popover.style.left = px + "px";
-      popover.style.top = Math.max(py, 8) + "px";
-    }
-    content.querySelectorAll(".schema-more").forEach(function (el) {
-      function open(e) { e.stopPropagation(); e.preventDefault();
-        showRoles(el.getAttribute("data-table"), e.clientX || 0, e.clientY || 0); }
-      el.addEventListener("click", open);
-      el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") open(e); });
-    });
-    document.addEventListener("click", function (e) {
-      if (!popover.hidden && !e.target.closest(".erd-popover") && !e.target.closest(".schema-more")) {
-        popover.hidden = true;
-      }
-    });
-
-    fit();
-    window.addEventListener("resize", function () { /* viewBox keeps it responsive */ });
-  })();
 
   // Candidate-relationships filter: pick a parent and/or child table to focus a
   // pair instead of scrolling the full list.

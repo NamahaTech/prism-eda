@@ -39,6 +39,28 @@ def test_html_export_is_self_contained(tmp_path) -> None:
     assert "<style>" in html
 
 
+def test_html_renders_category_values(tmp_path) -> None:
+    result = pe.profile(
+        pd.DataFrame(
+            {
+                "group": ["a", "a", "b"] * 1200,
+                "flag": [True, True, False] * 1200,
+                # 120 uniques over 3,600 rows (3.3%): categorical with a
+                # high-cardinality warning and a "+N more" coverage note.
+                "many_codes": [f"code_{i:03d}" for i in range(120)] * 30,
+            }
+        )
+    )
+    target = result.to_html(tmp_path / "report.html")
+    html = target.read_text(encoding="utf-8")
+
+    assert "No numeric range" not in html
+    assert "<code>a <b>67%</b></code>" in html
+    assert "<code>True <b>67%</b></code>" in html
+    assert "High cardinality for a categorical column" in html
+    assert "+115 more · top 5 cover" in html
+
+
 def test_interactive_export_falls_back_without_plotly(tmp_path, monkeypatch) -> None:
     result = pe.profile(pd.DataFrame({"value": [1, 2]}))
 

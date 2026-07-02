@@ -89,8 +89,14 @@ result = dataset.discover_schema(
 
 Schema discovery produces a `schema_graph` **artifact** — a self-contained entity
 diagram with PK/FK roles, routed relationships, confidence badges, and one/many
-cardinality marks. It's rendered inline in the HTML report (no JavaScript
-required) and is also available as structured data:
+cardinality marks. In the HTML report it renders as an **interactive diagram**
+(powered by an embedded, vendored Cytoscape.js — still fully offline): drag
+table cards to rearrange, scroll to zoom, click a table to focus its
+relationships, click an edge for cardinality and confidence detail, and toggle
+tables to declutter. Relationship endpoints are labelled **1** (parent side)
+and **N** (child side, one row can match many); the legend explains every
+symbol. Without JavaScript the report shows a static SVG version of the same
+diagram. The graph is also available as structured data:
 
 ```python
 graph = next(a for a in result.artifacts if a.kind == "schema_graph")

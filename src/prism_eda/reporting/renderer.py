@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import resources
 from typing import Any
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
@@ -47,7 +48,24 @@ def _environment() -> Environment:
     return environment
 
 
+def _load_cytoscape_js() -> str | None:
+    """Return the vendored Cytoscape.js source, or None when unavailable."""
+    try:
+        asset = resources.files("prism_eda.reporting").joinpath(
+            "assets/cytoscape.min.js"
+        )
+        text = asset.read_text(encoding="utf-8")
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return None
+    # A literal "</script" inside the inlined payload would terminate the
+    # surrounding script tag early and break the document.
+    return text.replace("</script", "<\\/script")
+
+
 def render_html(result: AnalysisResult) -> str:
     """Render a complete report as a standalone HTML document."""
     template = _environment().get_template("report.html")
-    return template.render(result=result)
+    cytoscape_js = (
+        _load_cytoscape_js() if result.goal == "schema_discovery" else None
+    )
+    return template.render(result=result, cytoscape_js=cytoscape_js)

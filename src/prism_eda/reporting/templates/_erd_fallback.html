@@ -1,0 +1,151 @@
+<script>
+  // Static-SVG fallback: viewBox pan/zoom (zoom-to-cursor), fit, focus/dim,
+  // hide tables, and a popover for the full inferred-key-role list. Only runs
+  // when the Cytoscape canvas did not mount (script above sets erdMode).
+  (function () {
+    "use strict";
+    var root = document.querySelector("[data-erd-root]");
+    if (!root || root.dataset.erdMode === "cy") return;
+    var svg = root.querySelector("#erd-svg");
+    var content = root.querySelector("#erd-content");
+    var popover = root.querySelector(".erd-popover");
+    var metaEl = document.getElementById("erd-graph");
+    var META = {};
+    try {
+      (JSON.parse(metaEl.textContent).nodes || []).forEach(function (n) {
+        META[n.table] = n;
+      });
+    } catch (e) { META = {}; }
+    var nodes = Array.prototype.slice.call(content.querySelectorAll(".schema-entity"));
+    var edges = Array.prototype.slice.call(content.querySelectorAll(".schema-relationship"));
+
+    function vb() { return svg.getAttribute("viewBox").split(/\s+/).map(Number); }
+    function setVB(v) { svg.setAttribute("viewBox", v.join(" ")); }
+
+    function fit() {
+      var b;
+      try { b = content.getBBox(); } catch (e) { return; }
+      if (!b || !b.width) return;
+      var p = 40;
+      setVB([b.x - p, b.y - p, b.width + 2 * p, b.height + 2 * p]);
+    }
+
+    function zoomBy(factor, fx, fy) {
+      var v = vb();
+      var nw = v[2] * factor, nh = v[3] * factor;
+      // clamp so we neither zoom into a pixel nor out past ~8x the content
+      if (nw < 60 || nw > (v[2] > v[3] ? 60000 : 40000)) return;
+      setVB([v[0] + fx * (v[2] - nw), v[1] + fy * (v[3] - nh), nw, nh]);
+    }
+
+    svg.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      var r = svg.getBoundingClientRect();
+      zoomBy(e.deltaY > 0 ? 1.1 : 1 / 1.1,
+             (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    }, { passive: false });
+
+    var dragging = false, lastX = 0, lastY = 0, moved = false;
+    svg.addEventListener("pointerdown", function (e) {
+      if (e.target.closest(".schema-more")) return;
+      dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+      svg.setPointerCapture(e.pointerId); svg.classList.add("grabbing");
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      var r = svg.getBoundingClientRect(); var v = vb();
+      var dx = (e.clientX - lastX) * v[2] / r.width;
+      var dy = (e.clientY - lastY) * v[3] / r.height;
+      if (Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY) > 3) moved = true;
+      lastX = e.clientX; lastY = e.clientY;
+      setVB([v[0] - dx, v[1] - dy, v[2], v[3]]);
+    });
+    function endDrag() { dragging = false; svg.classList.remove("grabbing"); }
+    svg.addEventListener("pointerup", endDrag);
+    svg.addEventListener("pointercancel", endDrag);
+
+    root.querySelectorAll("[data-erd]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var a = btn.getAttribute("data-erd");
+        if (a === "fit") { clearFocus(); fit(); }
+        else zoomBy(a === "zoom-in" ? 1 / 1.25 : 1.25, 0.5, 0.5);
+      });
+    });
+
+    function clearFocus() {
+      nodes.forEach(function (n) { n.classList.remove("dim", "focus"); });
+      edges.forEach(function (e) { e.classList.remove("dim"); });
+    }
+    function focus(table) {
+      var keep = {}; keep[table] = 1;
+      edges.forEach(function (e) {
+        if (e.dataset.parent === table || e.dataset.child === table) {
+          keep[e.dataset.parent] = 1; keep[e.dataset.child] = 1;
+        }
+      });
+      nodes.forEach(function (n) {
+        n.classList.toggle("dim", !keep[n.dataset.table]);
+        n.classList.toggle("focus", n.dataset.table === table);
+      });
+      edges.forEach(function (e) {
+        e.classList.toggle("dim", !(e.dataset.parent === table || e.dataset.child === table));
+      });
+    }
+    nodes.forEach(function (n) {
+      n.addEventListener("click", function (e) {
+        if (moved || e.target.closest(".schema-more")) return;
+        if (n.classList.contains("focus")) clearFocus(); else focus(n.dataset.table);
+        e.stopPropagation();
+      });
+    });
+    svg.addEventListener("click", function (e) {
+      if (e.target === svg || e.target === content) clearFocus();
+    });
+
+    root.querySelectorAll("[data-erd-toggle]").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var t = cb.getAttribute("data-erd-toggle"), on = cb.checked;
+        nodes.forEach(function (n) { if (n.dataset.table === t) n.classList.toggle("hidden", !on); });
+        edges.forEach(function (e) {
+          if (e.dataset.parent === t || e.dataset.child === t) e.classList.toggle("hidden", !on);
+        });
+      });
+    });
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    }
+    function showRoles(table, clientX, clientY) {
+      var meta = META[table];
+      if (!meta) return;
+      var html = '<div class="pop-title">' + esc(table) + "</div>";
+      (meta.roles || []).forEach(function (r) {
+        html += '<div class="pop-row"><span class="pop-kind ' + r.kind.toLowerCase() +
+          '">' + esc(r.kind) + '</span> <span class="pop-label">' + esc(r.label) +
+          '</span> <span class="pop-detail">' + esc(r.detail) + "</span></div>";
+      });
+      popover.innerHTML = html;
+      popover.hidden = false;
+      var rr = root.getBoundingClientRect();
+      var px = Math.min(Math.max(clientX - rr.left, 8), rr.width - popover.offsetWidth - 8);
+      var py = Math.min(clientY - rr.top + 10, rr.height - popover.offsetHeight - 8);
+      popover.style.left = px + "px";
+      popover.style.top = Math.max(py, 8) + "px";
+    }
+    content.querySelectorAll(".schema-more").forEach(function (el) {
+      function open(e) { e.stopPropagation(); e.preventDefault();
+        showRoles(el.getAttribute("data-table"), e.clientX || 0, e.clientY || 0); }
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") open(e); });
+    });
+    document.addEventListener("click", function (e) {
+      if (!popover.hidden && !e.target.closest(".erd-popover") && !e.target.closest(".schema-more")) {
+        popover.hidden = true;
+      }
+    });
+
+    fit();
+  })();
+  </script>

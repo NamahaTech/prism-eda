@@ -35,9 +35,10 @@ capabilities into extras. Install only what you need:
 | `test` | `pip install "prism-eda[test]"` | `pytest`, `pytest-cov` for running the test suite |
 
 > Reports are fully functional **without** any extra — core charts are rendered
-> as inline SVG, so an HTML report has no CDN, JavaScript, or network
-> requirement. The `plotly` extra only upgrades charts to interactive versions
-> when you explicitly ask for them.
+> as inline SVG and interactive pieces (like the schema ER diagram) embed a
+> vendored library, so an HTML report has no CDN or network requirement and
+> degrades gracefully without JavaScript. The `plotly` extra only upgrades
+> charts to interactive versions when you explicitly ask for them.
 
 ## Install from source (for contributors)
 

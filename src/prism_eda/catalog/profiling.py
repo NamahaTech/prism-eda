@@ -22,6 +22,16 @@ from prism_eda.catalog.models import (
 )
 
 
+# A low unique *ratio* alone is not enough to call a column categorical: on a
+# million-row table 5% is still tens of thousands of distinct values (names,
+# free text). The absolute cap bounds how many distinct values a column may
+# have and still be treated as an enumerable category set.
+CATEGORICAL_UNIQUE_CAP = 200
+# Categorical columns above this distinct count get an analyst-facing warning:
+# downstream category-based checks stop using them around this cardinality.
+HIGH_CARDINALITY_WARNING_THRESHOLD = 100
+
+
 def _semantic_type(series: pd.Series, unique_count: int | None) -> str:
     if ptypes.is_bool_dtype(series.dtype):
         return "boolean"
@@ -33,7 +43,10 @@ def _semantic_type(series: pd.Series, unique_count: int | None) -> str:
         return "categorical"
     non_null_count = int(series.notna().sum())
     if unique_count is not None and non_null_count:
-        if unique_count <= 50 or unique_count / non_null_count <= 0.05:
+        if unique_count <= 50 or (
+            unique_count <= CATEGORICAL_UNIQUE_CAP
+            and unique_count / non_null_count <= 0.05
+        ):
             return "categorical"
     return "text"
 
@@ -134,6 +147,16 @@ def profile_column(name: str, series: pd.Series) -> ColumnCatalog:
         warnings.append("At least half of the values are missing.")
     if unique_count == 1 and non_null_count:
         warnings.append("Column is constant among non-null values.")
+    if (
+        semantic_type == "categorical"
+        and unique_count is not None
+        and unique_count > HIGH_CARDINALITY_WARNING_THRESHOLD
+    ):
+        rate_note = f" ({unique_rate:.0%} unique)" if unique_rate is not None else ""
+        warnings.append(
+            f"High cardinality for a categorical column: {unique_count:,} "
+            f"distinct values{rate_note} — likely not a true category."
+        )
 
     return ColumnCatalog(
         name=name,

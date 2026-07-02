@@ -74,7 +74,8 @@ the full breakdown.
 ## 4. Produce a shareable report
 
 Nothing is written to disk until you ask. Export a self-contained HTML report (no
-internet, no JavaScript required) or machine-readable JSON:
+internet required; interactive extras degrade gracefully without JavaScript) or
+machine-readable JSON:
 
 ```python
 result.to_html("churn-readiness.html")

@@ -87,3 +87,59 @@ def test_catalog_infers_basic_semantic_roles() -> None:
     assert columns["created_at"].semantic_type == "datetime"
     assert "timestamp_candidate" in columns["created_at"].roles
     assert columns["segment"].semantic_type == "categorical"
+
+
+def _string_column(unique: int, repeats: int) -> list[str]:
+    return [f"value_{index:04d}" for index in range(unique)] * repeats
+
+
+def test_high_cardinality_text_is_not_categorical() -> None:
+    # 250 uniques over 6,000 rows: ratio 4.2% passes the 5% rule, but the
+    # absolute cap must demote the column to text.
+    frame = pd.DataFrame({"agent_name": _string_column(250, 24)})
+
+    agent = pe.load(frame).catalog().tables[0].columns[0]
+
+    assert agent.semantic_type == "text"
+    assert "free_text_candidate" in agent.roles
+    assert "min_length" in agent.statistics
+
+
+def test_categorical_cap_boundaries() -> None:
+    at_cap = pd.DataFrame({"code": _string_column(200, 30)})
+    above_cap = pd.DataFrame({"code": _string_column(201, 30)})
+    small_high_ratio = pd.DataFrame({"code": _string_column(40, 2)})
+
+    at_cap_col = pe.load(at_cap).catalog().tables[0].columns[0]
+    above_cap_col = pe.load(above_cap).catalog().tables[0].columns[0]
+    small_col = pe.load(small_high_ratio).catalog().tables[0].columns[0]
+
+    assert at_cap_col.semantic_type == "categorical"
+    assert above_cap_col.semantic_type == "text"
+    # <= 50 uniques stays categorical regardless of unique ratio (here 50%).
+    assert small_col.semantic_type == "categorical"
+
+
+def test_high_cardinality_categorical_gets_warning() -> None:
+    frame = pd.DataFrame(
+        {
+            "many_codes": _string_column(150, 40),
+            "few_codes": _string_column(30, 200),
+        }
+    )
+
+    columns = {
+        column.name: column for column in pe.load(frame).catalog().tables[0].columns
+    }
+    assert columns["many_codes"].semantic_type == "categorical"
+    assert any("High cardinality" in warning for warning in columns["many_codes"].warnings)
+    assert not any("High cardinality" in warning for warning in columns["few_codes"].warnings)
+
+
+def test_explicit_categorical_dtype_kept_but_warned() -> None:
+    frame = pd.DataFrame({"declared": pd.Categorical(_string_column(250, 4))})
+
+    column = pe.load(frame).catalog().tables[0].columns[0]
+
+    assert column.semantic_type == "categorical"
+    assert any("High cardinality" in warning for warning in column.warnings)

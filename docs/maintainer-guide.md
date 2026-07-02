@@ -112,6 +112,18 @@ inapplicable execution. Disabling sampling is not a promise of unlimited memory.
   itself must not overflow at mobile widths.
 - Candidate and assumption language must remain visible near inferred outputs.
 
+### Vendored report assets
+
+The interactive ER diagram embeds a pinned, vendored copy of Cytoscape.js
+(`src/prism_eda/reporting/assets/cytoscape.min.js`, MIT). It is committed so
+builds and installs stay offline, and it is only inlined into
+schema-discovery reports. To update: bump `CYTOSCAPE_VERSION` in
+`scripts/fetch_cytoscape.py`, run `python scripts/fetch_cytoscape.py`, and
+refresh `assets/LICENSE.cytoscape` / `assets/README.md`. Reports must keep
+degrading to the static SVG fallback (with a visible notice) when the asset
+is missing or fails to initialise — `tests/test_schema_discovery.py` covers
+this path.
+
 ## Release and packaging
 
 `pyproject.toml` is canonical. `requirements.txt` is only an editable-install

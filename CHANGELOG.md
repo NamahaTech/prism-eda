@@ -10,6 +10,34 @@ stabilizes.
 
 ### Added
 
+- **Interactive ER diagram.** The schema-discovery report's ERD is now a real
+  interactive diagram (embedded, vendored Cytoscape.js — reports stay fully
+  offline): drag table cards to rearrange with edges following, smooth
+  scroll-zoom and pan, click a table to focus its relationships, click an edge
+  for cardinality/confidence detail, and toggle tables to declutter.
+  Relationship endpoints carry explicit `1`/`N` labels, and the legend now has
+  a dedicated cardinality group explaining the notation. With JavaScript
+  unavailable the report degrades to the previous static SVG with a visible
+  notice.
+- **Categorical columns show their categories.** The column profile's
+  "Range / shape" cell now renders the top values of categorical and boolean
+  columns with their share of rows (plus a "+N more · top 5 cover X% of rows"
+  note), instead of the unhelpful "No numeric range".
+- **Column warnings are visible in reports.** `ColumnCatalog.warnings`
+  (half-missing, constant, and the new high-cardinality warning) render as
+  amber chips next to the column's type.
+
+### Changed
+
+- **Categorical inference has an absolute cardinality cap.** A text column is
+  categorical when it has ≤ 50 distinct values, or ≤ 5% distinct up to a cap
+  of 200 distinct values. Previously the 5% rule alone could label name-like
+  columns with tens of thousands of distinct values as categorical on large
+  tables; such columns are now `text`. Columns that stay categorical with
+  more than 100 distinct values get a high-cardinality warning.
+- Polished the report logo into a geometrically exact prism mark and added it
+  as the report favicon.
+
 - **Row-centric anomaly review.** Anomaly detection now leads with the rows
   themselves instead of one finding per detector. A new cross-detector
   *consensus* (`anomaly_consensus_review` evidence) ranks rows by how many

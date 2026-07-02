@@ -1,0 +1,220 @@
+<script>
+  // Interactive ER diagram (Cytoscape.js): draggable table cards with edges
+  // that follow, smooth pan/zoom, focus/dim, show/hide tables, and detail
+  // popovers. If the vendored library is missing or fails to initialise, the
+  // static SVG fallback below stays in charge and a warning is shown.
+  (function () {
+    "use strict";
+    var root = document.querySelector("[data-erd-root]");
+    if (!root) return;
+    var container = root.querySelector("#erd-cy");
+    var svg = root.querySelector("#erd-svg");
+    var warning = root.querySelector(".erd-warning");
+    var popover = root.querySelector(".erd-popover");
+    var dataEl = document.getElementById("erd-graph");
+    if (!container || !svg || !dataEl) return;
+
+    function degrade() {
+      container.hidden = true;
+      root.classList.remove("erd--cy");
+      if (warning) warning.hidden = false;
+    }
+
+    if (typeof window.cytoscape !== "function") { degrade(); return; }
+
+    var GRAPH;
+    try { GRAPH = JSON.parse(dataEl.textContent); } catch (e) { degrade(); return; }
+
+    var NODE_META = {};
+    var elements = [];
+    GRAPH.nodes.forEach(function (n) {
+      NODE_META[n.table] = n;
+      elements.push({
+        data: {
+          id: n.table,
+          w: n.w,
+          h: n.h,
+          cardUri: "data:image/svg+xml;utf8," + encodeURIComponent(n.card)
+        },
+        position: { x: n.x + n.w / 2, y: n.y + n.h / 2 }
+      });
+    });
+    GRAPH.edges.forEach(function (e, i) {
+      elements.push({
+        data: {
+          id: "edge-" + i,
+          source: e.parent, target: e.child,
+          cardinality: e.cardinality, bin: e.bin,
+          confidence: e.confidence, inclusion_rate: e.inclusion_rate,
+          name_similarity: e.name_similarity, type_compatibility: e.type_compatibility,
+          parent_columns: e.parent_columns, child_columns: e.child_columns
+        }
+      });
+    });
+
+    var EDGE_COLOR = "#668178";
+    var cy;
+    container.hidden = false;
+    try {
+      cy = window.cytoscape({
+        container: container,
+        elements: elements,
+        layout: { name: "preset", fit: false },
+        wheelSensitivity: 0.2,
+        minZoom: 0.06,
+        maxZoom: 4,
+        pixelRatio: "auto",
+        autoungrabify: false,
+        style: [
+          { selector: "node", style: {
+              shape: "round-rectangle",
+              width: "data(w)",
+              height: "data(h)",
+              "background-opacity": 0,
+              "background-image": "data(cardUri)",
+              "background-fit": "contain",
+              "border-width": 0,
+              label: ""
+          } },
+          { selector: "node.focus", style: {
+              "border-width": 2.4,
+              "border-color": "#0d5f4a"
+          } },
+          { selector: "edge", style: {
+              "curve-style": "taxi",
+              "taxi-direction": "auto",
+              "line-style": "dashed",
+              "line-dash-pattern": [5, 4],
+              "line-color": EDGE_COLOR,
+              "source-arrow-shape": "tee",
+              "source-arrow-color": EDGE_COLOR,
+              "target-arrow-color": EDGE_COLOR,
+              "arrow-scale": 0.9,
+              "source-label": "1",
+              "source-text-offset": 22,
+              "target-text-offset": 22,
+              "font-size": 10,
+              "font-weight": 700,
+              color: "#40534c",
+              "text-background-color": "#f7faf8",
+              "text-background-opacity": 1,
+              "text-background-padding": 2
+          } },
+          { selector: "edge[cardinality = 'one_to_many']", style: {
+              "target-arrow-shape": "vee",
+              "target-label": "N"
+          } },
+          { selector: "edge[cardinality = 'one_to_one']", style: {
+              "target-arrow-shape": "tee",
+              "target-label": "1"
+          } },
+          { selector: "edge[bin = 'high']", style: { width: 2, opacity: 0.85 } },
+          { selector: "edge[bin = 'medium']", style: { width: 1.6, opacity: 0.6 } },
+          { selector: "edge[bin = 'low']", style: { width: 1.2, opacity: 0.45 } },
+          { selector: ".dim", style: { opacity: 0.12 } }
+        ]
+      });
+    } catch (e) { degrade(); return; }
+
+    // Mounted: the static SVG steps aside and its script (below) bails out.
+    root.dataset.erdMode = "cy";
+    root.classList.add("erd--cy");
+    if (warning) warning.hidden = true;
+    cy.fit(cy.elements(), 40);
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    }
+
+    function showPopover(html, clientX, clientY) {
+      popover.innerHTML = html;
+      popover.hidden = false;
+      var rr = root.getBoundingClientRect();
+      var px = Math.min(Math.max(clientX - rr.left, 8), rr.width - popover.offsetWidth - 8);
+      var py = Math.min(clientY - rr.top + 10, rr.height - popover.offsetHeight - 8);
+      popover.style.left = px + "px";
+      popover.style.top = Math.max(py, 8) + "px";
+    }
+    function hidePopover() { popover.hidden = true; }
+
+    function clearFocus() {
+      cy.elements().removeClass("dim");
+      cy.nodes().removeClass("focus");
+    }
+    function focusNode(node) {
+      clearFocus();
+      cy.elements().difference(node.closedNeighborhood()).addClass("dim");
+      node.addClass("focus");
+    }
+
+    cy.on("tap", "node", function (evt) {
+      var node = evt.target;
+      if (node.hasClass("focus")) { clearFocus(); hidePopover(); return; }
+      focusNode(node);
+      var meta = NODE_META[node.id()];
+      if (meta && meta.roles && meta.roles.length) {
+        var html = '<div class="pop-title">' + esc(node.id()) + "</div>";
+        meta.roles.forEach(function (r) {
+          html += '<div class="pop-row"><span class="pop-kind ' + r.kind.toLowerCase() +
+            '">' + esc(r.kind) + '</span> <span class="pop-label">' + esc(r.label) +
+            '</span> <span class="pop-detail">' + esc(r.detail) + "</span></div>";
+        });
+        var oe = evt.originalEvent || {};
+        showPopover(html, oe.clientX || 0, oe.clientY || 0);
+      }
+    });
+
+    cy.on("tap", "edge", function (evt) {
+      var d = evt.target.data();
+      var cardinality = String(d.cardinality || "").replace(/_/g, "–");
+      var pct = function (v) { return Math.round((v || 0) * 100) + "%"; };
+      var html = '<div class="pop-title">' + esc(d.target) + "." + esc((d.child_columns || []).join(" + ")) +
+        " → " + esc(d.source) + "." + esc((d.parent_columns || []).join(" + ")) + "</div>" +
+        '<div class="pop-row"><span class="pop-label">' + esc(cardinality) + '</span>' +
+        '<span class="pop-detail">' + pct(d.confidence) + " confidence</span></div>" +
+        '<div class="pop-row"><span class="pop-label">inclusion ' + pct(d.inclusion_rate) +
+        '</span><span class="pop-detail">name ' + pct(d.name_similarity) +
+        " · type " + pct(d.type_compatibility) + "</span></div>";
+      var oe = evt.originalEvent || {};
+      showPopover(html, oe.clientX || 0, oe.clientY || 0);
+      evt.stopPropagation ? evt.stopPropagation() : null;
+    });
+
+    cy.on("tap", function (evt) {
+      if (evt.target === cy) { clearFocus(); hidePopover(); }
+    });
+    cy.on("drag", "node", hidePopover);
+    cy.on("pan zoom", hidePopover);
+
+    root.querySelectorAll("[data-erd]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var action = btn.getAttribute("data-erd");
+        if (action === "fit") {
+          clearFocus(); hidePopover();
+          cy.fit(cy.elements().filter(":visible"), 40);
+          return;
+        }
+        var factor = action === "zoom-in" ? 1.25 : 1 / 1.25;
+        cy.zoom({
+          level: cy.zoom() * factor,
+          renderedPosition: { x: container.clientWidth / 2, y: container.clientHeight / 2 }
+        });
+      });
+    });
+
+    root.querySelectorAll("[data-erd-toggle]").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var node = cy.getElementById(cb.getAttribute("data-erd-toggle"));
+        if (node.nonempty()) node.style("display", cb.checked ? "element" : "none");
+      });
+    });
+
+    document.addEventListener("click", function (e) {
+      if (!popover.hidden && !e.target.closest(".erd-popover") && !e.target.closest("#erd-cy")) {
+        hidePopover();
+      }
+    });
+  })();
+  </script>

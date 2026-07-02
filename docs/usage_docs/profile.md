@@ -83,6 +83,15 @@ Each column carries its physical type, an inferred **semantic type** and
 top values. See [Results & evidence](results-and-evidence.md) for the full
 `ColumnCatalog` / `TableCatalog` structure.
 
+A text column is inferred **categorical** when it has at most 50 distinct
+values, or at most 5% distinct values up to an absolute cap of 200 — beyond
+the cap it is treated as **text** no matter how large the table is, so name-
+or ID-like columns on million-row tables are not mislabelled. Columns that
+stay categorical with more than 100 distinct values (including columns you
+explicitly declared as pandas `Categorical`) carry a **high-cardinality
+warning** in `ColumnCatalog.warnings`, shown as an amber chip in the HTML
+report's column profile.
+
 ## The transformation plan
 
 Where a finding implies a concrete data-prep action, the profile records a

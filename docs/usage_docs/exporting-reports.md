@@ -19,10 +19,14 @@ path = result.to_html("churn-readiness.html")
 print(path)        # churn-readiness.html (as a pathlib.Path)
 ```
 
-The report has **no CDN, network, or JavaScript requirement** — charts are inline
-SVG and everything is embedded, so it opens anywhere, prints cleanly, and works
-offline. It leads with the decision-first summary, then the prioritized findings,
-their evidence, and any artifacts (metric tables, the schema graph).
+The report has **no CDN or network requirement** — charts are inline SVG and
+everything is embedded, so it opens anywhere, prints cleanly, and works fully
+offline. Schema-discovery reports additionally embed a vendored copy of
+[Cytoscape.js](https://js.cytoscape.org/) (MIT) to power the interactive ER
+diagram; with JavaScript disabled (or if the embedded library fails to load)
+the report degrades to a static SVG diagram with a visible notice. It leads
+with the decision-first summary, then the prioritized findings, their
+evidence, and any artifacts (metric tables, the schema graph).
 
 ### Render to a string instead of a file
 
