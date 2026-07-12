@@ -84,8 +84,9 @@ removed, or materially re-scoped.
 - Decision-first summaries (classification readiness verdict, top anomaly signal)
 - Univariate anomaly tails gated on genuine extremity; conditional-anomaly
   findings capped to the strongest pairs
-- One-to-one relationship candidates require key-name agreement, suppressing
-  coincidental ID-range overlap; relationship titles name their tables/columns
+- One-to-one and one-to-many relationship candidates require key-name agreement
+  or strong parent-coverage, suppressing coincidental ID-range overlap;
+  relationship titles name their tables/columns
 
 ### Privacy
 
@@ -160,8 +161,3 @@ removed, or materially re-scoped.
 - Public result models use dataclasses; schema-version and migration policy must be
   defined before 1.0.
 - Method-level performance benchmarks are not yet part of CI.
-- Schema discovery can still propose a coincidental cross-named one-to-many
-  relationship when two unrelated unique ID columns share a value range. The
-  one-to-one gate is name-aware, but the one-to-many confidence model weights
-  inclusion heavily; a proper fix needs join-cardinality/fan-out signals and
-  ideally real labeled relationships rather than synthetic tuning.

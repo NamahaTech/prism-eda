@@ -439,9 +439,14 @@ def discover_relationship_candidates(
                     ) = _relationship_metrics(parent, key.columns, child, ordered)
                 except (TypeError, ValueError):
                     continue
+                effective_inclusion = inclusion_rate
+                if not child_is_unique and name_score < _ONE_TO_ONE_MIN_NAME_SIMILARITY:
+                    parent_coverage = (len(parent) - parent_unmatched) / len(parent) if len(parent) else 0.0
+                    effective_inclusion *= parent_coverage
+
                 confidence = min(
                     1.0,
-                    0.5 * inclusion_rate
+                    0.5 * effective_inclusion
                     + 0.18 * type_score
                     + 0.17 * name_score
                     + 0.15 * key.confidence,

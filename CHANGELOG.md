@@ -195,3 +195,5 @@ stabilizes.
   coincidental ID-range overlap between unrelated unique columns is suppressed.
 - Relationship finding titles now name the participating tables and columns.
 - Fixed lint and type errors in the privacy module.
+- Spurious one-to-many relationship candidates driven purely by ID-range overlap
+  are now suppressed when they lack name similarity and adequate parent coverage.

@@ -496,11 +496,6 @@ fixed the privacy module, and added a CI wheel-install smoke test.
 
 The strongest next engineering tasks toward a 0.1 alpha are:
 
-1. The remaining schema noise: a coincidental cross-named one-to-many candidate
-   can still appear from ID-range overlap. This needs join-cardinality and
-   fan-out signals in the relationship confidence model (see
-   `docs/implementation-status.md` known technical debt). Avoid synthetic-only
-   tuning; ideally validate against a real multi-table dataset.
-2. Classification depth from the roadmap: class overlap / neighborhood
+1. Classification depth from the roadmap: class overlap / neighborhood
    disagreement, then train/test comparison.
-3. README and API-reference polish for the now-stable recipe behavior.
+2. README and API-reference polish for the now-stable recipe behavior.
