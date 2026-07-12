@@ -14,13 +14,8 @@ import urllib.request
 from pathlib import Path
 
 CYTOSCAPE_VERSION = "3.34.0"
-DIST_URL = (
-    "https://registry.npmjs.org/cytoscape/-/cytoscape-"
-    f"{CYTOSCAPE_VERSION}.tgz"
-)
-UNPKG_URL = (
-    f"https://unpkg.com/cytoscape@{CYTOSCAPE_VERSION}/dist/cytoscape.min.js"
-)
+DIST_URL = f"https://registry.npmjs.org/cytoscape/-/cytoscape-{CYTOSCAPE_VERSION}.tgz"
+UNPKG_URL = f"https://unpkg.com/cytoscape@{CYTOSCAPE_VERSION}/dist/cytoscape.min.js"
 ASSETS_DIR = (
     Path(__file__).resolve().parent.parent
     / "src"

@@ -180,9 +180,7 @@ def test_consensus_review_lists_rows_with_values_and_plain_why() -> None:
     rng = np.random.default_rng(0)
     salary = list(rng.integers(30_000, 90_000, size=40)) + [5_000_000, 7_000_000]
     tenure = list(rng.integers(1, 10, size=40)) + [22, 25]
-    frame = pd.DataFrame(
-        {"id": range(len(salary)), "salary": salary, "tenure": tenure}
-    )
+    frame = pd.DataFrame({"id": range(len(salary)), "salary": salary, "tenure": tenure})
 
     result = pe.anomaly_detection(frame, sampling="disabled")
 

@@ -441,7 +441,12 @@ def discover_relationship_candidates(
                     continue
                 effective_inclusion = inclusion_rate
                 if not child_is_unique and name_score < _ONE_TO_ONE_MIN_NAME_SIMILARITY:
-                    parent_coverage = (len(parent) - parent_unmatched) / len(parent) if len(parent) else 0.0
+                    parent_len = len(parent)
+                    parent_coverage = (
+                        (parent_len - parent_unmatched) / parent_len
+                        if parent_len
+                        else 0.0
+                    )
                     effective_inclusion *= parent_coverage
 
                 confidence = min(

@@ -73,17 +73,16 @@ def histogram_svg(distribution: dict[str, Any]) -> Markup:
         bin_lo, bin_hi = float(edges[index]), float(edges[index + 1])
         is_flagged = any(bin_lo <= value <= bin_hi for value in flagged_set)
         css = "chart-bar chart-bar-flagged" if is_flagged else "chart-bar"
-        title = (
-            f"{_format_number(bin_lo)} to {_format_number(bin_hi)}: {count} row(s)"
-        )
+        title = f"{_format_number(bin_lo)} to {_format_number(bin_hi)}: {count} row(s)"
         parts.append(
-            f'<g><title>{escape(title)}</title>'
+            f"<g><title>{escape(title)}</title>"
             f'<rect class="{css}" x="{left:.1f}" y="{top:.1f}" '
             f'width="{bar_w:.1f}" height="{bar_h:.1f}" rx="1.5"></rect></g>'
         )
 
     # Box-plot strip: whiskers to the fences, box across the IQR, median rule.
     if box:
+
         def bx(value: float) -> float:
             return _scale(float(value), x_lo, x_hi, pad_l, width - pad_r)
 
@@ -104,14 +103,14 @@ def histogram_svg(distribution: dict[str, Any]) -> Markup:
             parts.append(
                 f'<line class="chart-flag-tick" x1="{bx(value):.1f}" '
                 f'y1="{strip_y - 13}" x2="{bx(value):.1f}" y2="{strip_y + 13}">'
-                f'<title>flagged: {escape(_format_number(value))}</title></line>'
+                f"<title>flagged: {escape(_format_number(value))}</title></line>"
             )
         parts.append(
             f'<text class="chart-label" x="{pad_l}" y="{height - 4}" '
             f'text-anchor="start">{escape(_format_number(box["min"]))}</text>'
             f'<text class="chart-label" x="{bx(box["median"]):.1f}" '
             f'y="{height - 4}" text-anchor="middle">median '
-            f'{escape(_format_number(box["median"]))}</text>'
+            f"{escape(_format_number(box['median']))}</text>"
             f'<text class="chart-label" x="{width - pad_r}" y="{height - 4}" '
             f'text-anchor="end">{escape(_format_number(box["max"]))}</text>'
         )
@@ -226,7 +225,7 @@ def why_bars_svg(contributors: list[dict[str, Any]]) -> Markup:
             f"{_format_number(contributor.get('baseline'))} ({z:+.1f}σ)"
         )
         parts.append(
-            f'<g><title>{escape(title)}</title>'
+            f"<g><title>{escape(title)}</title>"
             f'<rect class="whybars-rail" x="{bar_x}" y="{rail_y:.1f}" '
             f'width="{track_w}" height="8" rx="4"></rect>'
             f'<rect class="{css}" x="{bar_x}" y="{rail_y:.1f}" '
@@ -298,13 +297,13 @@ def peer_group_svg(conditional: dict[str, Any]) -> Markup:
         f'x2="{sx(p_max):.1f}" y2="{axis_y + 5}"></line>',
         # the flagged row's own value
         f'<circle class="{value_css}" cx="{sx(value):.1f}" cy="{axis_y}" r="5">'
-        f'<title>this row: {escape(_format_number(value))}</title></circle>',
+        f"<title>this row: {escape(_format_number(value))}</title></circle>",
         f'<text class="peer-label" x="{band_x:.1f}" y="{axis_y - 15:.0f}" '
         f'text-anchor="{band_anchor}">peers {escape(_format_number(q1))}'
-        f'–{escape(_format_number(q3))}</text>',
+        f"–{escape(_format_number(q3))}</text>",
         f'<text class="peer-value-label" x="{value_x:.1f}" '
         f'y="{axis_y + 22:.0f}" text-anchor="{value_anchor}">this row '
-        f'{escape(_format_number(value))}</text>',
+        f"{escape(_format_number(value))}</text>",
         "</svg>",
     ]
     return Markup("".join(parts))

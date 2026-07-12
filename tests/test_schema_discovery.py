@@ -289,9 +289,7 @@ def test_schema_report_degrades_without_vendored_cytoscape(
 def test_vendored_cytoscape_asset_is_packaged() -> None:
     from importlib import resources
 
-    asset = resources.files("prism_eda.reporting").joinpath(
-        "assets/cytoscape.min.js"
-    )
+    asset = resources.files("prism_eda.reporting").joinpath("assets/cytoscape.min.js")
     text = asset.read_text(encoding="utf-8")
     assert len(text) > 100_000
     # A raw close-tag inside the inlined payload would truncate the report.

@@ -344,9 +344,11 @@ def _pagerank(
     base = (1.0 - damping) / count
     for _ in range(iterations):
         updated = dict.fromkeys(nodes, base)
-        dangling = damping * sum(
-            rank[node] for node in nodes if not out_edges.get(node)
-        ) / count
+        dangling = (
+            damping
+            * sum(rank[node] for node in nodes if not out_edges.get(node))
+            / count
+        )
         for node in nodes:
             updated[node] += dangling
         for node in nodes:
@@ -826,9 +828,7 @@ def discover_schema_dataset(
             "candidate_keys": len(discovery.keys),
             "candidate_relationships": len(discovery.relationships),
             "verdict": _schema_verdict(catalog, discovery.relationships, analysis),
-            "table_roles": {
-                name: info["role"] for name, info in analysis.items()
-            },
+            "table_roles": {name: info["role"] for name, info in analysis.items()},
         },
     )
     emit(

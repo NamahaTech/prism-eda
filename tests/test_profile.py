@@ -132,8 +132,12 @@ def test_high_cardinality_categorical_gets_warning() -> None:
         column.name: column for column in pe.load(frame).catalog().tables[0].columns
     }
     assert columns["many_codes"].semantic_type == "categorical"
-    assert any("High cardinality" in warning for warning in columns["many_codes"].warnings)
-    assert not any("High cardinality" in warning for warning in columns["few_codes"].warnings)
+    assert any(
+        "High cardinality" in warning for warning in columns["many_codes"].warnings
+    )
+    assert not any(
+        "High cardinality" in warning for warning in columns["few_codes"].warnings
+    )
 
 
 def test_explicit_categorical_dtype_kept_but_warned() -> None:
