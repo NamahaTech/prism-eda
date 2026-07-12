@@ -43,7 +43,7 @@ Issues = "https://github.com/NamahaTech/prism-eda/issues"
 dev = [
     "build>=1.2.0",
     "hatchling>=1.25.0",
-    "mypy>=1.9.0",
+    "mypy>=1.11.0",
     "ruff>=0.3.0",
 ]
 test = [
@@ -95,5 +95,7 @@ no_implicit_optional = true
 module = [
     "pandas.*",
     "sklearn.*",
+    "langgraph.*",
+    "google.*",
 ]
 ignore_missing_imports = true

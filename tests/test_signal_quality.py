@@ -180,9 +180,7 @@ def test_consensus_review_lists_rows_with_values_and_plain_why() -> None:
     rng = np.random.default_rng(0)
     salary = list(rng.integers(30_000, 90_000, size=40)) + [5_000_000, 7_000_000]
     tenure = list(rng.integers(1, 10, size=40)) + [22, 25]
-    frame = pd.DataFrame(
-        {"id": range(len(salary)), "salary": salary, "tenure": tenure}
-    )
+    frame = pd.DataFrame({"id": range(len(salary)), "salary": salary, "tenure": tenure})
 
     result = pe.anomaly_detection(frame, sampling="disabled")
 
@@ -349,6 +347,28 @@ def test_spurious_one_to_one_from_range_overlap_is_suppressed() -> None:
         == {"customer_id", "order_id"}
     ]
     assert not one_to_one
+
+
+def test_spurious_one_to_many_from_range_overlap_is_suppressed() -> None:
+    # customer_id in orders (0..49) is fully contained in product_id (0..999).
+    # Inclusion is 1.0, but names do not match at all.
+    # The parent (products) has 1000 rows, but only 50 are matched, so parent
+    # coverage is very low (5%). The relationship should be suppressed.
+    products = pd.DataFrame({"product_id": range(1000), "name": list("x" * 1000)})
+    orders = pd.DataFrame(
+        {"order_id": range(200), "customer_id": [index % 50 for index in range(200)]}
+    )
+
+    result = pe.discover_schema({"products": products, "orders": orders})
+
+    one_to_many = [
+        item
+        for item in result.evidence
+        if item.kind == "candidate_relationship"
+        and item.value["parent_table"] == "products"
+        and item.value["child_table"] == "orders"
+    ]
+    assert not one_to_many
 
 
 def test_relationship_finding_titles_name_the_tables() -> None:

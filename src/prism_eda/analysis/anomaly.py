@@ -252,7 +252,7 @@ def _model_top_records(
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for index, score in scores.sort_values(ascending=False).head(count).items():
-        row_z = z_frame.loc[index].abs().sort_values(ascending=False).head(3)
+        row_z = z_frame.loc[index].abs().sort_values(ascending=False).head(3)  # type: ignore[call-overload]
         records.append(
             {
                 "row_index": str(index),
@@ -851,9 +851,7 @@ def _consensus_evidence(
                 "method_count": len(methods),
                 "methods": sorted(methods),
                 "max_abs_robust_z": max_z,
-                "values": {
-                    str(col): frame.at[row_label, col] for col in frame.columns
-                },
+                "values": {str(col): frame.at[row_label, col] for col in frame.columns},
                 "contributors": contributors,
                 "why": why,
                 "explanations": _row_explanations(
@@ -1068,15 +1066,19 @@ def _scatter_evidence(
             )
             for column in columns
         }
-        focus = max(scored, key=lambda column: scored[column]) if any(
-            scored.values()
-        ) else None
+        focus = (
+            max(scored, key=lambda column: scored[column])
+            if any(scored.values())
+            else None
+        )
     if focus is not None:
         partner = max(
             (column for column in columns if column != focus),
-            key=lambda column: abs(float(correlation.loc[focus, column]))
-            if not math.isnan(correlation.loc[focus, column])
-            else -1.0,
+            key=lambda column: (
+                abs(float(correlation.loc[focus, column]))
+                if not math.isnan(correlation.loc[focus, column])
+                else -1.0
+            ),
             default=None,
         )
         best = (

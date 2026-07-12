@@ -65,7 +65,5 @@ def _load_cytoscape_js() -> str | None:
 def render_html(result: AnalysisResult) -> str:
     """Render a complete report as a standalone HTML document."""
     template = _environment().get_template("report.html")
-    cytoscape_js = (
-        _load_cytoscape_js() if result.goal == "schema_discovery" else None
-    )
+    cytoscape_js = _load_cytoscape_js() if result.goal == "schema_discovery" else None
     return template.render(result=result, cytoscape_js=cytoscape_js)

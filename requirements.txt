@@ -40,7 +40,7 @@ pandas==3.0.3
 pandas-stubs==3.0.3.260530
 pathspec==1.1.1
 pluggy==1.6.0
--e git+ssh://git@github.com/NamahaTech/prism-eda.git@fb700533c98c63afdf4f8aead90cfd6acb28c25d#egg=prism_eda
+-e .
 pyarrow==24.0.0
 pyasn1==0.6.3
 pyasn1_modules==0.4.2

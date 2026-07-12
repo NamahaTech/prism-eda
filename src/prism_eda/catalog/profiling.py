@@ -21,7 +21,6 @@ from prism_eda.catalog.models import (
     TableCatalog,
 )
 
-
 # A low unique *ratio* alone is not enough to call a column categorical: on a
 # million-row table 5% is still tens of thousands of distinct values (names,
 # free text). The absolute cap bounds how many distinct values a column may
