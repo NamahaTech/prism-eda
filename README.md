@@ -1,12 +1,12 @@
 # Prism EDA
 
-Prism EDA is a task-aware exploratory data analysis library for Python. It is
-being built around a deterministic evidence engine, goal-specific analysis
-recipes, self-contained reports, and optional AI-assisted investigation.
+Prism EDA is a task aware exploratory data analysis library for Python. It is
+being built around a deterministic evidence engine, goal specific analysis
+recipes, self contained reports, and optional AI-assisted investigation.
 
 The project is currently in early alpha development. It pairs a local
 deterministic foundation with an optional Gemini/Gemma-assisted investigator that
-plans and explains analyses over those deterministic tools (install with the
+plans and explains analysis over those deterministic tools (install with the
 `ai-gemini` extra).
 
 > **New here? Start with the [Usage Guide](docs/usage_docs/README.md)** — a
