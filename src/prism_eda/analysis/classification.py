@@ -404,14 +404,15 @@ def _classification_probe_evidence(
         columns=classes,
     )
     max_probability = probability_frame.max(axis=1)
-    predicted_probability = pd.Series(
+    predicted_probability: pd.Series[Any] = pd.Series(
         [
-            float(probability_frame.loc[index, str(prediction)])
+            float(probability_frame.loc[index, str(prediction)])  # type: ignore[index,arg-type,misc]
             if str(prediction) in probability_frame.columns
-            else float(max_probability.loc[index])
+            else float(max_probability.loc[index])  # type: ignore[call-overload]
             for index, prediction in predictions.items()
         ],
         index=predictions.index,
+        dtype=float,
     )
     hard_mask = predictions.astype("string") != y.astype("string")
     hard_scores = (1.0 - predicted_probability).where(hard_mask, 0.0)

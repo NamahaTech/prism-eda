@@ -252,7 +252,7 @@ def _model_top_records(
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for index, score in scores.sort_values(ascending=False).head(count).items():
-        row_z = z_frame.loc[index].abs().sort_values(ascending=False).head(3)
+        row_z = z_frame.loc[index].abs().sort_values(ascending=False).head(3)  # type: ignore[call-overload]
         records.append(
             {
                 "row_index": str(index),
