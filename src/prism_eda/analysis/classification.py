@@ -15,6 +15,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -484,7 +485,130 @@ def _classification_probe_evidence(
                 ),
             )
         )
+    neighborhood_ev = _neighborhood_evidence(
+        X, y, numeric, categorical, table.name, target, config, folds
+    )
+    if neighborhood_ev is not None:
+        evidence.append(neighborhood_ev)
+
     return evidence
+
+
+def _neighborhood_evidence(
+    X: pd.DataFrame,
+    y: pd.Series,
+    numeric: list[str],
+    categorical: list[str],
+    table_name: str,
+    target: str,
+    config: AnalysisConfig,
+    folds: int,
+) -> Evidence | None:
+    # Cap the dataset to a max of 10,000 rows to ensure KNN remains fast for EDA
+    if len(X) > 10_000:
+        sample_idx = X.sample(n=10_000, random_state=config.random_seed).index
+        X_sample = X.loc[sample_idx]
+        y_sample = y.loc[sample_idx]
+    else:
+        X_sample = X
+        y_sample = y
+
+    # KNeighborsClassifier requires at least n_neighbors samples.
+    # StratifiedKFold requires at least `folds` instances for each class.
+    if len(X_sample) < 10:
+        return None
+
+    splitter = StratifiedKFold(
+        n_splits=min(folds, 5),
+        shuffle=True,
+        random_state=config.random_seed,
+    )
+
+    transformers: list[tuple[str, Pipeline, list[str]]] = []
+    if numeric:
+        transformers.append(
+            (
+                "numeric",
+                Pipeline(
+                    [
+                        ("imputer", SimpleImputer(strategy="median")),
+                        ("scaler", StandardScaler()),
+                    ]
+                ),
+                numeric,
+            )
+        )
+    if categorical:
+        transformers.append(
+            (
+                "categorical",
+                Pipeline(
+                    [
+                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        (
+                            "encoder",
+                            OneHotEncoder(
+                                handle_unknown="ignore",
+                                sparse_output=False,
+                            ),
+                        ),
+                    ]
+                ),
+                categorical,
+            )
+        )
+
+    probe = Pipeline(
+        [
+            ("preprocess", ColumnTransformer(transformers=transformers)),
+            (
+                "model",
+                KNeighborsClassifier(n_neighbors=5, weights="uniform"),
+            ),
+        ]
+    )
+
+    try:
+        probabilities = cross_val_predict(
+            probe, X_sample, y_sample, cv=splitter, method="predict_proba"
+        )
+    except ValueError:
+        return None
+
+    classes = [str(item) for item in np.unique(y_sample)]
+    probability_frame = pd.DataFrame(
+        probabilities,
+        index=y_sample.index,
+        columns=classes,
+    )
+
+    true_class_probs = []
+    for idx, true_label in y_sample.items():
+        label_str = str(true_label)
+        if label_str in probability_frame.columns:
+            true_class_probs.append(float(probability_frame.loc[idx, label_str]))  # type: ignore[index,arg-type,misc]
+
+    if not true_class_probs:
+        return None
+
+    avg_true_prob = float(np.mean(true_class_probs))
+    disagreement_rate = float(np.mean(np.array(true_class_probs) < 0.5))
+
+    return Evidence.create(
+        kind="classification_neighborhood_disagreement",
+        scope=EvidenceScope(
+            table=table_name, columns=tuple(numeric + categorical + [target])
+        ),
+        value={
+            "n_neighbors": 5,
+            "sampled_rows": len(y_sample),
+            "average_true_class_probability": avg_true_prob,
+            "high_disagreement_rate": disagreement_rate,
+        },
+        method="knn_cross_val_neighborhood_v1",
+        description=f"Class overlap and neighborhood disagreement for {table_name}.",
+        confidence=0.70,
+    )
 
 
 def _split_guidance_evidence(
@@ -1048,6 +1172,25 @@ def _findings_and_steps(
                         recommendation=(
                             "Use this as readiness evidence, while still checking "
                             "timing, leakage, and validation design before modeling."
+                        ),
+                    )
+                )
+        elif item.kind == "classification_neighborhood_disagreement":
+            rate = value["high_disagreement_rate"]
+            if rate >= 0.4:
+                findings.append(
+                    Finding.create(
+                        title=f"High class overlap in {item.scope.table}",
+                        summary=(
+                            f"{rate:.1%} of sampled instances have a nearest-neighborhood "
+                            "that predominantly belongs to a different class."
+                        ),
+                        severity="high",
+                        confidence=item.confidence,
+                        evidence_ids=(item.id,),
+                        recommendation=(
+                            "Review whether key predictive features are missing, "
+                            "or if the classes are inherently overlapping."
                         ),
                     )
                 )
