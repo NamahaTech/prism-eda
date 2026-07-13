@@ -10,6 +10,48 @@ stabilizes.
 
 ### Added
 
+- **Image dataset profiling.** New `ImageDataset`, `load_images()`, and
+  `profile_images()` APIs profile image folders without forcing them through the
+  tabular loader. The recipe reports unreadable files, dimensions and
+  aspect-ratio spread, formats/modes/animation, EXIF/orientation presence,
+  directory-label balance, exact SHA-256 duplicates, perceptual near-duplicate
+  candidates, file-size outliers, and lightweight visual-quality flags for dark,
+  bright, low-contrast, low-sharpness, and low-entropy images. Results use the
+  standard `AnalysisResult`, evidence lineage, metric-table artifacts,
+  transformation recommendations, sampling records, JSON export, and
+  self-contained HTML report.
+- **Train/test leakage detection for images.** Labels *and* splits are inferred
+  from the `root/split/label/file` layout, so a duplicate or near-duplicate that
+  crosses a split is reported as a `critical` finding — it inflates every metric
+  you report without changing the model. The same check across labels catches a
+  single image filed under two classes.
+- **Loader traps.** Images that decode cleanly but reach a pipeline changed:
+  non-default EXIF orientation (orientations 5-8 also swap width and height),
+  file extensions that disagree with the actual encoding, greyscale images stored
+  in three identical colour channels, used alpha channels, and truncated files —
+  which are now profiled and reported rather than discarded as unreadable.
+- **Per-label breakdown.** Dimension and brightness statistics are computed per
+  label, and labels that do not look like the rest of the dataset are called out,
+  so collection bias in one class is not averaged away.
+- **The image report shows the images.** Flagged files are rendered as embedded
+  base64 thumbnail contact sheets, with duplicate candidates paired side by side,
+  alongside a width-against-height scatter, a brightness histogram, and class
+  balance bars. Reports stay single, portable, offline files. `thumbnails=False`
+  turns the pictures off without changing the findings. Thumbnails are stored in
+  artifacts, never in evidence, and image datasets are not exposed to the
+  optional AI layer: raw pixels never reach a model provider.
+
+### Fixed
+
+- Image profiling no longer reports a readable file as corrupt when Pillow merely
+  *warns* about it. Pillow warns rather than raises on recoverable defects such
+  as a corrupt EXIF block, and those warnings were being turned into decode
+  failures, which would have called ordinary JPEGs unreadable.
+- Robust outlier scoring for images no longer goes blind on a uniform dataset.
+  When most images share one size the MAD and the IQR are both zero, and the
+  previous scale returned no outliers at all — hiding the single panorama among
+  the thumbnails in exactly the case where it matters most. The scale now falls
+  back to the mean absolute deviation.
 - **Interactive ER diagram.** The schema-discovery report's ERD is now a real
   interactive diagram (embedded, vendored Cytoscape.js — reports stay fully
   offline): drag table cards to rearrange with edges following, smooth

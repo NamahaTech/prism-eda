@@ -39,6 +39,7 @@ packaging==26.2
 pandas==3.0.3
 pandas-stubs==3.0.3.260530
 pathspec==1.1.1
+pillow==12.3.0
 pluggy==1.6.0
 -e .
 pyarrow==24.0.0

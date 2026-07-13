@@ -25,8 +25,12 @@ Usage::
 
 from __future__ import annotations
 
+import io
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+from PIL import Image
 
 #: Seed used for every random draw so the tables are byte-for-byte reproducible.
 SEED = 7
@@ -117,6 +121,124 @@ def orders() -> pd.DataFrame:
 def load_sample() -> dict[str, pd.DataFrame]:
     """Return both tables as a ``{name: DataFrame}`` mapping ready for ``pe.load``."""
     return {"customers": customers(), "orders": orders()}
+
+
+# --------------------------------------------------------------------------
+# Sample image dataset
+#
+# The same idea as the tables above, for ``docs/usage_docs/image-datasets.md``:
+# a small, seeded ``train``/``val`` image folder with deliberately planted
+# pathologies, so every finding in that guide is one you can reproduce.
+# --------------------------------------------------------------------------
+
+#: Size every "well-behaved" sample image is stored at.
+IMAGE_SIZE = (64, 64)
+
+
+def _photo(
+    rng: np.random.Generator,
+    *,
+    size: tuple[int, int] = IMAGE_SIZE,
+    tint: tuple[int, int, int] = (130, 120, 110),
+    noise: float = 34.0,
+) -> Image.Image:
+    """A textured RGB image — noise stands in for real detail."""
+    width, height = size
+    pixels = np.asarray(tint, dtype=np.float64) + rng.normal(
+        0.0, noise, size=(height, width, 3)
+    )
+    return Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8), mode="RGB")
+
+
+def _gradient(size: tuple[int, int] = IMAGE_SIZE) -> Image.Image:
+    """A smooth ramp: no edges and almost no detail, so it reads as blurred."""
+    width, height = size
+    ramp = np.linspace(70, 150, width, dtype=np.float64)
+    pixels = np.repeat(ramp[None, :, None], height, axis=0).repeat(3, axis=2)
+    return Image.fromarray(pixels.astype(np.uint8), mode="RGB")
+
+
+def sample_images(destination: str | Path) -> Path:
+    """Write the sample image dataset under ``destination`` and return its root.
+
+    The layout is the standard ``root/split/label/file`` convention, and the
+    planted problems are:
+
+    * ``leaked.png`` is byte-identical in ``train/cat`` and ``val/cat`` — the
+      same image on both sides of the split.
+    * ``cat_twin.png`` is a near-duplicate of ``cat_01.png``.
+    * ``muddle.png`` is the same image as ``dog_01.png`` but filed under ``cat``,
+      so one of the two labels must be wrong.
+    * ``rotated.jpg`` carries EXIF orientation 6, so honoring the tag swaps its
+      width and height.
+    * ``photo.jpg`` is actually PNG-encoded despite its extension.
+    * ``flat.png`` is a smooth gradient (no detail) and ``night.png`` is nearly
+      black.
+    * ``panorama.png`` is far wider than anything else in the set.
+    * ``gray.png`` is greyscale stored in three identical colour channels.
+    * ``truncated.jpg`` is cut short mid-file, and ``broken.png`` is not an
+      image at all.
+    """
+    root = Path(destination)
+    rng = np.random.default_rng(SEED)
+
+    train_cat = root / "train" / "cat"
+    train_dog = root / "train" / "dog"
+    val_cat = root / "val" / "cat"
+    val_dog = root / "val" / "dog"
+    for folder in (train_cat, train_dog, val_cat, val_dog):
+        folder.mkdir(parents=True, exist_ok=True)
+
+    for index in range(1, 6):
+        _photo(rng, tint=(150, 130, 110)).save(train_cat / f"cat_{index:02d}.png")
+    for index in range(1, 5):
+        _photo(rng, tint=(110, 120, 140)).save(train_dog / f"dog_{index:02d}.png")
+    _photo(rng, tint=(150, 130, 110)).save(val_cat / "cat_06.png")
+    _photo(rng, tint=(110, 120, 140)).save(val_dog / "dog_05.png")
+
+    # The same image on both sides of the split — the leak that quietly inflates
+    # every evaluation score.
+    leaked = _photo(rng, tint=(140, 125, 115))
+    leaked.save(train_cat / "leaked.png")
+    leaked.save(val_cat / "leaked.png")
+
+    # A near-duplicate: same picture, a few pixels nudged.
+    twin = np.asarray(Image.open(train_cat / "cat_01.png"), dtype=np.uint8).copy()
+    twin[:3, :3] = 255
+    Image.fromarray(twin, mode="RGB").save(train_cat / "cat_twin.png")
+
+    # One image, two labels. At most one of them is right.
+    dog_one = Image.open(train_dog / "dog_01.png").copy()
+    dog_one.save(train_cat / "muddle.png")
+
+    # EXIF orientation 6 asks the loader to rotate a quarter turn, which also
+    # swaps the reported width and height.
+    exif = Image.Exif()
+    exif[274] = 6
+    _photo(rng, size=(96, 64), tint=(125, 125, 125)).save(
+        train_dog / "rotated.jpg", exif=exif
+    )
+
+    # Named .jpg, actually PNG bytes.
+    _photo(rng, tint=(120, 130, 120)).save(train_dog / "photo.jpg", format="PNG")
+
+    _gradient().save(train_dog / "flat.png")
+    _photo(rng, tint=(6, 6, 6), noise=2.0).save(train_dog / "night.png")
+    _photo(rng, size=(320, 64), tint=(135, 125, 120)).save(train_dog / "panorama.png")
+
+    grey = rng.integers(60, 190, size=(64, 64), dtype=np.uint8)
+    Image.fromarray(np.stack([grey] * 3, axis=-1), mode="RGB").save(
+        train_dog / "gray.png"
+    )
+
+    # Cut a real JPEG short so it only decodes with truncation tolerance.
+    buffer = io.BytesIO()
+    _photo(rng, tint=(140, 135, 125)).save(buffer, format="JPEG", quality=92)
+    payload = buffer.getvalue()
+    (train_cat / "truncated.jpg").write_bytes(payload[: int(len(payload) * 0.6)])
+
+    (train_cat / "broken.png").write_bytes(b"not an image at all")
+    return root
 
 
 if __name__ == "__main__":  # pragma: no cover - manual inspection helper

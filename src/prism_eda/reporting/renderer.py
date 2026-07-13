@@ -10,6 +10,8 @@ from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescap
 from prism_eda.reporting.charts import (
     format_cell,
     histogram_svg,
+    image_dimension_svg,
+    label_bars_svg,
     peer_group_svg,
     scatter_svg,
     why_bars_svg,
@@ -45,6 +47,8 @@ def _environment() -> Environment:
     environment.filters["scatter_svg"] = scatter_svg
     environment.filters["why_bars_svg"] = why_bars_svg
     environment.filters["peer_group_svg"] = peer_group_svg
+    environment.filters["image_dimension_svg"] = image_dimension_svg
+    environment.filters["label_bars_svg"] = label_bars_svg
     return environment
 
 

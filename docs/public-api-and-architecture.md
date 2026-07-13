@@ -12,6 +12,7 @@ Status: Living public contract. Implemented behavior is tracked in
 - Base install: `pip install prism-eda`
 - Gemini/Gemma-assisted investigation: `pip install prism-eda[ai-gemini]`
 - Interactive Plotly artifacts: `pip install prism-eda[plotly]`
+- Image dataset profiling is included in the base install and uses Pillow.
 - Python support: 3.11 and newer
 - License: MIT
 
@@ -72,6 +73,27 @@ table names to DataFrames or paths, or an existing `Dataset`.
 cached deterministic evidence. It does not copy a caller's DataFrame unless an
 operation requires a safe internal representation. The non-mutation guarantee
 still applies.
+
+Image datasets use a sibling session because a directory of images is not a
+table collection:
+
+```python
+images = pe.load_images("images/train/", recursive=True)
+result = images.profile()
+
+result = pe.profile_images("images/train/", label_strategy="directory")
+```
+
+`ImageDataset` owns discovered image paths, an optional common root, and the
+labels *and* splits derived from the directory layout (`root/split/label/file`).
+Its result still returns the standard `AnalysisResult`; the catalog represents
+the analyzed image manifest so existing JSON and HTML exports remain compatible.
+
+Image reports embed base64 thumbnails of the flagged files. Those live in report
+**artifacts**, never in evidence, and `ImageDataset` is deliberately absent from
+the assisted-analysis tool registry — raw pixels must never reach a model
+provider, in line with the privacy boundary that already forbids sending raw cell
+values. `thumbnails=False` omits them entirely.
 
 Important methods:
 
@@ -158,15 +180,28 @@ result = dataset.discover_schema(
     max_key_columns=2,
     mode="standard",
 )
+
+image_result = pe.profile_images(
+    "images/",
+    mode="standard",
+    label_strategy="directory",
+    near_duplicate_threshold=4,
+    thumbnails=True,
+)
 ```
 
-`discover_schema`, `anomaly_detection`, and `classification` are implemented.
+`discover_schema`, `anomaly_detection`, `classification`, and `profile_images`
+are implemented.
 Schema discovery returns candidate keys and relationships, not declared
 constraints. Anomaly detection returns statistical review candidates, not
 confirmed anomaly labels; `expected_contamination` is an optional review-sizing
 assumption, not a confirmed prevalence estimate. Classification returns
 target-readiness, association, leakage, and diagnostic probe-model evidence; it
-does not return a production model object. See
+does not return a production model object. Image profiling returns metadata,
+quality, duplicate, leakage, loader-trap, and per-label evidence; near-duplicate
+and quality flags are candidates for review, not confirmed removal instructions.
+Image leakage and per-label checks depend on the directory layout, so a flat
+folder of images yields neither. See
 `docs/implementation-plan.md` for algorithms, thresholds, sampling behavior,
 limitations, and the detailed roadmap.
 
@@ -176,6 +211,7 @@ Convenience functions:
 result = pe.anomaly_detection(df, mode="standard")
 result = pe.classification(df, target="churned")
 result = pe.discover_schema("data/", recursive=True)
+result = pe.profile_images("images/train/")
 ```
 
 Convenience functions call `load()` and the corresponding `Dataset` method. They

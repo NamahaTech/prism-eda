@@ -309,6 +309,110 @@ def peer_group_svg(conditional: dict[str, Any]) -> Markup:
     return Markup("".join(parts))
 
 
+def image_dimension_svg(distribution: dict[str, Any]) -> Markup:
+    """Width against height, one dot per distinct size, sized by how many files.
+
+    A single dot means every image already shares one shape. A smear along a
+    diagonal means mixed resolutions at a constant aspect ratio; a scattered
+    cloud means the shapes disagree too, which is the case that quietly breaks a
+    fixed-size resize.
+    """
+    points = distribution.get("scatter_points", [])
+    if not points:
+        return Markup("")
+    width, height = 680.0, 300.0
+    pad_l, pad_r, pad_t, pad_b = 52.0, 18.0, 18.0, 38.0
+    widths = [float(point["width"]) for point in points]
+    heights = [float(point["height"]) for point in points]
+    x_lo, x_hi = min(widths), max(widths)
+    y_lo, y_hi = min(heights), max(heights)
+    # Pad a degenerate axis so a single distinct size still lands mid-plot.
+    if x_hi == x_lo:
+        x_lo, x_hi = x_lo - 1, x_hi + 1
+    if y_hi == y_lo:
+        y_lo, y_hi = y_lo - 1, y_hi + 1
+    max_count = max(int(point["count"]) for point in points) or 1
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Image width against height">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{height - pad_b}" '
+        f'x2="{width - pad_r}" y2="{height - pad_b}"></line>',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t}" '
+        f'x2="{pad_l}" y2="{height - pad_b}"></line>',
+    ]
+    for point in points:
+        px = _scale(float(point["width"]), x_lo, x_hi, pad_l, width - pad_r)
+        py = _scale(float(point["height"]), y_lo, y_hi, height - pad_b, pad_t)
+        count = int(point["count"])
+        radius = 3.0 + 7.0 * math.sqrt(count / max_count)
+        css = "chart-dot-flagged" if point.get("is_outlier") else "chart-dot"
+        title = f"{int(point['width'])}x{int(point['height'])}: {count} image(s)" + (
+            " — outlier" if point.get("is_outlier") else ""
+        )
+        parts.append(
+            f"<g><title>{escape(title)}</title>"
+            f'<circle class="{css}" cx="{px:.1f}" cy="{py:.1f}" '
+            f'r="{radius:.1f}"></circle></g>'
+        )
+    parts.append(
+        f'<text class="chart-label" x="{pad_l}" y="{height - 12}" '
+        f'text-anchor="start">{escape(_format_number(x_lo))}</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 12}" '
+        f'text-anchor="end">width {escape(_format_number(x_hi))}</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{pad_t + 8}" '
+        f'text-anchor="end">{escape(_format_number(y_hi))}</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{height - pad_b}" '
+        f'text-anchor="end">{escape(_format_number(y_lo))}</text>'
+        "</svg>"
+    )
+    return Markup("".join(parts))
+
+
+def label_bars_svg(rows: list[dict[str, Any]]) -> Markup:
+    """Class balance as horizontal bars, smallest class highlighted."""
+    if not rows:
+        return Markup("")
+    visible = rows[:16]
+    counts = [int(row["count"]) for row in visible]
+    max_count = max(counts) or 1
+    smallest = min(counts)
+    width = 680.0
+    row_h = 26.0
+    label_w = 120.0
+    track_w = width - label_w - 74.0
+    height = len(visible) * row_h + 6.0
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Images per label">'
+    ]
+    for index, row in enumerate(visible):
+        count = int(row["count"])
+        y = index * row_h + 3.0
+        bar_w = max(2.0, (count / max_count) * track_w)
+        # Only call out the smallest class when it is genuinely starved, not
+        # merely last in a balanced set.
+        starved = count == smallest and max_count >= 5 * max(smallest, 1)
+        css = "chart-bar-flagged" if starved else "chart-bar"
+        name = str(row.get("value", ""))
+        share = float(row.get("rate", 0.0))
+        title = f"{name}: {count} image(s), {share:.1%}"
+        parts.append(
+            f"<g><title>{escape(title)}</title>"
+            f'<text class="chart-label" x="0" y="{y + 15:.1f}">'
+            f"{escape(_truncate(name, 16))}</text>"
+            f'<rect class="{css}" x="{label_w}" y="{y + 4:.1f}" '
+            f'width="{bar_w:.1f}" height="14" rx="3"></rect>'
+            f'<text class="chart-label" x="{label_w + bar_w + 8:.1f}" '
+            f'y="{y + 15:.1f}">{count:,}</text></g>'
+        )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
 def format_cell(value: Any) -> str:
     """Human-friendly cell formatting for the flagged-rows table."""
     if value is None:

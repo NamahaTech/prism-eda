@@ -9,6 +9,7 @@ from prism_eda.catalog.loaders import DataSource
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.dataset import Dataset
 from prism_eda.events import EventCallback
+from prism_eda.image_dataset import ImageDataset, ImageSource
 from prism_eda.results import AnalysisResult
 
 
@@ -73,6 +74,66 @@ def profile(
 def minimal_eda(source: DataSource | Dataset, **kwargs: Any) -> AnalysisResult:
     """Alias for :func:`profile`, retained for discoverability."""
     return profile(source, **kwargs)
+
+
+def load_images(
+    source: ImageSource | ImageDataset,
+    *,
+    recursive: bool = True,
+    include: Sequence[str] | None = None,
+    exclude: Sequence[str] | None = None,
+    label_strategy: str | None = "directory",
+) -> ImageDataset:
+    """Load image paths into a Prism EDA image dataset session."""
+    if isinstance(source, ImageDataset):
+        return source
+    return ImageDataset.load(
+        source,
+        recursive=recursive,
+        include=include,
+        exclude=exclude,
+        label_strategy=label_strategy,
+    )
+
+
+def profile_images(
+    source: ImageSource | ImageDataset,
+    *,
+    context: AnalysisContext | Mapping[str, Any] | None = None,
+    config: AnalysisConfig | None = None,
+    callbacks: Sequence[EventCallback] = (),
+    mode: AnalysisMode | str = AnalysisMode.STANDARD,
+    sampling: str = "auto",
+    random_seed: int = 42,
+    allow_insufficient_evidence: bool = False,
+    recursive: bool = True,
+    include: Sequence[str] | None = None,
+    exclude: Sequence[str] | None = None,
+    label_strategy: str | None = "directory",
+    near_duplicate_threshold: int = 4,
+    thumbnails: bool = True,
+    thumbnail_size: int = 112,
+) -> AnalysisResult:
+    """Load image paths and run deterministic image dataset profiling."""
+    dataset = load_images(
+        source,
+        recursive=recursive,
+        include=include,
+        exclude=exclude,
+        label_strategy=label_strategy,
+    )
+    return dataset.profile(
+        context=context,
+        config=config,
+        callbacks=callbacks,
+        mode=mode,
+        sampling=sampling,
+        random_seed=random_seed,
+        allow_insufficient_evidence=allow_insufficient_evidence,
+        near_duplicate_threshold=near_duplicate_threshold,
+        thumbnails=thumbnails,
+        thumbnail_size=thumbnail_size,
+    )
 
 
 def anomaly_detection(
@@ -210,6 +271,8 @@ __all__ = [
     "classification",
     "discover_schema",
     "load",
+    "load_images",
     "minimal_eda",
     "profile",
+    "profile_images",
 ]

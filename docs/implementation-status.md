@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-06-23 (signal-quality hardening pass)
+Last updated: 2026-07-13 (image dataset profiling)
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -77,6 +77,34 @@ removed, or materially re-scoped.
 - Cross-validated hard-example candidates from probe errors
 - Class-balance and feature-signal report artifacts
 
+### Image dataset profile
+
+- `ImageDataset`, `load_images()`, and `profile_images()` public API
+- Recursive image-folder discovery with glob-style include/exclude filters
+- Directory-derived labels *and* splits (`root/split/label/file`), so the split
+  folder is not mistaken for a class
+- Decode validation with unreadable/corrupt file evidence
+- Dimension, aspect-ratio, megapixel, format, mode, animation, EXIF, and
+  orientation summaries
+- Exact duplicate groups via SHA-256 file hashes
+- Perceptual near-duplicate candidates via average/difference image hashes, with
+  deterministic hash-window blocking for larger analyzed sets
+- Train/validation/test split leakage and conflicting-label detection from
+  duplicate groups that cross a cohort boundary
+- Loader traps: EXIF rotation (including orientations that transpose width and
+  height), extension/encoding mismatch, greyscale stored in colour mode, used
+  alpha channels, and truncated-but-decodable files
+- Lightweight visual-quality flags for very dark, very bright, low-contrast,
+  low-sharpness, and low-entropy images
+- Robust outlier candidates for file size, resolution, and aspect ratio, with a
+  mean-absolute-deviation fallback so uniform datasets still surface odd files
+- Per-label dimension and brightness profiles, plus deviating-label findings
+- Embedded base64 thumbnail contact sheets for flagged images (duplicates shown
+  as pairs), a width-against-height scatter, a brightness histogram, and class
+  balance bars — all offline and self-contained; `thumbnails=False` opts out
+- Label imbalance findings, metric-table artifacts, HTML/JSON export, sampling
+  disclosure, and evidence-linked review recommendations
+
 ### Report quality
 
 - Findings ordered by severity (`critical` > `high` > `medium` > `low`) across
@@ -138,6 +166,17 @@ removed, or materially re-scoped.
 - Class overlap and neighborhood-disagreement detection
 - Group/time split guidance and opt-in fairness coverage
 - Train/test comparison when both are supplied
+
+### Image dataset improvements
+
+- Optional deep visual embeddings for stronger near-duplicate and semantic
+  outlier review (two photographs of the same object are not caught by
+  perceptual hashes)
+- Label-file joins for COCO/YOLO/classification manifests, so leakage and
+  per-label checks work without a directory layout
+- Per-channel mean/std normalization constants
+- Domain-specific image quality profiles for OCR, medical imaging, and remote
+  sensing
 
 ## Later
 

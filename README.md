@@ -79,6 +79,41 @@ extra). Use `names=` when
 you need to override the table names derived from filenames, and `read_options=`
 to pass options through to pandas readers.
 
+## Profile an image dataset
+
+Image folders can be profiled separately from tabular datasets. Prism scans image
+headers and lightweight visual-quality signals, then reports issues as
+evidence-backed findings instead of a raw metadata dump — and the report *shows*
+you the flagged images rather than listing their paths.
+
+```python
+import prism_eda as pe
+
+images = pe.profile_images("images/")
+images.to_html("image-profile.html")
+```
+
+Labels and splits are read from the usual `images/train/cat/001.png` layout, which
+unlocks the checks that matter most:
+
+- **Leakage** — the same image in both `train` and `test` inflates every metric
+  you report without changing the model, so it leads the report as `critical`.
+  The same check across labels catches one image filed under two classes.
+- **Loader traps** — files that decode cleanly but reach your pipeline changed:
+  EXIF orientation tags that silently rotate (and sometimes transpose) an image,
+  a `.jpg` that is really a PNG, greyscale stored in three identical channels,
+  used alpha channels, and truncated files.
+- **Duplicates, outliers, and quality** — exact and perceptual-hash duplicate
+  candidates, odd resolutions and aspect ratios, and dark, blown-out, blurry, or
+  blank images.
+- **Per-label breakdown** — dimensions and brightness per class, so collection
+  bias in one class is not averaged away.
+
+Flagged images are embedded in the report as thumbnails (duplicate candidates
+side by side), and the report stays a single offline file. Pass
+`thumbnails=False` to omit them, or `label_strategy=None` to disable label
+inference. See [the image dataset guide](docs/usage_docs/image-datasets.md).
+
 ## Discover related tables
 
 ```python

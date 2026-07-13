@@ -230,6 +230,94 @@ Important limitations:
 - no group/time split recommendation yet beyond existing context fields;
 - fairness or subgroup coverage is not implemented.
 
+### Image Profile
+
+`pe.profile_images(source)` and `ImageDataset.profile()` profile a folder (or an
+explicit list) of image files. Images are not forced through the tabular loader:
+`ImageDataset` is a sibling session, and the resulting catalog describes the
+analyzed image manifest so the existing JSON and HTML exports keep working.
+
+Discovery and cohorts:
+
+- recursive directory walk over `.bmp/.gif/.jpeg/.jpg/.png/.tif/.tiff/.webp`,
+  with glob-style `include`/`exclude` filters;
+- the label and the split are both read from the directory layout. Directory
+  names in `{train, training, val, valid, validation, test, testing, dev, eval,
+  evaluation, holdout}` are recognized as splits, so `root/train/cat/001.png`
+  yields label `cat` in split `train` rather than mistaking `train` for a class.
+  `label_strategy=None` disables label inference.
+
+Per-file scan (Pillow only — no deep model, no network):
+
+- decode validation. A file that fails only because it is *truncated* is decoded
+  permissively and reported as a truncated-file finding, because it still
+  profiles and "this file is short" is itself the signal. Pillow *warns* rather
+  than raises on recoverable defects such as a corrupt EXIF block; those are
+  recorded as traps and must not be treated as decode failures;
+- shape: width, height, aspect ratio, megapixels;
+- encoding: container format, mode, frame count (animation);
+- metadata: EXIF presence, tag count, orientation;
+- content: mean grayscale brightness, contrast (stddev), a gradient-energy
+  sharpness proxy, and Shannon entropy, all measured on a 128x128 grayscale
+  downscale;
+- hashes: SHA-256 of the file bytes, plus 64-bit average and difference
+  perceptual hashes.
+
+Checks and thresholds:
+
+| Check | Rule |
+|-------|------|
+| Dimension drift | dominant width x height covers < 90% of valid images |
+| Resolution / aspect / file-size outliers | robust z >= 4.0 (see below) |
+| Exact duplicates | identical SHA-256 |
+| Near-duplicates | min(average-hash, difference-hash) Hamming distance <= `near_duplicate_threshold` (default 4) |
+| Split leakage | a duplicate or near-duplicate group spanning more than one split — **critical** |
+| Label conflict | a duplicate or near-duplicate group spanning more than one label |
+| Rotates on load | EXIF orientation != 1; orientations 5-8 also transpose width and height |
+| Truncated | decodes only with truncation tolerance enabled |
+| Extension mismatch | file suffix implies a different format than the decoded one |
+| Grayscale in colour mode | RGB/RGBA whose three channels are exactly equal on a 64x64 downscale |
+| Transparency | an alpha channel that is actually used (min alpha < 255) |
+| Dark / bright / low contrast / blurry / blank | brightness <= 0.08 or >= 0.92; contrast <= 0.035; sharpness <= 0.0008; entropy <= 2.0 |
+| Label imbalance | largest inferred label >= 5x the smallest |
+| Deviating label | a label whose dominant size differs from the dataset's, or whose mean brightness is >= 3.5 robust z from the other labels (needs >= 3 labels) |
+
+Robust outliers use `0.6745 * (value - median) / MAD`. Image datasets normally
+agree on a size, which drives the MAD *and* the IQR to zero — precisely the case
+where the single panorama among the thumbnails matters most. When MAD is zero the
+scale falls back to the mean absolute deviation (`1.253314 * MeanAD`, the
+standard MAD=0 recommendation) so a uniform dataset surfaces its odd files
+instead of scoring everything zero.
+
+Near-duplicate scanning is full pairwise up to 2,000 analyzed images. Above that
+it switches to deterministic hash-window blocking (sort by each hash, compare a
+40-file window) and discloses which method it used in the evidence.
+
+Reporting: the recipe emits metric-table artifacts *and* `image_contact_sheet`
+artifacts — base64 PNG thumbnails of the flagged files, with duplicate candidates
+paired side by side. Thumbnails are built in a bounded second pass over only the
+files the report shows, so a 50,000-image scan never holds 50,000 encoded
+thumbnails in memory. `thumbnails=False` turns them off without changing what is
+found.
+
+Sampling budgets when `sampling="auto"`: quick 2,000 / standard 10,000 / deep
+50,000 analyzed files, sampled deterministically from `random_seed` and recorded
+in a `SamplingRecord`.
+
+Important limitations:
+
+- pixels are read through Pillow only. There are no deep embeddings, so
+  near-duplicates are perceptual-hash *candidates* and two different photographs
+  of the same object are not detected;
+- labels and splits come from directory names only. COCO/YOLO/CSV annotation
+  files are not read, so a flat folder gets neither leakage nor per-label checks;
+- the quality checks are triage heuristics, not a task-specific perceptual
+  quality model. Treat them as review candidates in medical, remote-sensing, or
+  OCR domains;
+- thumbnails are stored in artifacts, never in evidence, and `ImageDataset` is
+  deliberately absent from the assisted-analysis tool registry: raw pixels must
+  never reach a model provider.
+
 ## Result and Evidence Contract
 
 Every recipe returns `AnalysisResult`.
@@ -303,7 +391,10 @@ Current suite categories:
 - baseline profile tests;
 - export tests;
 - schema discovery tests;
-- anomaly and classification goal recipe tests.
+- anomaly and classification goal recipe tests;
+- image profile tests, asserted against the seeded sample image dataset in
+  `examples/sample_data.py` so `docs/usage_docs/image-datasets.md` cannot drift
+  from the behavior it documents.
 
 Expected verification commands:
 

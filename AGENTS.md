@@ -16,7 +16,7 @@ later plan and explain analysis, but it does not invent numeric truth.
 - Import package: `prism_eda`
 - Supported Python: 3.11+
 - Implemented recipes: baseline profile, schema discovery, anomaly detection,
-  classification
+  classification, image dataset profile
 - Optional AI-assisted investigation via the `ai-gemini` extra
   (`prism_eda.assisted_analysis`): an LLM plans over the deterministic tools only
 - Planned next recipes: regression, time-series, clustering
@@ -56,6 +56,9 @@ python -m build
 
 - `api.py`: top-level convenience functions only; delegate to `Dataset`.
 - `dataset.py`: session object and recipe dispatch.
+- `image_dataset.py`: sibling session for image folders — path discovery, and
+  the label/split inferred from the directory layout. A directory of images is
+  not a table collection, so it does not go through `catalog/`.
 - `catalog/`: loading, fingerprints, column catalog, keys, and relationships.
 - `analysis/`: task recipes that turn deterministic computations into evidence,
   findings, artifacts, warnings, and statuses.
@@ -102,6 +105,14 @@ Do not postpone documentation into a future cleanup task.
 - Automated functional-dependency discovery and self-referential relationships
   are not implemented.
 - Persistent AI sessions are not implemented.
+- Image profiling reads pixels only through Pillow: no deep embeddings, so
+  near-duplicates are perceptual-hash candidates and semantic duplicates (the
+  same object photographed twice) are not detected.
+- Image labels and splits are inferred from directory names only; annotation
+  files (COCO/YOLO/CSV manifests) are not read.
+- Image evidence is not exposed to the assisted-analysis tool registry, and
+  thumbnails live in artifacts rather than evidence. Keep it that way: raw
+  pixels must never reach a model provider.
 
 ## Key documents
 

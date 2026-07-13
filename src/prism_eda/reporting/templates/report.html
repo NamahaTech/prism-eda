@@ -228,6 +228,23 @@
     .chart-dot-flagged { fill: var(--high); stroke: var(--surface); stroke-width: 1; }
     .chart-legend, .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: var(--ink-2); }
     .chart-legend span, .legend span { display: inline-flex; align-items: center; gap: 7px; }
+
+    /* Image contact sheets: show the flagged file, don't just name it. */
+    .sheet + .sheet { margin-top: 26px; }
+    .sheet-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 11px; }
+    .sheet-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+    .sheet-head .note { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+    .thumbs { display: flex; flex-wrap: wrap; gap: 14px; }
+    .thumb { width: 112px; min-width: 0; }
+    .thumb img { display: block; width: 112px; height: 112px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+    .thumb .cap { margin-top: 5px; font-size: 10.5px; font-family: var(--mono); color: var(--ink-2); word-break: break-all; line-height: 1.35; }
+    .thumb .meta { font-size: 10.5px; font-family: var(--mono); color: var(--ink-3); }
+    /* A duplicate pair only reads as a pair when the images sit side by side. */
+    .pair-row { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+    .pair-row + .pair-row { margin-top: 12px; }
+    .pair-row .thumb img { background: var(--surface); }
+    .pair-note { flex: 1 1 160px; min-width: 140px; font-size: 12px; color: var(--ink-2); font-family: var(--mono); }
+    @media (max-width: 640px) { .thumb, .thumb img { width: 88px; } .thumb img { height: 88px; } }
     .swatch, .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
     .swatch-normal, .sw.n { background: var(--taupe); }
     .swatch-flag, .sw.f { background: var(--high); }
@@ -398,13 +415,13 @@
         </div>
       </div>
       <div class="recipe-pill" aria-label="Report recipe">
-        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% else %}Data profile{% endif %}
+        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
       </div>
     </div>
     <div class="mast-meta">
       <span><span class="k">Recipe</span>&nbsp; <span class="mono">{{ result.goal }}</span></span>
       <span><span class="k">Tables</span>&nbsp; <span class="mono">{{ result.catalog.table_count | format_value }}</span></span>
-      <span><span class="k">Rows</span>&nbsp; <span class="mono">{{ result.catalog.row_count | format_value }}</span></span>
+      <span><span class="k">{% if result.goal == 'image_profile' %}Images{% else %}Rows{% endif %}</span>&nbsp; <span class="mono">{{ result.catalog.row_count | format_value }}</span></span>
       <span class="status"><span class="dot"></span>{{ result.status.value | replace('_', ' ') }}</span>
     </div>
     <div class="spectrum-rule"></div>
@@ -422,6 +439,8 @@
         Anomaly candidate review
       {%- elif result.goal == 'classification' -%}
         Classification readiness map
+      {%- elif result.goal == 'image_profile' -%}
+        Image dataset quality profile
       {%- else -%}
         Decision-first data profile
       {%- endif -%}
@@ -430,12 +449,15 @@
 
     <div class="stats" role="list" aria-label="Dataset overview">
       <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.table_count | format_value }}</div><div class="l">Table{% if result.catalog.table_count != 1 %}s{% endif %}</div></div>
-      <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.row_count | format_value }}</div><div class="l">Rows</div></div>
-      <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.column_count | format_value }}</div><div class="l">Columns</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.row_count | format_value }}</div><div class="l">{% if result.goal == 'image_profile' %}Images{% else %}Rows{% endif %}</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.column_count | format_value }}</div><div class="l">{% if result.goal == 'image_profile' %}Manifest fields{% else %}Columns{% endif %}</div></div>
       {% if result.goal == 'schema_discovery' %}
       <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}</div><div class="l">Candidate relationships</div></div>
       {% else %}
       <div class="stat" role="listitem"><div class="n mono">{{ result.findings | length | format_value }}</div><div class="l">Finding{% if result.findings | length != 1 %}s{% endif %}</div></div>
+      {% if result.goal == 'image_profile' and result.metadata.get('invalid_image_count') %}
+      <div class="stat flag" role="listitem"><div class="n mono">{{ result.metadata.get('invalid_image_count') | format_value }}</div><div class="l">Unreadable files</div></div>
+      {% endif %}
       {% endif %}
       {% if review_count %}
       <div class="stat flag" role="listitem"><div class="n mono">{{ review_count | format_value }}</div><div class="l">Rows to review</div></div>
@@ -545,7 +567,9 @@
     </section>
   {% endif %}
 
-  {% if result.goal != 'anomaly_detection' %}
+  {# Image profiles defer their tables until after the findings and the contact
+     sheets: the decision comes first, the reference tables back it up. #}
+  {% if result.goal not in ('anomaly_detection', 'image_profile') %}
   {% for artifact in result.artifacts %}
     {% if artifact.kind == 'metric_table' %}
     {% set section_index.n = section_index.n + 1 %}
@@ -591,7 +615,7 @@
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
+      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
     {% endif %}
   </section>
 
@@ -667,6 +691,127 @@
     </div>
   </section>
   {% endfor %}
+
+  <!-- ============ FLAGGED IMAGES (contact sheets) ============ -->
+  {% set sheets = result.artifacts | selectattr('kind', 'equalto', 'image_contact_sheet') | list %}
+  {% if sheets %}
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="wide">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-title">
+        <h2>The flagged images</h2>
+        <p>Every image the checks above called out, shown rather than listed. Duplicate candidates are paired side by side so you can confirm or dismiss them without opening a file browser.</p>
+      </div>
+    </div>
+    {% for sheet in sheets %}
+    <div class="sheet">
+      <div class="sheet-head">
+        <h3>{{ sheet.title }}</h3>
+        {% if sheet.metadata.description %}<span class="note">{{ sheet.metadata.description }}</span>{% endif %}
+      </div>
+      {% if sheet.data.layout == 'pairs' %}
+        {% for group in sheet.data.groups %}
+        <div class="pair-row">
+          {% for item in group['items'] %}
+          <div class="thumb">
+            <img src="{{ item.src }}" alt="{{ item.caption }}" loading="lazy">
+            <div class="cap">{{ item.caption }}</div>
+            <div class="meta">{{ item.meta }}</div>
+          </div>
+          {% endfor %}
+          <div class="pair-note">{{ group.note }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        {% for group in sheet.data.groups %}
+        <div class="sheet-head" style="margin-top:14px">
+          <h3 style="font-size:12.5px;font-weight:600;text-transform:capitalize">{{ group.caption }}</h3>
+          <span class="note">{{ group.note }}</span>
+        </div>
+        <div class="thumbs">
+          {% for item in group['items'] %}
+          <div class="thumb">
+            <img src="{{ item.src }}" alt="{{ item.caption }}" loading="lazy">
+            <div class="cap">{{ item.caption }}</div>
+            <div class="meta">{{ item.meta }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- ============ IMAGE SHAPE & BALANCE ============ -->
+  {% if result.goal == 'image_profile' and result.metadata.get('image_count') %}
+  {% set dimension = result.evidence | selectattr('kind', 'equalto', 'image_dimension_distribution') | first %}
+  {% set brightness = result.evidence | selectattr('kind', 'equalto', 'image_brightness_distribution') | first %}
+  {% set label_evidence = result.evidence | selectattr('kind', 'equalto', 'image_label_distribution') | first %}
+  {% set section_index.n = section_index.n + 1 %}
+  <section class="wide">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-title">
+        <h2>Shape, exposure, and balance</h2>
+        <p>One dot per distinct image size — a single dot means the dataset already agrees on a shape, a spread means your resize policy has to make a decision.</p>
+      </div>
+    </div>
+    <div class="chart-grid">
+      {% if dimension and dimension.value.scatter_points %}
+      <div class="chart-card">
+        <h3>Width against height</h3>
+        <p class="chart-note">{{ dimension.value.unique_dimensions | format_value }} distinct size{% if dimension.value.unique_dimensions != 1 %}s{% endif %} · dot size = image count</p>
+        {{ dimension.value | image_dimension_svg }}
+      </div>
+      {% endif %}
+      {% if brightness and brightness.value.get('histogram') %}
+      <div class="chart-card">
+        <h3>Brightness</h3>
+        <p class="chart-note">median {{ brightness.value.box.median | format_cell }} · 0 is black, 1 is white</p>
+        {{ brightness.value | histogram_svg }}
+      </div>
+      {% endif %}
+    </div>
+    {% if label_evidence and label_evidence.value.labels | length > 1 %}
+    <div style="margin-top:26px">
+      <div class="sheet-head"><h3>Images per label</h3><span class="note">a class starved 5x below the largest is marked</span></div>
+      {{ label_evidence.value.labels | label_bars_svg }}
+    </div>
+    {% endif %}
+    <div class="legend"><span><span class="sw n"></span>typical</span><span><span class="sw f"></span>flagged</span></div>
+  </section>
+
+  <!-- ============ IMAGE REFERENCE TABLES (deep) ============ -->
+  {% for artifact in result.artifacts %}
+    {% if artifact.kind == 'metric_table' %}
+    {% set section_index.n = section_index.n + 1 %}
+    <section class="page">
+      <details class="deep">
+        <summary>
+          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+          <div class="sec-title">
+            <h2>{{ artifact.title }}</h2>
+            {% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}
+          </div>
+        </summary>
+        <div class="deep-body tbl-wrap">
+          <table>
+            <thead><tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+            <tbody>
+              {% for row in artifact.data.rows %}
+              <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
 
   <!-- ============ DISTRIBUTIONS ============ -->
   {% set distributions = result.evidence | selectattr('kind', 'equalto', 'anomaly_distribution_shape') | list %}
@@ -746,7 +891,11 @@
         <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
         <div class="sec-title">
           <h2>{{ table.name }}</h2>
+          {% if result.goal == 'image_profile' %}
+          <p>{{ table.row_count | format_value }} image files · {{ table.column_count | format_value }} manifest fields</p>
+          {% else %}
           <p>{{ table.row_count | format_value }} rows · {{ table.column_count | format_value }} columns · {{ table.duplicate_row_count | format_value }} duplicate row{% if table.duplicate_row_count != 1 %}s{% endif %}</p>
+          {% endif %}
         </div>
       </summary>
       <div class="deep-body tbl-wrap">
