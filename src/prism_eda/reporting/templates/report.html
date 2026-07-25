@@ -19,7 +19,7 @@
   <style>
     :root {
       color-scheme: light;
-      --paper: #f4f1e9;
+      --paper: #ffffff;
       --surface: #fbf9f3;
       --ink: #211d17;
       --ink-2: #655e51;
@@ -28,15 +28,16 @@
       --line: #e2dccd;
       --line-2: #eae5d8;
       --fill: #ece7da;
+      --table-header: #ffee8e;
       --accent: #33707a;
       --accent-ink: #245b64;
-      --high: #b0402f;
-      --high-bg: #f6e4df;
-      --med: #b3792a;
-      --med-bg: #f6ecd9;
-      --low: #4272a3;
-      --low-bg: #e2ebf3;
-      --taupe: #c4b9a1;
+      --high: #f3aaaa;
+      --high-bg: #f3aaaa;
+      --med: #f4d995;
+      --med-bg: #f4d995;
+      --low: #b6d9ed;
+      --low-bg: #b6d9ed;
+      --taupe: #3b82f6;
       --radius: 10px;
       /* muted refraction spectrum — the only decorative color in the report */
       --spectrum: linear-gradient(90deg,#6d5bd0 0%,#4a72c4 20%,#2f8fa6 40%,#4f9e6a 58%,#c9a63f 78%,#c0623f 100%);
@@ -61,7 +62,7 @@
     a { color: var(--accent-ink); text-underline-offset: 2px; }
 
     /* ---------- layout ---------- */
-    .page { width: min(1080px, calc(100% - 48px)); margin: 0 auto; }
+    .page { width: min(1200px, calc(100% - 48px)); margin: 0 auto; }
     .wide { width: min(1240px, calc(100% - 48px)); margin: 0 auto; }
     section { padding: 46px 0; border-top: 1px solid var(--line); }
     .verdict { border-top: 0; }
@@ -97,7 +98,7 @@
     .verdict .lede { margin: 20px 0 0; font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 64ch; }
 
     /* ---------- stat strip ---------- */
-    .stats { display: flex; flex-wrap: wrap; gap: 0; margin-top: 34px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+    .stats { display: flex; flex-wrap: wrap; gap: 0; margin-top: 34px; border: 1px solid var(--line); border-radius: var(--radius); background: #bde0fe; overflow: hidden; }
     .stat { flex: 1 1 0; min-width: 120px; padding: 16px 20px; border-left: 1px solid var(--line-2); }
     .stat:first-child { border-left: 0; }
     .stat .n { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
@@ -113,26 +114,19 @@
     .sec-title p { margin: 6px 0 0; color: var(--ink-2); font-size: 14.5px; max-width: 74ch; }
 
     /* ---------- findings ---------- */
-    .finding { display: grid; grid-template-columns: auto 1fr auto; gap: 0 22px; padding: 22px 0 22px 20px; border-top: 1px solid var(--line-2); position: relative; }
+    .finding { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 22px; padding: 22px 0 22px 20px; border-top: 1px solid var(--line-2); position: relative; }
     .finding:first-of-type { border-top: 0; }
     .finding::before { content: ""; position: absolute; left: 0; top: 26px; bottom: 26px; width: 3px; border-radius: 3px; background: var(--sev); }
-    .finding .sev-tag { align-self: start; display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sev); background: var(--sev-bg); white-space: nowrap; margin-top: 2px; }
+    .finding .sev-tag { align-self: start; display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); background: var(--sev-bg); white-space: nowrap; margin-top: 2px; }
     .finding-body { min-width: 0; }
     .finding-body h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
     .finding-body p { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; max-width: 72ch; overflow-wrap: anywhere; }
     .finding-body .rec { color: var(--accent-ink); font-weight: 500; display: flex; gap: 9px; align-items: baseline; }
     .finding-body .rec::before { content: "→"; color: var(--accent); font-family: var(--mono); transform: translateY(1px); }
-    .finding .conf { align-self: start; text-align: right; min-width: 118px; margin-top: 2px; }
-    .conf .cval { font-size: 13px; font-weight: 600; }
-    .conf .clab { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-    .conf .meter { width: 110px; height: 4px; margin: 7px 0 0 auto; border-radius: 99px; background: var(--fill); overflow: hidden; }
-    .conf .meter > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
-    .lineage { grid-column: 2 / -1; margin-top: 12px; }
-    .lineage summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ink-2); list-style: none; display: inline-flex; align-items: center; gap: 6px; }
-    .lineage summary::-webkit-details-marker { display: none; }
-    .lineage summary::before { content: "+"; font-family: var(--mono); color: var(--ink-3); }
-    .lineage[open] summary::before { content: "–"; }
-    .lineage .lin-body { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+    .finding-detail { grid-column: 2 / -1; margin-top: 14px; }
+    .finding-detail summary { cursor: pointer; color: var(--accent-ink); font-size: 13px; font-weight: 600; }
+    .finding-detail .detail-body { margin-top: 12px; }
+    .finding-detail thead th { background: var(--detail-header); }
     code { font-family: var(--mono); background: var(--fill); padding: 2px 6px; border-radius: 5px; font-size: .86em; overflow-wrap: anywhere; word-break: break-word; }
     .tbl-wrap code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
     .empty { padding: 22px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--ink-2); text-align: center; }
@@ -163,10 +157,11 @@
     .count-note { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
 
     /* ---------- tables ---------- */
-    .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
     table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-top: 1px solid var(--line-2); }
-    thead th { border-top: 0; color: var(--ink-3); font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; background: var(--fill); }
+    thead th { border-top: 0; color: #000; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; background: var(--table-header); }
+    tbody tr { background: #fff; }
     tbody tr:hover { background: rgba(51,112,122,.035); }
     td.num, th.num { text-align: right; }
     .rows-table td.flagcell { color: var(--high); font-weight: 600; background: var(--high-bg); white-space: nowrap; }
@@ -235,8 +230,10 @@
     .sheet-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
     .sheet-head .note { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
     .thumbs { display: flex; flex-wrap: wrap; gap: 14px; }
-    .thumb { width: 112px; min-width: 0; }
-    .thumb img { display: block; width: 112px; height: 112px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+    .thumb { width: 140px; min-width: 0; }
+    .thumb-preview { display: block; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: zoom-in; }
+    .thumb img { display: block; width: 140px; height: 140px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+    .thumb-preview:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     .thumb .cap { margin-top: 5px; font-size: 10.5px; font-family: var(--mono); color: var(--ink-2); word-break: break-all; line-height: 1.35; }
     .thumb .meta { font-size: 10.5px; font-family: var(--mono); color: var(--ink-3); }
     /* A duplicate pair only reads as a pair when the images sit side by side. */
@@ -244,7 +241,16 @@
     .pair-row + .pair-row { margin-top: 12px; }
     .pair-row .thumb img { background: var(--surface); }
     .pair-note { flex: 1 1 160px; min-width: 140px; font-size: 12px; color: var(--ink-2); font-family: var(--mono); }
-    @media (max-width: 640px) { .thumb, .thumb img { width: 88px; } .thumb img { height: 88px; } }
+    .image-preview { width: min(1200px, calc(100% - 32px)); max-width: none; max-height: calc(100vh - 32px); padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; color: var(--ink); box-shadow: 0 20px 60px rgba(33,29,23,.24); }
+    .image-preview::backdrop { background: rgba(33,29,23,.6); }
+    .image-preview form { display: flex; justify-content: flex-end; margin: -10px -10px 8px; }
+    .image-preview button { width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
+    .image-preview figure { margin: 0; }
+    .image-preview img { display: block; max-width: 100%; max-height: min(85vh, 800px); margin: 0 auto; object-fit: contain; }
+    .image-preview figcaption { margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+    .image-preview .preview-meta { display: block; margin-top: 3px; color: var(--ink-3); }
+    @media (max-width: 640px) { .thumb, .thumb img { width: 100px; } .thumb img { height: 100px; } }
+    .chart-tooltip { position: fixed; pointer-events: none; z-index: 999; display: none; background: #211d17; color: #fff; font-family: var(--mono); font-size: 12px; padding: 6px 10px; border-radius: 6px; white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 12px rgba(33,29,23,.24); }
     .swatch, .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
     .swatch-normal, .sw.n { background: var(--taupe); }
     .swatch-flag, .sw.f { background: var(--high); }
@@ -379,9 +385,7 @@
     @media (max-width: 720px) {
       .page, .wide { width: calc(100% - 32px); }
       section { padding: 34px 0; }
-      .finding { grid-template-columns: auto 1fr; }
-      .finding .conf { grid-column: 2; text-align: left; margin-top: 12px; }
-      .conf .meter { margin-left: 0; }
+      .finding { grid-template-columns: auto minmax(0, 1fr); }
       .verdict h1 { font-size: 26px; }
       .mast-row { flex-wrap: wrap; }
       .recipe-pill { order: 3; }
@@ -598,11 +602,23 @@
   <section class="page">
     <div class="sec-head">
       <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
-      <div class="sec-title"><h2>Prioritized findings</h2><p>Ranked by severity. Confidence — how strongly the evidence supports the claim — is reported separately.</p></div>
+      <div class="sec-title"><h2>Prioritized findings</h2><p>Ranked by severity so the most important issues are reviewed first.</p></div>
     </div>
     {% if result.findings %}
       {% for finding in result.findings %}
       {% set sev = finding.severity if finding.severity in ['high', 'medium', 'low'] else 'high' %}
+      {% set related_tables = namespace(items=[]) %}
+      {% if result.goal == 'image_profile' %}
+        {% for artifact in result.artifacts %}
+          {% if artifact.kind == 'metric_table' %}
+            {% for evidence_id in artifact.evidence_ids %}
+              {% if evidence_id in finding.evidence_ids %}
+                {% set related_tables.items = related_tables.items + [artifact] %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
       <div class="finding" style="--sev: var(--{{ 'high' if sev == 'high' else ('med' if sev == 'medium' else 'low') }}); --sev-bg: var(--{{ 'high-bg' if sev == 'high' else ('med-bg' if sev == 'medium' else 'low-bg') }})">
         <span class="sev-tag">{{ finding.severity }}</span>
         <div class="finding-body">
@@ -610,8 +626,26 @@
           <p>{{ finding.summary }}</p>
           {% if finding.recommendation %}<p class="rec">{{ finding.recommendation }}</p>{% endif %}
         </div>
-        <div class="conf"><div class="cval mono">{{ finding.confidence | format_value }}</div><div class="clab">confidence</div><div class="meter"><span style="width: {{ [(finding.confidence * 100) | round, 100] | min }}%"></span></div></div>
-        <details class="lineage"><summary>Evidence lineage</summary><div class="lin-body">Evidence: {% for evidence_id in finding.evidence_ids %}<code>{{ evidence_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</div></details>
+        {% if related_tables.items %}
+        <details class="finding-detail" style="--detail-header: var(--sev-bg)">
+          <summary>View details</summary>
+          <div class="detail-body">
+            {% for artifact in related_tables.items %}
+            <div class="sheet-head"><h3>{{ artifact.title }}</h3>{% if artifact.metadata.description %}<span class="note">{{ artifact.metadata.description }}</span>{% endif %}</div>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                  {% for row in artifact.data.rows %}
+                  <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
       </div>
       {% endfor %}
     {% else %}
@@ -696,7 +730,7 @@
   {% set sheets = result.artifacts | selectattr('kind', 'equalto', 'image_contact_sheet') | list %}
   {% if sheets %}
   {% set section_index.n = section_index.n + 1 %}
-  <section class="wide">
+  <section class="page">
     <div class="sec-head">
       <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
       <div class="sec-title">
@@ -715,7 +749,9 @@
         <div class="pair-row">
           {% for item in group['items'] %}
           <div class="thumb">
-            <img src="{{ item.src }}" alt="{{ item.caption }}" loading="lazy">
+            <button class="thumb-preview" type="button" data-preview-src="{{ item.src }}" data-preview-caption="{{ item.caption }}" data-preview-meta="{{ item.meta }}" aria-label="Preview {{ item.caption }}">
+              <img src="{{ item.src }}" alt="{{ item.caption }}" loading="lazy">
+            </button>
             <div class="cap">{{ item.caption }}</div>
             <div class="meta">{{ item.meta }}</div>
           </div>
@@ -732,7 +768,9 @@
         <div class="thumbs">
           {% for item in group['items'] %}
           <div class="thumb">
-            <img src="{{ item.src }}" alt="{{ item.caption }}" loading="lazy">
+            <button class="thumb-preview" type="button" data-preview-src="{{ item.src }}" data-preview-caption="{{ item.caption }}" data-preview-meta="{{ item.meta }}" aria-label="Preview {{ item.caption }}">
+              <img src="{{ item.src }}" alt="{{ item.caption }}" loading="lazy">
+            </button>
             <div class="cap">{{ item.caption }}</div>
             <div class="meta">{{ item.meta }}</div>
           </div>
@@ -751,7 +789,7 @@
   {% set brightness = result.evidence | selectattr('kind', 'equalto', 'image_brightness_distribution') | first %}
   {% set label_evidence = result.evidence | selectattr('kind', 'equalto', 'image_label_distribution') | first %}
   {% set section_index.n = section_index.n + 1 %}
-  <section class="wide">
+  <section class="page">
     <div class="sec-head">
       <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
       <div class="sec-title">
@@ -787,6 +825,13 @@
   <!-- ============ IMAGE REFERENCE TABLES (deep) ============ -->
   {% for artifact in result.artifacts %}
     {% if artifact.kind == 'metric_table' %}
+    {% set linked_to_finding = namespace(value=false) %}
+    {% for finding in result.findings %}
+      {% for evidence_id in artifact.evidence_ids %}
+        {% if evidence_id in finding.evidence_ids %}{% set linked_to_finding.value = true %}{% endif %}
+      {% endfor %}
+    {% endfor %}
+    {% if not linked_to_finding.value %}
     {% set section_index.n = section_index.n + 1 %}
     <section class="page">
       <details class="deep">
@@ -809,6 +854,7 @@
         </div>
       </details>
     </section>
+    {% endif %}
     {% endif %}
   {% endfor %}
   {% endif %}
@@ -954,7 +1000,6 @@
         <h3>{{ step.operation | replace('_', ' ') | title }}</h3>
         <p>{{ step.table }}{% if step.columns %}.{{ step.columns | join(', ') }}{% endif %}: {{ step.rationale }}</p>
       </div>
-      <div class="conf"></div>
     </div>
     {% endfor %}
   </section>
@@ -976,8 +1021,17 @@
       <div class="lin-body">{% for failure in result.failures %}{{ failure.stage }}: {{ failure.message }}<br>{% endfor %}</div>
     </details>
     {% endif %}
-    <p class="foot-note">Generated locally by Prism EDA. Every numeric claim is backed by structured evidence — expand any finding's lineage to trace it.</p>
+    <p class="foot-note">Generated locally by Prism EDA. Every numeric claim is backed by structured evidence available in the result and JSON export.</p>
   </footer>
+
+  <dialog class="image-preview" id="imagePreview" aria-labelledby="imagePreviewCaption">
+    <form method="dialog"><button aria-label="Close image preview">&times;</button></form>
+    <figure>
+      <img id="imagePreviewImage" alt="">
+      <figcaption id="imagePreviewCaption"><span class="preview-title"></span><span class="preview-meta"></span></figcaption>
+    </figure>
+  </dialog>
+  <div class="chart-tooltip" id="chartTooltip"></div>
 
   <script>
   (function () {
@@ -1011,6 +1065,75 @@
     });
 
     apply(0);
+  })();
+  </script>
+
+  <script>
+  (function () {
+    "use strict";
+    var dialog = document.getElementById("imagePreview");
+    if (!dialog || !dialog.showModal) return;
+    var image = document.getElementById("imagePreviewImage");
+    var caption = document.getElementById("imagePreviewCaption");
+    var title = caption.querySelector(".preview-title");
+    var meta = caption.querySelector(".preview-meta");
+
+    document.querySelectorAll(".thumb-preview").forEach(function (thumbnail) {
+      thumbnail.addEventListener("click", function () {
+        image.src = thumbnail.getAttribute("data-preview-src");
+        image.alt = thumbnail.getAttribute("data-preview-caption");
+        title.textContent = thumbnail.getAttribute("data-preview-caption");
+        meta.textContent = thumbnail.getAttribute("data-preview-meta");
+        dialog.showModal();
+      });
+    });
+
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) dialog.close();
+    });
+  })();
+  </script>
+
+  <script>
+  (function () {
+    "use strict";
+    var tip = document.getElementById("chartTooltip");
+    if (!tip) return;
+    function findTitle(el, root) {
+      while (el && el !== root) {
+        var t = el.querySelector(":scope > title");
+        if (t && t.textContent) return t;
+        el = el.parentElement;
+      }
+      return null;
+    }
+    function show(e) {
+      var t = findTitle(e.target, e.currentTarget);
+      if (!t) return;
+      tip.textContent = t.textContent;
+      tip.style.display = "block";
+      var x = e.clientX + 14, y = e.clientY - 28;
+      var r = tip.getBoundingClientRect();
+      if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+      if (y < 8) y = e.clientY + 18;
+      tip.style.left = x + "px";
+      tip.style.top = y + "px";
+    }
+    function move(e) {
+      if (tip.style.display !== "block") return;
+      var x = e.clientX + 14, y = e.clientY - 28;
+      var r = tip.getBoundingClientRect();
+      if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+      if (y < 8) y = e.clientY + 18;
+      tip.style.left = x + "px";
+      tip.style.top = y + "px";
+    }
+    function hide() { tip.style.display = "none"; }
+    document.querySelectorAll(".chart, .whybars, .peer").forEach(function (svg) {
+      svg.addEventListener("mouseover", show, true);
+      svg.addEventListener("mousemove", move, true);
+      svg.addEventListener("mouseout", hide, true);
+    });
   })();
   </script>
 

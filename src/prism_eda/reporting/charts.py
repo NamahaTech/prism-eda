@@ -154,9 +154,14 @@ def scatter_svg(scatter: dict[str, Any]) -> Markup:
     normal = [point for point in points if not point.get("flagged")]
     flagged = [point for point in points if point.get("flagged")]
     for point in normal:
+        title = (
+            f"{x_col}={_format_number(point['x'])}, "
+            f"{y_col}={_format_number(point['y'])}"
+        )
         parts.append(
             f'<circle class="chart-dot" cx="{px(float(point["x"])):.1f}" '
-            f'cy="{py(float(point["y"])):.1f}" r="3.4"></circle>'
+            f'cy="{py(float(point["y"])):.1f}" r="3.4">'
+            f"<title>{escape(title)}</title></circle>"
         )
     for point in flagged:
         title = (
@@ -393,11 +398,14 @@ def label_bars_svg(rows: list[dict[str, Any]]) -> Markup:
         count = int(row["count"])
         y = index * row_h + 3.0
         bar_w = max(2.0, (count / max_count) * track_w)
+        name = str(row.get("value", ""))
         # Only call out the smallest class when it is genuinely starved, not
         # merely last in a balanced set.
         starved = count == smallest and max_count >= 5 * max(smallest, 1)
-        css = "chart-bar-flagged" if starved else "chart-bar"
-        name = str(row.get("value", ""))
+        # Missing labels are always a review item, even when their class count
+        # is not the smallest in the dataset.
+        unlabeled = name.strip().casefold() == "unlabeled"
+        css = "chart-bar-flagged" if starved or unlabeled else "chart-bar"
         share = float(row.get("rate", 0.0))
         title = f"{name}: {count} image(s), {share:.1%}"
         parts.append(

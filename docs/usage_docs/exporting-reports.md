@@ -26,7 +26,9 @@ offline. Schema-discovery reports additionally embed a vendored copy of
 diagram; with JavaScript disabled (or if the embedded library fails to load)
 the report degrades to a static SVG diagram with a visible notice. It leads
 with the decision-first summary, then the prioritized findings, their
-evidence, and any artifacts (metric tables, the schema graph).
+supporting charts and artifacts (metric tables, the schema graph).
+Raw evidence IDs stay in `to_json()`, `to_dict()`, and the Python result object
+for auditing and downstream integrations.
 
 ### Render to a string instead of a file
 

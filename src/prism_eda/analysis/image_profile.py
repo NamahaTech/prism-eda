@@ -1850,7 +1850,7 @@ def profile_image_dataset(
     config: AnalysisConfig,
     near_duplicate_threshold: int = 4,
     thumbnails: bool = True,
-    thumbnail_size: int = 112,
+    thumbnail_size: int = 600,
     callbacks: tuple[EventCallback, ...] = (),
 ) -> AnalysisResult:
     """Build a deterministic profile for a directory or list of images."""

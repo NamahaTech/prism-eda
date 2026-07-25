@@ -226,7 +226,7 @@ class ImageDataset:
         )
         near_duplicate_threshold = options.pop("near_duplicate_threshold", 4)
         thumbnails = options.pop("thumbnails", True)
-        thumbnail_size = options.pop("thumbnail_size", 112)
+        thumbnail_size = options.pop("thumbnail_size", 600)
         if options:
             unknown = ", ".join(sorted(options))
             raise TypeError(f"Unexpected analysis options: {unknown}")
@@ -255,7 +255,7 @@ class ImageDataset:
         allow_insufficient_evidence: bool = False,
         near_duplicate_threshold: int = 4,
         thumbnails: bool = True,
-        thumbnail_size: int = 112,
+        thumbnail_size: int = 600,
     ) -> AnalysisResult:
         if config is None:
             config = AnalysisConfig(

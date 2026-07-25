@@ -147,14 +147,19 @@ them. Duplicate candidates are rendered side by side so you can confirm or
 dismiss a match without opening a file browser, and quality-flagged images,
 outliers, and loader traps get thumbnail contact sheets.
 
+Supporting metric tables are available from a collapsed **View details** panel
+on the finding they support. Reference tables with no matching
+finding remain separate in the report.
+
 Thumbnails are embedded as base64 PNGs, so the report stays a single portable
 file with no network access, consistent with every other Prism report. They are
 rendered only for the files the report actually shows, never for the whole
-dataset.
+dataset. Click a thumbnail to open its embedded preview; original image files
+are not included in the report.
 
 ```python
-result = pe.profile_images(root, thumbnails=False)   # counts and paths only
-result = pe.profile_images(root, thumbnail_size=64)  # smaller report
+result = pe.profile_images(root, thumbnails=False)    # counts and paths only
+result = pe.profile_images(root, thumbnail_size=112)  # smaller report
 ```
 
 Turning thumbnails off changes the size of the report, never the findings. Use

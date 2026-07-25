@@ -112,7 +112,7 @@ def profile_images(
     label_strategy: str | None = "directory",
     near_duplicate_threshold: int = 4,
     thumbnails: bool = True,
-    thumbnail_size: int = 112,
+    thumbnail_size: int = 600,
 ) -> AnalysisResult:
     """Load image paths and run deterministic image dataset profiling."""
     dataset = load_images(
