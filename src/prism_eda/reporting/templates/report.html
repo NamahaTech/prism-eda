@@ -424,9 +424,6 @@
     </div>
     <div class="mast-meta">
       <span><span class="k">Recipe</span>&nbsp; <span class="mono">{{ result.goal }}</span></span>
-      <span><span class="k">Tables</span>&nbsp; <span class="mono">{{ result.catalog.table_count | format_value }}</span></span>
-      <span><span class="k">{% if result.goal == 'image_profile' %}Images{% else %}Rows{% endif %}</span>&nbsp; <span class="mono">{{ result.catalog.row_count | format_value }}</span></span>
-      <span class="status"><span class="dot"></span>{{ result.status.value | replace('_', ' ') }}</span>
     </div>
     <div class="spectrum-rule"></div>
   </header>
