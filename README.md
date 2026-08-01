@@ -4,6 +4,7 @@
 </p>
 
 <h1 align="center">Prism-EDA</h1>
+<h2 align="center">A python library for exploratory data analysis</h2>
 
 <p align="center">
   <strong>Give Prism EDA your data, and it turns it into decision ready insights through seven task aware recipes.</strong>
