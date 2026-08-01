@@ -40,15 +40,15 @@ truth. It gives you citable evidence and review recommendations.
 The prism metaphor guides the product: one input—data—can be examined through
 seven distinct objectives:
 
-| Prism-rays (recipes)   | Objectives                                             |
-|------------------------|--------------------------------------------------------|
-| **Baseline Profiling** | What is in this dataset and what is its quality?       |
-| **Schema Discovery**   | How do tables and entities relate?                     |
-| **Anomaly Detection**  | What observations or combinations look unusual?        |
-| **Classification**     | Is this data ready to predict categories?              |
-| **Regression**         | Is this data ready to predict a numeric outcome?       |
-| **Time Series**        | Is this time-based data ready for forecasting?         |
-| **Data Structure**     | Is there meaningful natural structure or segmentation? |
+| Prism-rays (recipes)     | Objectives                                            |
+|--------------------------|-------------------------------------------------------|
+| **Baseline Profiling**   | Complete baseline dataset quality report.             |
+| **Schema Discovery**     | Relationship insights for tables and entities.        |
+| **Anomaly Detection**    | Observations, combinations, outliers detection.       |
+| **Classification**       | Categorization, clustering and segmentation support.  |
+| **Regression**           | Prediction and regression for numerical outcomes.     |
+| **Time Series Analysis** | Time-based data forecasting analysis.                 |
+| **Data Statistics**      | Data characteristics, distribution and visualization. |
 
 ## Why it exists
 
