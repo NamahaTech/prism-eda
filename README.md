@@ -8,13 +8,13 @@
 <h2 align="center">A python library for exploratory data analysis</h2>
 
 <p align="center">
-  <strong>Give Prism EDA your data, and it turns it into decision ready insights through seven task aware recipes.</strong>
+  <strong>Give Prism EDA your data, and it turns it into decision ready insights through task aware recipes.</strong>
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/v/prism-eda?color=6f52ed&label=PyPI" alt="PyPI version"></a>
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/pyversions/prism-eda?color=6f52ed" alt="Python 3.11+"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-1f9d55" alt="MIT license"></a>
+  <a href="https://github.com/NamahaTech/prism-eda/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-1f9d55" alt="MIT license"></a>
   <a href="https://github.com/NamahaTech/prism-eda"><img src="https://img.shields.io/badge/docs-guide-0b7285" alt="Documentation"></a>
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/dm/prism-eda?label=downloads" alt="PyPI downloads"></a>
 </p>
@@ -31,22 +31,23 @@ to choose relevant diagnostics and explain their limits. Prism never treats an
 inferred key, relationship, anomaly, or leakage signal as confirmed business
 truth. It gives you citable evidence and review recommendations.
 
-The prism metaphor: one input—data can be examined through
-seven distinct objectives:
+The prism metaphor: one input — data — can be examined through several distinct
+objectives. Five rays ship today; the rest are the roadmap.
 
-| Prism-rays (recipes)     | Objectives                                            |
-|--------------------------|-------------------------------------------------------|
-| **Baseline Profiling**   | Complete baseline dataset quality report.             |
-| **Schema Discovery**     | Relationship insights for tables and entities.        |
-| **Anomaly Detection**    | Observations, combinations, outliers detection.       |
-| **Classification**       | Categorization, clustering and segmentation support.  |
-| **Regression**           | Prediction and regression for numerical outcomes.     |
-| **Time Series Analysis** | Time-based data forecasting analysis.                 |
-| **Data Statistics**      | Data characteristics, distribution and visualization. |
+| Prism-rays (recipes)      | Objectives                                              | Status |
+|---------------------------|---------------------------------------------------------|--------|
+| **Baseline Profiling**    | Data quality issues, distributions, and correlations.   | Available |
+| **Schema Discovery**      | Relationship insights for tables and entities.          | Available |
+| **Anomaly Detection**     | Observations, combinations, outliers detection.         | Available |
+| **Classification**        | Target readiness, leakage, and split guidance.          | Available |
+| **Image Dataset Profile** | Split leakage, loader traps, duplicates, quality flags. | Available |
+| **Regression**            | Prediction and regression for numerical outcomes.       | Planned |
+| **Time Series Analysis**  | Time-based data forecasting analysis.                   | Planned |
+| **Clustering**            | Categorization, clustering and segmentation support.    | Planned |
 
 ## Why it exists
 
-Traditional profiling tools produces a broad catalog: types, missing values, duplicates, distributions, and correlations. But a raw
+Traditional profiling tools produce a broad catalog: types, missing values, duplicates, distributions, and correlations. But a raw
 profile often leaves the most important next question unanswered:
 
 - Can these tables safely be joined, and what are the likely keys?
@@ -71,6 +72,14 @@ JavaScript, or an AI provider.
 - Build deterministic dataset/table fingerprints and column catalogs.
 - Profile shape, memory use, physical and semantic types, missingness,
   cardinality, duplicates, constants, robust numeric summaries, and top values.
+- Separate **issues** (data quality defects — placeholder values, mixed date
+  formats, numbers stored as text, duplicate columns) from **alerts** (true but
+  not broken — correlated columns, all-unique columns, time coverage), so the
+  defect list stays short enough to read.
+- Name each numeric column's distribution shape, and the standard family it
+  follows where one fits, abstaining rather than naming a poor fit.
+- Measure every column pair with the statistic that suits its types (Spearman,
+  Cramér's V, or the correlation ratio) and plot the strongest pairs.
 - Analyze without mutating the caller's DataFrame or writing files until an
   explicit export is requested.
 
@@ -110,13 +119,6 @@ JavaScript, or an AI provider.
 - Evidence-citation validation: unsupported model claims are discarded.
 - Privacy controls to allow, redact, alias, or exclude columns from provider
   context; raw values are withheld by default.
-
-
-
-```md
-<!-- Example once the asset exists -->
-![Prism EDA schema discovery demo](docs/assets/demos/schema.gif)
-```
 
 ## Installation
 
@@ -195,21 +197,8 @@ python -m pip install prism-eda
 python your_analysis.py
 ```
 
-## Install
-
-```bash
-pip install prism-eda
-```
-
-Python 3.11+. Optional extras, each installable on its own or together:
-
-| Extra | `pip install "prism-eda[...]"` | Adds |
-|-------|-------------------------------|------|
-| `excel` | `excel` | Reading `.xlsx` sources via openpyxl |
-| `ai-gemini` | `ai-gemini` | The optional AI investigator (LangGraph + google-genai) |
-| `plotly` | `plotly` | Interactive chart export |
-
-The deterministic core needs none of them, and never imports an LLM library.
+The deterministic core needs none of the extras, and never imports an LLM
+library.
 
 ## Quick start
 
@@ -306,7 +295,7 @@ side by side), and the report stays a single offline file. Pass
 `thumbnails=False` to omit them, or `label_strategy=None` to disable label
 inference. See [the image dataset guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/image-datasets.md).
 
-## Discover related tables
+### AI-assisted investigation: let a model plan over the evidence
 
 ```python
 import prism_eda as pe
@@ -333,7 +322,7 @@ Set `GEMINI_API_KEY` in the environment before creating `GeminiProvider`.
 
 ## AI features
 
-The optional option gives an LLM a tightly constrained role: it chooses
+The optional AI layer gives an LLM a tightly constrained role: it chooses
 which Prism tools to call and explains their evidence. It does not inspect raw
 rows, run arbitrary code, or create findings without citations.
 
@@ -360,20 +349,20 @@ bounded provider/tool loop ──► deterministic recipes ──► evidence ba
   evidence ID. Uncited findings are removed, and insufficient evidence is a
   valid outcome.
 
-See [AI-assisted analysis](docs/usage_docs/ai-assisted-analysis.md) and
-[Privacy](docs/usage_docs/privacy.md) for configuration and provider details.
+See [AI-assisted analysis](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) and
+[Privacy](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md) for configuration and provider details.
 
 
 
 ## Detailed documentation:
 
-- [**Usage Guide**](docs/usage_docs/README.md) — install, load, analyze, export (start here)
-- [AI-assisted investigation](docs/usage_docs/ai-assisted-analysis.md) · [Privacy](docs/usage_docs/privacy.md)
-- [Schema discovery](docs/schema-discovery.md)
-- [Implementation plan and handoff](docs/implementation-plan.md)
-- [Implementation status](docs/implementation-status.md)
-- [Maintainer guide](docs/maintainer-guide.md)
-- [Agent handoff](AGENTS.md)
+- [**Usage Guide**](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/README.md) — install, load, analyze, export (start here)
+- [AI-assisted investigation](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) · [Privacy](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md)
+- [Schema discovery](https://github.com/NamahaTech/prism-eda/blob/main/docs/schema-discovery.md)
+- [Implementation plan and handoff](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-plan.md)
+- [Implementation status](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-status.md)
+- [Maintainer guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/maintainer-guide.md)
+- [Agent handoff](https://github.com/NamahaTech/prism-eda/blob/main/AGENTS.md)
 
 ## Generated reports
 
@@ -390,12 +379,6 @@ and transformation recommendations needed to audit that conclusion.
 | Classification readiness | Class balance, leakage/identifier risks, associations, probe results, hard examples, overlap, and split guidance |
 | Image profile | Quality/loader checks, duplicate and leakage evidence, class balance, charts, and embedded thumbnail contact sheets |
 | Investigation | Deterministic findings plus AI provenance and grounded interpretation |
-
-```md
-<!-- Add public-release screenshots here. -->
-![Classification readiness report](docs/assets/screenshots/classification-report.png)
-![Image dataset profile report](docs/assets/screenshots/image-profile-report.png)
-```
 
 ## Architecture
 
@@ -488,7 +471,7 @@ result = pe.profile_images(
 
 Pass callbacks to receive lifecycle and evidence events without coupling Prism
 to a logging framework or UI framework. See
-[Events & progress](docs/usage_docs/events-and-progress.md).
+[Events & progress](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/events-and-progress.md).
 
 ## FAQ
 
@@ -555,10 +538,10 @@ issue/contact path for feedback and collaboration requests.
 
 ## License
 
-Prism EDA is released under the [MIT License](LICENSE). You may use, copy,
+Prism EDA is released under the [MIT License](https://github.com/NamahaTech/prism-eda/blob/main/LICENSE). You may use, copy,
 modify, merge, publish, distribute, sublicense, and sell copies of the software,
 provided that the copyright and license notice are included. The software is
-provided without warranty; see [LICENSE](LICENSE) for the complete terms.
+provided without warranty; see [LICENSE](https://github.com/NamahaTech/prism-eda/blob/main/LICENSE) for the complete terms.
 
 ---
 
