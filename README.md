@@ -1,4 +1,17 @@
-# Prism EDA
+<p align="center">
+  <!-- Absolute raw URL: PyPI renders the README outside the repository, so a
+       relative image path would show as a broken image on the project page. -->
+  <img src="https://raw.githubusercontent.com/NamahaTech/prism-eda/main/docs/assets/prism-eda-logo.png" alt="Prism EDA" width="150">
+</p>
+
+<h1 align="center">Prism EDA</h1>
+
+<p align="center">
+  <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/v/prism-eda.svg" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/pyversions/prism-eda.svg" alt="Supported Python versions"></a>
+  <a href="https://github.com/NamahaTech/prism-eda/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/prism-eda.svg" alt="MIT license"></a>
+  <a href="https://github.com/NamahaTech/prism-eda/actions/workflows/ci.yml"><img src="https://github.com/NamahaTech/prism-eda/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+</p>
 
 Prism EDA is a task aware exploratory data analysis library for Python. It is
 being built around a deterministic evidence engine, goal specific analysis
@@ -9,9 +22,25 @@ deterministic foundation with an optional Gemini/Gemma-assisted investigator tha
 plans and explains analysis over those deterministic tools (install with the
 `ai-gemini` extra).
 
-> **New here? Start with the [Usage Guide](docs/usage_docs/README.md)** — a
+> **New here? Start with the [Usage Guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/README.md)** — a
 > step-by-step walkthrough of installing Prism, loading data, every analysis
 > recipe, and reading results, with runnable, verified examples.
+
+## Install
+
+```bash
+pip install prism-eda
+```
+
+Python 3.11+. Optional extras, each installable on its own or together:
+
+| Extra | `pip install "prism-eda[...]"` | Adds |
+|-------|-------------------------------|------|
+| `excel` | `excel` | Reading `.xlsx` sources via openpyxl |
+| `ai-gemini` | `ai-gemini` | The optional AI investigator (LangGraph + google-genai) |
+| `plotly` | `plotly` | Interactive chart export |
+
+The deterministic core needs none of them, and never imports an LLM library.
 
 ## Quick start
 
@@ -134,7 +163,7 @@ unlocks the checks that matter most:
 Flagged images are embedded in the report as thumbnails (duplicate candidates
 side by side), and the report stays a single offline file. Pass
 `thumbnails=False` to omit them, or `label_strategy=None` to disable label
-inference. See [the image dataset guide](docs/usage_docs/image-datasets.md).
+inference. See [the image dataset guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/image-datasets.md).
 
 ## Discover related tables
 
@@ -210,20 +239,20 @@ result.to_html("investigation.html")
 
 `pip install "prism-eda[ai-gemini]"`. The result is the same `AnalysisResult` the
 deterministic recipes return. See the
-[AI-assisted guide](docs/usage_docs/ai-assisted-analysis.md) and the
-[privacy guide](docs/usage_docs/privacy.md). The deterministic core never imports
+[AI-assisted guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) and the
+[privacy guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md). The deterministic core never imports
 an LLM library.
 
-See [the product research brief](docs/product-research-brief.md) and
-[the public API specification](docs/public-api-and-architecture.md) for the
+See [the product research brief](https://github.com/NamahaTech/prism-eda/blob/main/docs/product-research-brief.md) and
+[the public API specification](https://github.com/NamahaTech/prism-eda/blob/main/docs/public-api-and-architecture.md) for the
 confirmed direction.
 
 Further documentation:
 
-- [**Usage Guide**](docs/usage_docs/README.md) — install, load, analyze, export (start here)
-- [AI-assisted investigation](docs/usage_docs/ai-assisted-analysis.md) · [Privacy](docs/usage_docs/privacy.md)
-- [Schema discovery](docs/schema-discovery.md)
-- [Implementation plan and handoff](docs/implementation-plan.md)
-- [Implementation status](docs/implementation-status.md)
-- [Maintainer guide](docs/maintainer-guide.md)
-- [Agent handoff](AGENTS.md)
+- [**Usage Guide**](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/README.md) — install, load, analyze, export (start here)
+- [AI-assisted investigation](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) · [Privacy](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md)
+- [Schema discovery](https://github.com/NamahaTech/prism-eda/blob/main/docs/schema-discovery.md)
+- [Implementation plan and handoff](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-plan.md)
+- [Implementation status](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-status.md)
+- [Maintainer guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/maintainer-guide.md)
+- [Agent handoff](https://github.com/NamahaTech/prism-eda/blob/main/AGENTS.md)

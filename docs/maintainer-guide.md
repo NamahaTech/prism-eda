@@ -126,8 +126,42 @@ this path.
 
 ## Release and packaging
 
-`pyproject.toml` is canonical. `requirements.txt` is only an editable-install
-compatibility shim. The wheel must include templates, `py.typed`, and the license.
+`pyproject.toml` is canonical and there is deliberately **no `setup.py`**. The
+build uses PEP 517/518 with the hatchling backend declared in `[build-system]`;
+a `setup.py` is setuptools-specific legacy that would either be ignored or
+conflict with that backend. `requirements.txt` is only an editable-install
+compatibility shim. The wheel must include templates, packaged assets,
+`py.typed`, and the license.
 
-Before a release or handoff, run all commands listed in `AGENTS.md`, inspect the
-wheel contents, and install the wheel into a separate target or environment.
+The version is single-sourced from `prism_eda.__version__` via
+`[tool.hatch.version]`. Bump it **only** in `src/prism_eda/__init__.py`; the
+distribution metadata follows automatically, and the release workflow refuses to
+publish when the git tag disagrees with it.
+
+### Cutting a release
+
+1. Move the `## [Unreleased]` entries in `CHANGELOG.md` under a new
+   `## [x.y.z] - YYYY-MM-DD` heading.
+2. Bump `__version__` in `src/prism_eda/__init__.py`.
+3. Run the full gate from `AGENTS.md`: `ruff check .`, `ruff format --check .`,
+   `mypy src/prism_eda`, `pytest`, `python -m build`,
+   `python -m twine check --strict dist/*`.
+4. Install the built wheel into a throwaway virtualenv and render a report, to
+   confirm templates and assets shipped.
+5. Rehearse on TestPyPI: run the **Release** workflow manually with
+   `target: testpypi`, then
+   `pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple prism-eda`.
+6. Commit, tag `vx.y.z`, push the tag, and publish a GitHub Release. The
+   `Release` workflow publishes to PyPI through Trusted Publishing.
+
+A version number on PyPI can never be reused or overwritten — deleting a release
+does not free it. That is why the tag/version check and the TestPyPI rehearsal
+exist: a mistake costs a version number, not just a retry.
+
+### Credentials
+
+Publishing uses PyPI **Trusted Publishing** (OIDC) from
+`.github/workflows/release.yml`. There is no API token to store, rotate, or
+leak. Do not add `PYPI_API_TOKEN` as a repository secret; if a manual upload is
+ever unavoidable, use a short-lived project-scoped token from your own account
+and revoke it afterwards.

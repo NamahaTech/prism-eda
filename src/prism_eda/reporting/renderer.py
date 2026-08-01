@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from base64 import b64encode
 from importlib import resources
 from pathlib import PurePath
 from typing import Any
@@ -65,6 +66,20 @@ def _environment() -> Environment:
     return environment
 
 
+def _data_uri(asset: str, media_type: str) -> str | None:
+    """Base64-encode a packaged asset for inlining, or None when unavailable.
+
+    Reports must stay single self-contained files with no network requests, so
+    images travel inside the document. A missing asset degrades the masthead
+    rather than failing the render.
+    """
+    try:
+        payload = resources.files("prism_eda.reporting").joinpath(asset).read_bytes()
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return None
+    return f"data:{media_type};base64,{b64encode(payload).decode('ascii')}"
+
+
 def _load_cytoscape_js() -> str | None:
     """Return the vendored Cytoscape.js source, or None when unavailable."""
     try:
@@ -92,6 +107,8 @@ def render_html(result: AnalysisResult) -> str:
         observations=observations,
         dataset_title=dataset_title(result),
         source_location=_source_location(result),
+        logo_uri=_data_uri("assets/logo.png", "image/png"),
+        favicon_uri=_data_uri("assets/favicon.png", "image/png"),
         column_charts=_by_column(result, "profile_distribution"),
         column_frequencies=_by_column(result, "profile_category_frequency"),
         column_timelines=_by_column(result, "profile_timeline"),

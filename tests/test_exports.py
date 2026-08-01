@@ -42,6 +42,34 @@ def test_html_export_is_self_contained(tmp_path) -> None:
     assert "backed by structured evidence" not in html
 
 
+def test_report_embeds_the_packaged_logo(tmp_path) -> None:
+    """The brand mark travels inside the file, so reports work offline.
+
+    This also guards packaging: if the assets stop being included in the built
+    distribution, the mark silently disappears from every report.
+    """
+    result = pe.profile(pd.DataFrame({"value": [1, 2, 3]}))
+
+    html = result.to_html(tmp_path / "report.html").read_text(encoding="utf-8")
+
+    assert '<img class="brand-mark" src="data:image/png;base64,' in html
+    assert '<link rel="icon" type="image/png" href="data:image/png;base64,' in html
+
+
+def test_report_renders_without_the_packaged_logo(monkeypatch, tmp_path) -> None:
+    """A missing asset degrades the masthead; it does not fail the render."""
+    import prism_eda.reporting.renderer as renderer
+
+    monkeypatch.setattr(renderer, "_data_uri", lambda *args: None)
+    result = pe.profile(pd.DataFrame({"value": [1, 2, 3]}))
+
+    html = result.to_html(tmp_path / "report.html").read_text(encoding="utf-8")
+
+    assert '<img class="brand-mark"' not in html
+    assert "data:image/png;base64," not in html
+    assert "Prism" in html  # the wordmark still identifies the report
+
+
 def test_html_renders_category_values(tmp_path) -> None:
     result = pe.profile(
         pd.DataFrame(

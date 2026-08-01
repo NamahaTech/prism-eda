@@ -55,8 +55,26 @@ stabilizes.
   owns the ordered section list that drives the navigation, the anchors, and the
   section numbering, so the three cannot drift apart.
 
+- **Brand logo in reports.** The masthead and favicon now use the Prism EDA
+  logo, base64-embedded from `prism_eda/reporting/assets/` so reports stay
+  single offline files. The assets are stored at roughly 3x their display size
+  rather than at full resolution, and a missing asset degrades the masthead
+  instead of failing the render. Regenerate with
+  `python scripts/build_logo_assets.py <logo.png>`.
+- **Release workflow** (`.github/workflows/release.yml`) publishing to PyPI via
+  Trusted Publishing (OIDC), with a TestPyPI rehearsal path and a check that the
+  git tag matches `__version__`. CI now also runs `twine check --strict` and
+  asserts the packaged binary assets survive the build.
+- `CONTRIBUTING.md` and `SECURITY.md`.
+
 ### Changed
 
+- **Packaging metadata modernised.** The version is single-sourced from
+  `prism_eda.__version__`, the license uses the PEP 639 SPDX expression
+  (`license = "MIT"` plus `license-files`) instead of the deprecated table and
+  classifier, and the project gains keywords, richer URLs, `Typing :: Typed`,
+  and an explicit sdist file list. README links are now absolute so they resolve
+  on PyPI, and the README documents installation and the optional extras.
 - **Column detail is now cards, not a table row per column.** The shared
   per-table section renders one card per column — type, tags, a two-column stat
   grid, a chart, and a "More details" expander — with a name/type filter. All
