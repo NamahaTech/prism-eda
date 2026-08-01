@@ -27,7 +27,7 @@ Read them roughly in this order:
 | [Installation](installation.md) | Installing Prism, supported Python versions, optional extras |
 | [Getting started](getting-started.md) | Your first analysis in 5 minutes, and the mental model |
 | [Loading data](loading-data.md) | DataFrames, CSV/Parquet/Excel, folders, multi-table mappings |
-| [The baseline profile](profile.md) | `profile()` — data quality at a glance |
+| [The baseline profile](profile.md) | `profile()` — issues vs alerts, distribution shape, correlations, missing structure |
 | [Image dataset profile](image-datasets.md) | `profile_images()` — split leakage, loader traps, quality, duplicates |
 | [Schema discovery](schema-discovery.md) | `discover_schema()` — candidate keys & relationships |
 | [Anomaly detection](anomaly-detection.md) | `anomaly_detection()` — statistical review candidates |

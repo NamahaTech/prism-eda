@@ -37,19 +37,29 @@ def _scale(value: float, lo: float, hi: float, out_lo: float, out_hi: float) -> 
     return out_lo + (value - lo) / (hi - lo) * (out_hi - out_lo)
 
 
-def histogram_svg(distribution: dict[str, Any]) -> Markup:
-    """A histogram with a box-plot strip beneath, flagged values highlighted."""
+# Above this many unflagged points, a scatter stops attaching a hover tooltip to
+# each one. It is a file-size decision: the tooltip markup outweighs the marker
+# itself, and on a crowded plot the individual value is not what is being read.
+SCATTER_TOOLTIP_MAX_POINTS = 150
+
+
+def histogram_svg(distribution: dict[str, Any], compact: bool = False) -> Markup:
+    """A histogram with a box-plot strip beneath, flagged values highlighted.
+
+    ``compact`` renders the card-sized variant: same data, shorter, and without
+    the box strip, which is unreadable at that height.
+    """
     histogram = distribution.get("histogram", {})
     counts = histogram.get("counts", [])
     edges = histogram.get("edges", [])
-    box = distribution.get("box", {})
+    box = {} if compact else distribution.get("box", {})
     flagged = distribution.get("flagged_values", []) or []
     if not counts or len(edges) != len(counts) + 1:
         return Markup("")
 
-    width, height = 680.0, 184.0
+    width, height = (300.0, 96.0) if compact else (680.0, 184.0)
     pad_l, pad_r, pad_t = 14.0, 14.0, 12.0
-    hist_h = 104.0
+    hist_h = 62.0 if compact else 104.0
     strip_y = pad_t + hist_h + 22.0
     x_lo, x_hi = float(edges[0]), float(edges[-1])
     max_count = max(counts) or 1
@@ -114,16 +124,23 @@ def histogram_svg(distribution: dict[str, Any]) -> Markup:
             f'<text class="chart-label" x="{width - pad_r}" y="{height - 4}" '
             f'text-anchor="end">{escape(_format_number(box["max"]))}</text>'
         )
+    if compact and edges:
+        parts.append(
+            f'<text class="chart-label" x="{pad_l}" y="{height - 4}" '
+            f'text-anchor="start">{escape(_format_number(edges[0]))}</text>'
+            f'<text class="chart-label" x="{width - pad_r}" y="{height - 4}" '
+            f'text-anchor="end">{escape(_format_number(edges[-1]))}</text>'
+        )
     parts.append("</svg>")
     return Markup("".join(parts))
 
 
-def scatter_svg(scatter: dict[str, Any]) -> Markup:
+def scatter_svg(scatter: dict[str, Any], compact: bool = False) -> Markup:
     """A scatter of the most relevant numeric pair, flagged rows highlighted."""
     points = scatter.get("points", [])
     if not points:
         return Markup("")
-    width, height = 680.0, 300.0
+    width, height = (480.0, 300.0) if compact else (680.0, 300.0)
     pad_l, pad_r, pad_t, pad_b = 48.0, 16.0, 16.0, 36.0
     xs = [float(point["x"]) for point in points]
     ys = [float(point["y"]) for point in points]
@@ -153,16 +170,24 @@ def scatter_svg(scatter: dict[str, Any]) -> Markup:
     ]
     normal = [point for point in points if not point.get("flagged")]
     flagged = [point for point in points if point.get("flagged")]
+    # A tooltip per point roughly triples the markup, and on a dense plot nobody
+    # hovers an individual dot — the shape is the message. Above this many
+    # points the unflagged dots drop their tooltips; flagged ones always keep
+    # theirs, because those are the ones a reader goes looking for.
+    label_points = len(normal) <= SCATTER_TOOLTIP_MAX_POINTS
     for point in normal:
-        title = (
-            f"{x_col}={_format_number(point['x'])}, "
-            f"{y_col}={_format_number(point['y'])}"
-        )
-        parts.append(
+        marker = (
             f'<circle class="chart-dot" cx="{px(float(point["x"])):.1f}" '
-            f'cy="{py(float(point["y"])):.1f}" r="3.4">'
-            f"<title>{escape(title)}</title></circle>"
+            f'cy="{py(float(point["y"])):.1f}" r="3.4"'
         )
+        if label_points:
+            title = (
+                f"{x_col}={_format_number(point['x'])}, "
+                f"{y_col}={_format_number(point['y'])}"
+            )
+            parts.append(f"{marker}><title>{escape(title)}</title></circle>")
+        else:
+            parts.append(f"{marker}></circle>")
     for point in flagged:
         title = (
             f"{x_col}={_format_number(point['x'])}, "
@@ -375,6 +400,52 @@ def image_dimension_svg(distribution: dict[str, Any]) -> Markup:
     return Markup("".join(parts))
 
 
+def _bars_svg(
+    rows: list[dict[str, Any]],
+    *,
+    aria_label: str,
+    noun: str,
+    flagged: set[int],
+    limit: int,
+    label_width: float = 120.0,
+) -> Markup:
+    """Horizontal count bars — the shared body of the label and category charts."""
+    if not rows:
+        return Markup("")
+    visible = rows[:limit]
+    counts = [int(row["count"]) for row in visible]
+    max_count = max(counts) or 1
+    width = 680.0
+    row_h = 26.0
+    track_w = width - label_width - 74.0
+    height = len(visible) * row_h + 6.0
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="{escape(aria_label)}">'
+    ]
+    for index, row in enumerate(visible):
+        count = int(row["count"])
+        y = index * row_h + 3.0
+        bar_w = max(2.0, (count / max_count) * track_w)
+        name = str(row.get("value", ""))
+        css = "chart-bar-flagged" if index in flagged else "chart-bar"
+        share = float(row.get("rate", 0.0))
+        title = f"{name}: {count:,} {noun}, {share:.1%}"
+        parts.append(
+            f"<g><title>{escape(title)}</title>"
+            f'<text class="chart-label" x="0" y="{y + 15:.1f}">'
+            f"{escape(_truncate(name, 16))}</text>"
+            f'<rect class="{css}" x="{label_width}" y="{y + 4:.1f}" '
+            f'width="{bar_w:.1f}" height="14" rx="3"></rect>'
+            f'<text class="chart-label" x="{label_width + bar_w + 8:.1f}" '
+            f'y="{y + 15:.1f}">{count:,}</text></g>'
+        )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
 def label_bars_svg(rows: list[dict[str, Any]]) -> Markup:
     """Class balance as horizontal bars, smallest class highlighted."""
     if not rows:
@@ -383,41 +454,273 @@ def label_bars_svg(rows: list[dict[str, Any]]) -> Markup:
     counts = [int(row["count"]) for row in visible]
     max_count = max(counts) or 1
     smallest = min(counts)
-    width = 680.0
-    row_h = 26.0
-    label_w = 120.0
-    track_w = width - label_w - 74.0
-    height = len(visible) * row_h + 6.0
-
-    parts: list[str] = [
-        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
-        f'height="{height:.0f}" role="img" class="chart" '
-        f'aria-label="Images per label">'
-    ]
+    flagged = set()
     for index, row in enumerate(visible):
         count = int(row["count"])
-        y = index * row_h + 3.0
-        bar_w = max(2.0, (count / max_count) * track_w)
-        name = str(row.get("value", ""))
         # Only call out the smallest class when it is genuinely starved, not
         # merely last in a balanced set.
         starved = count == smallest and max_count >= 5 * max(smallest, 1)
         # Missing labels are always a review item, even when their class count
         # is not the smallest in the dataset.
-        unlabeled = name.strip().casefold() == "unlabeled"
-        css = "chart-bar-flagged" if starved or unlabeled else "chart-bar"
-        share = float(row.get("rate", 0.0))
-        title = f"{name}: {count} image(s), {share:.1%}"
+        unlabeled = str(row.get("value", "")).strip().casefold() == "unlabeled"
+        if starved or unlabeled:
+            flagged.add(index)
+    return _bars_svg(
+        rows,
+        aria_label="Images per label",
+        noun="image(s)",
+        flagged=flagged,
+        limit=16,
+    )
+
+
+def category_bars_svg(frequency: dict[str, Any]) -> Markup:
+    """Label frequencies for a categorical column, long tail folded into one bar."""
+    rows = list(frequency.get("counts", []))
+    if not rows:
+        return Markup("")
+    other = int(frequency.get("other_count", 0) or 0)
+    flagged: set[int] = set()
+    if other:
+        remaining = int(frequency.get("other_category_count", 0) or 0)
+        rows = [
+            *rows,
+            {
+                "value": f"other ({remaining:,} more)",
+                "count": other,
+                "rate": other / max(1, sum(int(row["count"]) for row in rows) + other),
+            },
+        ]
+        flagged.add(len(rows) - 1)
+    return _bars_svg(
+        rows,
+        aria_label=f"Value frequencies for {frequency.get('column', '')}",
+        noun="row(s)",
+        flagged=flagged,
+        limit=len(rows),
+    )
+
+
+def missing_bars_svg(missingness: dict[str, Any]) -> Markup:
+    """Missing share per column, so structural gaps stand out from stray nulls."""
+    columns = [
+        row for row in missingness.get("columns", []) if float(row["missing_rate"]) > 0
+    ]
+    if not columns:
+        return Markup("")
+    columns.sort(key=lambda row: -float(row["missing_rate"]))
+    width = 680.0
+    row_h = 24.0
+    label_w = 150.0
+    track_w = width - label_w - 66.0
+    height = len(columns) * row_h + 6.0
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Missing values per column">'
+    ]
+    for index, row in enumerate(columns):
+        rate = float(row["missing_rate"])
+        y = index * row_h + 3.0
+        bar_w = max(2.0, rate * track_w)
+        # 20% is where the profile promotes missingness to a finding, so the bar
+        # and the findings list agree about what counts as a lot.
+        css = "chart-bar-flagged" if rate >= 0.2 else "chart-bar"
+        title = f"{row['column']}: {int(row['missing_count']):,} missing ({rate:.1%})"
         parts.append(
             f"<g><title>{escape(title)}</title>"
-            f'<text class="chart-label" x="0" y="{y + 15:.1f}">'
-            f"{escape(_truncate(name, 16))}</text>"
+            f'<text class="chart-label" x="0" y="{y + 14:.1f}">'
+            f"{escape(_truncate(str(row['column']), 20))}</text>"
+            f'<rect class="chart-rail" x="{label_w}" y="{y + 4:.1f}" '
+            f'width="{track_w:.1f}" height="12" rx="3"></rect>'
             f'<rect class="{css}" x="{label_w}" y="{y + 4:.1f}" '
-            f'width="{bar_w:.1f}" height="14" rx="3"></rect>'
-            f'<text class="chart-label" x="{label_w + bar_w + 8:.1f}" '
-            f'y="{y + 15:.1f}">{count:,}</text></g>'
+            f'width="{bar_w:.1f}" height="12" rx="3"></rect>'
+            f'<text class="chart-label" x="{width:.0f}" y="{y + 14:.1f}" '
+            f'text-anchor="end">{rate:.1%}</text></g>'
         )
     parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def _heatmap_svg(
+    labels: list[str],
+    cells: dict[tuple[str, str], dict[str, Any]],
+    *,
+    aria_label: str,
+    diagonal: str,
+) -> Markup:
+    """A square matrix of intensity cells, with the number printed when it fits.
+
+    Colour alone would make the strongest pairs invisible to a reader who cannot
+    distinguish the shades, so every cell carries its value as text at readable
+    grid sizes and as a tooltip at all sizes.
+    """
+    if len(labels) < 2:
+        return Markup("")
+    count = len(labels)
+    label_w = 118.0
+    cell = max(24.0, min(46.0, 620.0 / count))
+    width = label_w + cell * count + 8
+    height = label_w + cell * count + 8
+    show_text = cell >= 34.0
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart heat" '
+        f'aria-label="{escape(aria_label)}">'
+    ]
+    for index, name in enumerate(labels):
+        y = label_w + index * cell + cell / 2 + 3.5
+        parts.append(
+            f'<text class="chart-label" x="{label_w - 8:.1f}" y="{y:.1f}" '
+            f'text-anchor="end">{escape(_truncate(name, 16))}</text>'
+        )
+        x = label_w + index * cell + cell / 2
+        parts.append(
+            f'<text class="chart-label" x="{x:.1f}" y="{label_w - 8:.1f}" '
+            f'text-anchor="start" transform="rotate(-90 {x:.1f} '
+            f'{label_w - 8:.1f})">{escape(_truncate(name, 16))}</text>'
+        )
+
+    for row, left in enumerate(labels):
+        for column, right in enumerate(labels):
+            x = label_w + column * cell
+            y = label_w + row * cell
+            if left == right:
+                parts.append(
+                    f'<rect class="heat-diagonal" x="{x:.1f}" y="{y:.1f}" '
+                    f'width="{cell - 2:.1f}" height="{cell - 2:.1f}" rx="2">'
+                    f"<title>{escape(f'{left}: {diagonal}')}</title></rect>"
+                )
+                continue
+            entry = cells.get((left, right)) or cells.get((right, left))
+            if entry is None:
+                parts.append(
+                    f'<rect class="heat-empty" x="{x:.1f}" y="{y:.1f}" '
+                    f'width="{cell - 2:.1f}" height="{cell - 2:.1f}" rx="2">'
+                    f"<title>{escape(f'{left} vs {right}: not comparable')}</title>"
+                    f"</rect>"
+                )
+                continue
+            strength = max(0.0, min(1.0, float(entry["strength"])))
+            css = "heat-cell-negative" if entry.get("negative") else "heat-cell"
+            # A faint floor keeps a near-zero cell visible as "measured, weak"
+            # rather than looking like a hole in the matrix.
+            opacity = 0.07 + 0.88 * strength
+            parts.append(
+                f"<g><title>{escape(str(entry['title']))}</title>"
+                f'<rect class="{css}" x="{x:.1f}" y="{y:.1f}" '
+                f'width="{cell - 2:.1f}" height="{cell - 2:.1f}" rx="2" '
+                f'style="fill-opacity:{opacity:.3f}"></rect>'
+            )
+            if show_text:
+                text_css = (
+                    "heat-value heat-value-light" if strength >= 0.6 else "heat-value"
+                )
+                parts.append(
+                    f'<text class="{text_css}" x="{x + (cell - 2) / 2:.1f}" '
+                    f'y="{y + (cell - 2) / 2 + 3.5:.1f}" text-anchor="middle">'
+                    f"{escape(entry['label'])}</text>"
+                )
+            parts.append("</g>")
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def association_heatmap_svg(matrix: dict[str, Any]) -> Markup:
+    """Every measured column pair, coloured by association strength."""
+    labels = [str(name) for name in matrix.get("columns", [])]
+    method_names = {
+        "spearman": "Spearman rho",
+        "cramers_v": "Cramer's V",
+        "correlation_ratio": "correlation ratio",
+    }
+    cells: dict[tuple[str, str], dict[str, Any]] = {}
+    for pair in matrix.get("pairs", []):
+        strength = float(pair["strength"])
+        signed = pair.get("method") == "spearman"
+        rho = float(pair["spearman"]) if signed else None
+        label = f"{rho:+.2f}"[:5] if signed and rho is not None else f"{strength:.2f}"
+        method = method_names.get(str(pair.get("method")), str(pair.get("method")))
+        cells[(str(pair["left"]), str(pair["right"]))] = {
+            "strength": strength,
+            "negative": bool(signed and rho is not None and rho < 0),
+            "label": label,
+            "title": (f"{pair['left']} vs {pair['right']}: {label} ({method})"),
+        }
+    return _heatmap_svg(
+        labels,
+        cells,
+        aria_label="Association strength between columns",
+        diagonal="a column against itself",
+    )
+
+
+def co_missing_heatmap_svg(co_missing: dict[str, Any]) -> Markup:
+    """How often two columns are missing on the same row."""
+    labels = [str(name) for name in co_missing.get("columns", [])]
+    cells: dict[tuple[str, str], dict[str, Any]] = {}
+    for pair in co_missing.get("pairs", []):
+        jaccard = float(pair["jaccard"])
+        cells[(str(pair["left"]), str(pair["right"]))] = {
+            "strength": jaccard,
+            "negative": False,
+            "label": f"{jaccard:.2f}",
+            "title": (
+                f"{pair['left']} and {pair['right']}: "
+                f"{int(pair['both_missing']):,} rows missing both "
+                f"(overlap {jaccard:.0%})"
+            ),
+        }
+    return _heatmap_svg(
+        labels,
+        cells,
+        aria_label="Columns whose missing values coincide",
+        diagonal="a column against itself",
+    )
+
+
+def timeline_svg(timeline: dict[str, Any]) -> Markup:
+    """Row counts over time, so collection gaps are visible rather than inferred."""
+    buckets = timeline.get("buckets", [])
+    if not buckets:
+        return Markup("")
+    width, height = 680.0, 150.0
+    pad_l, pad_r, pad_t = 14.0, 14.0, 12.0
+    plot_h = 100.0
+    counts = [int(bucket["count"]) for bucket in buckets]
+    max_count = max(counts) or 1
+    span = max(1, len(buckets))
+    bar_w = max(1.0, (width - pad_l - pad_r) / span - 1.2)
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Rows over time for {escape(timeline.get("column", ""))}">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t + plot_h}" '
+        f'x2="{width - pad_r}" y2="{pad_t + plot_h}"></line>',
+    ]
+    for index, bucket in enumerate(buckets):
+        count = int(bucket["count"])
+        left = pad_l + index * (width - pad_l - pad_r) / span
+        bar_h = (count / max_count) * plot_h
+        start = str(bucket["start"])[:10]
+        parts.append(
+            f"<g><title>{escape(f'{start}: {count:,} row(s)')}</title>"
+            f'<rect class="chart-bar" x="{left:.1f}" '
+            f'y="{pad_t + plot_h - bar_h:.1f}" width="{bar_w:.1f}" '
+            f'height="{bar_h:.1f}" rx="1.5"></rect></g>'
+        )
+    granularity = str(timeline.get("granularity", ""))
+    parts.append(
+        f'<text class="chart-label" x="{pad_l}" y="{height - 6}" '
+        f'text-anchor="start">{escape(str(timeline.get("min", ""))[:10])}</text>'
+        f'<text class="chart-label" x="{width / 2:.0f}" y="{height - 6}" '
+        f'text-anchor="middle">rows per {escape(granularity)}</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 6}" '
+        f'text-anchor="end">{escape(str(timeline.get("max", ""))[:10])}</text>'
+        "</svg>"
+    )
     return Markup("".join(parts))
 
 

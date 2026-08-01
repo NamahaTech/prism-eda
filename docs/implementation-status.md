@@ -25,10 +25,29 @@ removed, or materially re-scoped.
 ### Baseline profile
 
 - Dataset/table shape and memory summaries
-- Missingness, distinctness, duplicates, constants, top values, and basic robust
-  numeric summaries
+- Missingness, distinctness, duplicates, constants, top values, and robust
+  numeric summaries including quantiles, skewness, kurtosis, zero/negative/
+  infinite counts, and per-column memory
 - Initial semantic-role candidates
-- Prioritized findings with evidence lineage
+- Prioritized findings with evidence lineage, split into **issues** (data-quality
+  defects) and **alerts** (true-but-not-broken observations) via
+  `Finding.category`
+- Data-quality detectors: case/whitespace label variants, disguised missing
+  values (text placeholders and repeated negative sentinels), numbers stored as
+  text, mixed Python types, text dates, mixed date layouts, ambiguous day/month
+  order, placeholder and implausible dates, future-dated rows, reversed
+  start/end date pairs, duplicate columns, unnamed columns, and mangled
+  duplicate headers — all computed on every row, never sampled
+- Per-column distribution shape labels, and best-fit distribution family
+  (Normal, Log-normal, Exponential, Gamma, Weibull, Uniform, Beta, Poisson)
+  selected by AIC with explicit abstention and no p-values
+- Mixed-type association matrix (Spearman/Pearson, bias-corrected Cramér's V,
+  correlation ratio) with per-pair method recorded
+- Scatter interactions: ranked highlight pairs plus a pre-rendered explorer
+- Missingness bars and pairwise co-missingness structure
+- Head/tail sample rows and duplicate-row groups
+- `detail="standard" | "full"` budgets, with every truncation reported as a
+  warning and on the page
 
 ### Schema discovery
 

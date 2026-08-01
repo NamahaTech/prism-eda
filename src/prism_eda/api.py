@@ -6,7 +6,12 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from prism_eda.catalog.loaders import DataSource
-from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
+from prism_eda.config import (
+    AnalysisConfig,
+    AnalysisContext,
+    AnalysisMode,
+    DetailLevel,
+)
 from prism_eda.dataset import Dataset
 from prism_eda.events import EventCallback
 from prism_eda.image_dataset import ImageDataset, ImageSource
@@ -45,6 +50,7 @@ def profile(
     sampling: str = "auto",
     random_seed: int = 42,
     allow_insufficient_evidence: bool = False,
+    detail: DetailLevel = "standard",
     recursive: bool = False,
     include: Sequence[str] | None = None,
     exclude: Sequence[str] | None = None,
@@ -68,6 +74,7 @@ def profile(
         sampling=sampling,
         random_seed=random_seed,
         allow_insufficient_evidence=allow_insufficient_evidence,
+        detail=detail,
     )
 
 

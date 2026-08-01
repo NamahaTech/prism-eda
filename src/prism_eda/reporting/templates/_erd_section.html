@@ -67,10 +67,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="{{ node.width }}" height="{{ node.height }}" viewBox="0 0 {{ node.width }} {{ node.height }}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"><style>{{ erd_card_css }}</style>{{ table_card(node) }}</svg>
 {%- endmacro %}
 
-      {% set section_index.n = section_index.n + 1 %}
-      <section class="wide">
+      <section class="wide" id="section-erd">
         <div class="sec-head">
-          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+          <div class="sec-idx">{{ sections.number('erd') }}</div>
           <div class="sec-title">
             <h2>{{ artifact.title }}</h2>
             <p>Evidence-backed candidates, not declared constraints. Scroll to zoom, drag the canvas to pan, drag a table to rearrange, click a table to focus its relationships; toggle tables to declutter.</p>

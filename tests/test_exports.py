@@ -33,10 +33,12 @@ def test_html_export_is_self_contained(tmp_path) -> None:
     html = target.read_text(encoding="utf-8")
 
     assert "<!doctype html>" in html
-    assert "Decision-first data profile" in html
     assert "Dataset fingerprint" in html
     assert "https://" not in html
     assert "<style>" in html
+    # The report names the data it profiled, and carries no product copy.
+    assert "Decision-first data profile" not in html
+    assert "backed by structured evidence" not in html
 
 
 def test_html_renders_category_values(tmp_path) -> None:
@@ -46,7 +48,7 @@ def test_html_renders_category_values(tmp_path) -> None:
                 "group": ["a", "a", "b"] * 1200,
                 "flag": [True, True, False] * 1200,
                 # 120 uniques over 3,600 rows (3.3%): categorical with a
-                # high-cardinality warning and a "+N more" coverage note.
+                # high-cardinality warning and a folded "other" bucket.
                 "many_codes": [f"code_{i:03d}" for i in range(120)] * 30,
             }
         )
@@ -54,11 +56,14 @@ def test_html_renders_category_values(tmp_path) -> None:
     target = result.to_html(tmp_path / "report.html")
     html = target.read_text(encoding="utf-8")
 
-    assert "No numeric range" not in html
-    assert "<code>a <b>67%</b></code>" in html
-    assert "<code>True <b>67%</b></code>" in html
+    # Category frequencies render as a bar chart, labelled and titled.
+    assert "Value frequencies for group" in html
+    assert "a: 2,400 row(s), 66.7%" in html
+    assert "True: 2,400 row(s), 66.7%" in html
     assert "High cardinality for a categorical column" in html
-    assert "+115 more · top 5 cover" in html
+    # The long tail is folded, and the report says how much it folded.
+    assert "other (105 more)" in html
+    assert "further label(s) are folded into" in html
 
 
 def test_interactive_export_falls_back_without_plotly(tmp_path, monkeypatch) -> None:

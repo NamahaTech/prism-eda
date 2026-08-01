@@ -26,6 +26,7 @@ class ColumnCatalog:
     missing_rate: float
     unique_count: int | None
     unique_rate: float | None
+    memory_bytes: int | None = None
     statistics: dict[str, Any] = field(default_factory=dict)
     top_values: tuple[dict[str, Any], ...] = ()
     warnings: tuple[str, ...] = ()

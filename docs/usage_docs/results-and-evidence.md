@@ -77,6 +77,7 @@ top = result.findings[0]
 print("id:        ", top.id)
 print("title:     ", top.title)
 print("severity:  ", top.severity)       # critical | high | medium | low | info
+print("category:  ", top.category)       # quality_issue | observation
 print("confidence:", top.confidence)
 print("evidence:  ", top.evidence_ids)
 print("recommend: ", top.recommendation)
@@ -86,6 +87,7 @@ print("recommend: ", top.recommendation)
 id:         finding_48e5033c56d58367
 title:      Potential target leakage: exit_survey_sent
 severity:   critical
+category:   quality_issue
 confidence: 0.92
 evidence:   ('ev_0b5b3e6d53fc6712',)
 recommend:  Confirm the feature is available before prediction time and is not derived from the label.
@@ -94,6 +96,28 @@ recommend:  Confirm the feature is available before prediction time and is not d
 Findings arrive **already sorted** — most-severe first, then by descending
 confidence — so `result.findings[0]` is always the thing most worth your
 attention.
+
+### Issues and observations
+
+`category` separates two kinds of conclusion that should not share a list:
+
+- `quality_issue` — something is *wrong* with the data. This is the default, and
+  what every recipe produced before the field existed.
+- `observation` — something is *true of* the data and worth knowing, but is not a
+  defect: two columns that move together, a column that is all-unique, the window
+  a timestamp covers.
+
+`split_findings()` returns both lists, each already severity-sorted:
+
+```python
+from prism_eda.evidence.models import split_findings
+
+issues, observations = split_findings(result.findings)
+```
+
+The HTML report renders them as separate **Issues** and **Alerts** sections. The
+[baseline profile](profile.md) is currently the recipe that raises observations;
+the others report issues only.
 
 ## Evidence
 

@@ -2,22 +2,40 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+from typing import TypeVar
+
+import pandas as pd
+
+from prism_eda.analysis._limits import ProfileLimits
+from prism_eda.analysis.associations import build_observations
+from prism_eda.analysis.distributions import build_distribution_evidence
+from prism_eda.analysis.quality_checks import build_quality_findings
 from prism_eda.catalog.models import DatasetCatalog
-from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
+from prism_eda.config import (
+    AnalysisConfig,
+    AnalysisContext,
+    AnalysisMode,
+    DetailLevel,
+)
 from prism_eda.events import Event, EventCallback, EventKind, emit
 from prism_eda.evidence.models import (
     Evidence,
     EvidenceScope,
     Finding,
     sort_findings,
+    split_findings,
 )
 from prism_eda.results import (
     AnalysisFailure,
     AnalysisResult,
     AnalysisStatus,
     AnalysisWarning,
+    SamplingRecord,
 )
 from prism_eda.transformations.models import TransformationPlan, TransformationStep
+
+_T = TypeVar("_T")
 
 
 def _table_evidence(catalog: DatasetCatalog) -> list[Evidence]:
@@ -77,6 +95,7 @@ def _table_evidence(catalog: DatasetCatalog) -> list[Evidence]:
 def _findings_and_plan(
     catalog: DatasetCatalog, evidence: list[Evidence]
 ) -> tuple[list[Finding], list[TransformationStep]]:
+    """Promote the catalog's own numbers into duplicate/missing/constant issues."""
     by_scope = {
         (item.scope.table, item.scope.columns): item
         for item in evidence
@@ -189,11 +208,52 @@ def _findings_and_plan(
     return sort_findings(findings), steps
 
 
+def _run_optional(
+    stage: str,
+    table: str,
+    failures: list[AnalysisFailure],
+    work: Callable[[], _T],
+) -> _T | None:
+    """Run an optional stage, recording a failure instead of aborting the run.
+
+    Invariant 7: optional metric failures are recorded and analysis continues.
+    The catalog-level profile is still true without the charts.
+    """
+    try:
+        return work()
+    except Exception as error:  # noqa: BLE001 - optional stage, recorded below
+        failures.append(
+            AnalysisFailure(
+                stage=stage,
+                message=f"{stage.replace('_', ' ').capitalize()} failed: {error}",
+                recoverable=True,
+                table=table,
+            )
+        )
+        return None
+
+
+def _counts_phrase(issues: list[Finding], observations: list[Finding]) -> str:
+    """Say what was found, keeping defects and observations visibly separate."""
+    if not issues and not observations:
+        return "no data-quality issues"
+    parts = []
+    if issues:
+        parts.append(f"{len(issues)} data-quality issue(s)")
+    if observations:
+        parts.append(f"{len(observations)} observation(s)")
+    if not issues:
+        return f"no data-quality issues and {parts[0]}"
+    return " and ".join(parts)
+
+
 def profile_dataset(
+    tables: Mapping[str, pd.DataFrame],
     catalog: DatasetCatalog,
     *,
     context: AnalysisContext,
     config: AnalysisConfig,
+    detail: DetailLevel = "standard",
     callbacks: tuple[EventCallback, ...] = (),
 ) -> AnalysisResult:
     """Build a concise baseline profile from an exact dataset catalog."""
@@ -210,6 +270,84 @@ def profile_dataset(
         ),
     )
     evidence = _table_evidence(catalog)
+    limits = ProfileLimits.for_detail(detail)
+    extra_findings: list[Finding] = []
+    extra_steps: list[TransformationStep] = []
+    optional_failures: list[AnalysisFailure] = []
+    optional_warnings: list[AnalysisWarning] = []
+    sampling_records: list[SamplingRecord] = []
+
+    for table in catalog.tables:
+        frame = tables.get(table.name)
+        if frame is None:
+            continue
+
+        quality = _run_optional(
+            "quality_checks",
+            table.name,
+            optional_failures,
+            lambda: build_quality_findings(frame, table),
+        )
+        if quality is not None:
+            quality_evidence, quality_findings, quality_steps = quality
+            evidence.extend(quality_evidence)
+            extra_findings.extend(quality_findings)
+            extra_steps.extend(quality_steps)
+
+        charts = _run_optional(
+            "distributions",
+            table.name,
+            optional_failures,
+            lambda: build_distribution_evidence(
+                frame,
+                table,
+                chart_columns=limits.chart_columns,
+                fit_rows=limits.fit_rows,
+            ),
+        )
+        if charts is not None:
+            chart_evidence, skipped = charts
+            evidence.extend(chart_evidence)
+            if skipped:
+                optional_warnings.append(
+                    AnalysisWarning(
+                        code="chart_columns_capped",
+                        message=(
+                            f"{table.name} has more columns than the "
+                            f"{limits.chart_columns}-column chart budget; "
+                            f"{len(skipped)} column(s) are profiled without a "
+                            "chart. Pass detail='full' to chart them all."
+                        ),
+                        table=table.name,
+                    )
+                )
+
+        column_evidence = {
+            item.scope.columns[0]: item.id
+            for item in evidence
+            if item.kind == "column_profile"
+            and item.scope.table == table.name
+            and item.scope.columns
+        }
+        observed = _run_optional(
+            "associations",
+            table.name,
+            optional_failures,
+            lambda: build_observations(
+                frame,
+                table,
+                column_evidence,
+                limits=limits,
+                seed=config.random_seed,
+            ),
+        )
+        if observed is not None:
+            found_evidence, found, found_warnings, found_sampling = observed
+            evidence.extend(found_evidence)
+            extra_findings.extend(found)
+            optional_warnings.extend(found_warnings)
+            sampling_records.extend(found_sampling)
+
     for item in evidence:
         emit(
             callbacks,
@@ -220,9 +358,12 @@ def profile_dataset(
                 data={"evidence_id": item.id, "kind": item.kind},
             ),
         )
-    findings, steps = _findings_and_plan(catalog, evidence)
-    warnings: list[AnalysisWarning] = []
-    failures: list[AnalysisFailure] = []
+    catalog_findings, catalog_steps = _findings_and_plan(catalog, evidence)
+    findings = sort_findings([*catalog_findings, *extra_findings])
+    steps = [*catalog_steps, *extra_steps]
+    issues, observations = split_findings(findings)
+    warnings: list[AnalysisWarning] = list(optional_warnings)
+    failures: list[AnalysisFailure] = list(optional_failures)
     for table in catalog.tables:
         for warning in table.warnings:
             failures.append(
@@ -252,14 +393,14 @@ def profile_dataset(
         status = AnalysisStatus.COMPLETED_WITH_WARNINGS
         summary = (
             f"Profiled {catalog.table_count} table(s) and found "
-            f"{len(findings)} prioritized issue(s); some optional metrics failed."
+            f"{_counts_phrase(issues, observations)}; some optional metrics failed."
         )
     else:
         status = AnalysisStatus.COMPLETED
         summary = (
             f"Profiled {catalog.table_count} table(s), {catalog.row_count:,} rows, "
-            f"and {catalog.column_count} columns; found {len(findings)} prioritized "
-            "issue(s)."
+            f"and {catalog.column_count} columns; found "
+            f"{_counts_phrase(issues, observations)}."
         )
 
     result = AnalysisResult(
@@ -272,11 +413,15 @@ def profile_dataset(
         assumptions=context.assumptions,
         warnings=tuple(warnings),
         failures=tuple(failures),
+        sampling=tuple(sampling_records),
         transformation_plan=TransformationPlan(tuple(steps)),
         metadata={
             "mode": AnalysisMode(config.mode).value,
             "sampling": config.sampling,
             "random_seed": config.random_seed,
+            "detail": detail,
+            "issue_count": len(issues),
+            "observation_count": len(observations),
         },
     )
     emit(
