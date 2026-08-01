@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prism EDA Report</title>
+  <title>{{ dataset_title }} — Prism EDA</title>
   {#- Brand mark: a beam enters an equilateral prism and the spectrum emerges
       staggered along the right face, each ray fanning out at its own angle. -#}
   {% set prism_logo %}<svg viewBox="0 0 34 34" fill="none" aria-hidden="true">
@@ -59,6 +59,7 @@
       text-rendering: optimizeLegibility;
     }
     .mono, .num { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     a { color: var(--accent-ink); text-underline-offset: 2px; }
 
     /* ---------- layout ---------- */
@@ -104,6 +105,15 @@
     .stat .n { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
     .stat .l { margin-top: 7px; font-size: 12px; letter-spacing: .04em; color: var(--ink-2); }
     .stat.flag .n { color: var(--high); }
+
+    /* ---------- section navigation ---------- */
+    .navbar { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.94); backdrop-filter: saturate(1.4) blur(8px); border-bottom: 1px solid var(--line); }
+    .navbar-inner { width: min(1200px, calc(100% - 48px)); margin: 0 auto; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin; padding: 0; }
+    .navbar a { flex: none; padding: 11px 12px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+    .navbar a:hover { color: var(--ink); }
+    .navbar a[aria-current="true"] { color: var(--accent-ink); border-bottom-color: var(--accent); }
+    /* Anchors land below the sticky bar rather than under it. */
+    section[id] { scroll-margin-top: 56px; }
 
     /* ---------- section headers ---------- */
     .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 26px; }
@@ -274,6 +284,63 @@
     .shape .shape-note { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-3); }
     .chip-warn { display: block; max-width: 220px; margin-top: 4px; font-size: 11px; line-height: 1.35; color: #7a4d12; background: var(--med-bg); border-radius: 5px; padding: 2px 7px; }
 
+    /* ---------- column cards ---------- */
+    .col-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .col-controls input, .col-controls select { font: inherit; font-size: 13.5px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); min-width: 200px; }
+    .col-controls .count { font-size: 12.5px; color: var(--ink-3); }
+    .col-card { border: 1px solid var(--line); border-radius: var(--radius); background: #fff; padding: 20px 22px; margin-bottom: 14px; }
+    .col-card.is-hidden { display: none; }
+    .col-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .col-head h3 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.015em; overflow-wrap: anywhere; }
+    .col-type { font-size: 12.5px; color: var(--ink-2); }
+    .col-type .mono { color: var(--ink-3); }
+    .col-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .01em; padding: 2px 8px; border-radius: 5px; background: var(--fill); color: var(--ink-2); }
+    .tag.shape { background: #dbeafe; color: #1e40af; }
+    .tag.fit { background: #dcfce7; color: #15803d; }
+    .tag.alert { background: var(--med-bg); color: #7a4d12; }
+    .tag.issue { background: var(--high-bg); color: #7d2020; }
+    .col-body { display: grid; grid-template-columns: minmax(280px, 1.15fr) minmax(240px, 1fr); gap: 22px 30px; margin-top: 16px; align-items: start; }
+    .col-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 26px; }
+    .col-stats div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+    .col-stats dt, .col-stats .k { color: var(--ink-2); }
+    .col-stats .v { font-family: var(--mono); font-feature-settings: "tnum" 1; color: var(--ink); white-space: nowrap; }
+    .col-stats .v.flag { color: #a13b3b; }
+    .col-chart { min-width: 0; }
+    .col-chart svg { max-width: 100%; height: auto; }
+    .col-note { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-3); }
+    .col-more { margin-top: 14px; }
+    .col-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); list-style: none; }
+    .col-more > summary::-webkit-details-marker { display: none; }
+    .col-more > summary::after { content: " +"; }
+    .col-more[open] > summary::after { content: " –"; }
+    .col-more-body { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+    .kv { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; }
+    .kv span { display: inline-flex; gap: 7px; }
+    .kv .k { color: var(--ink-3); }
+    .kv .v { font-family: var(--mono); }
+
+    /* ---------- heatmaps ---------- */
+    .heat-cell { fill: var(--accent); }
+    .heat-cell-negative { fill: #b3792a; }
+    .heat-diagonal { fill: var(--fill); }
+    .heat-empty { fill: transparent; stroke: var(--line-2); stroke-width: 1; }
+    .heat-value { font-family: var(--mono); font-size: 10px; fill: var(--ink); }
+    .heat-value-light { fill: #fff; }
+    .chart-rail { fill: var(--fill); }
+
+    /* ---------- scatter explorer ---------- */
+    .explorer-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+    .explorer-controls select { font: inherit; font-size: 13.5px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+    .explorer-plot { display: none; }
+    .explorer-plot.is-active { display: block; }
+    .explorer-empty { padding: 18px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--ink-2); font-size: 13.5px; }
+    .pair-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+    .pair { border: 1px solid var(--line); border-radius: var(--radius); background: #fff; padding: 16px 18px; }
+    .pair h3 { margin: 0 0 2px; font-size: 15px; font-weight: 700; }
+    .pair p { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-2); }
+    .pair svg { max-width: 100%; height: auto; }
+
     /* ---------- schema entity-relationship diagram ---------- */
     .schema-wrap { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
     .er-legend { display: flex; flex-wrap: wrap; gap: 10px 0; margin: 12px 0 0; color: var(--ink-3); font-size: 12px; }
@@ -392,10 +459,23 @@
       .mast-meta { gap: 8px 14px; font-size: 11.5px; }
       .stat { min-width: 40%; }
       .rel-controls select { max-width: 44vw; }
+      /* One column below this width: the stat grid and its chart cannot both
+         be legible side by side on a phone. */
+      .col-body { grid-template-columns: minmax(0, 1fr); }
+      .col-stats { grid-template-columns: minmax(0, 1fr); }
+      .col-card { padding: 16px; }
+      .col-controls input, .col-controls select { min-width: 0; flex: 1 1 140px; }
+      .pair-grid { grid-template-columns: minmax(0, 1fr); }
+      .navbar-inner { width: calc(100% - 16px); }
     }
     @media print {
       body { background: #fff; }
       .controls, .erd-controls, .erd-tables { display: none; }
+      /* The navigation bar and the column filter are screen affordances. */
+      .navbar, .col-controls, .explorer-controls { display: none !important; }
+      .col-card { break-inside: avoid; }
+      /* Print every explorer pair rather than only the selected one. */
+      .explorer-plot { display: block !important; }
       /* canvas rendering prints poorly — fall back to the static SVG */
       #erd-cy, .erd-warning, .erd-toolbar { display: none !important; }
       .erd--cy .erd-svg { display: block !important; }
@@ -424,6 +504,9 @@
     </div>
     <div class="mast-meta">
       <span><span class="k">Recipe</span>&nbsp; <span class="mono">{{ result.goal }}</span></span>
+      {% if source_location %}
+      <span><span class="k">Source</span>&nbsp; <span class="mono">{{ source_location }}</span></span>
+      {% endif %}
     </div>
     <div class="spectrum-rule"></div>
   </header>
@@ -443,7 +526,7 @@
       {%- elif result.goal == 'image_profile' -%}
         Image dataset quality profile
       {%- else -%}
-        Decision-first data profile
+        {{ dataset_title }}
       {%- endif -%}
     </h1>
     <p class="lede">{{ result.summary }}</p>
@@ -454,6 +537,9 @@
       <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.column_count | format_value }}</div><div class="l">{% if result.goal == 'image_profile' %}Manifest fields{% else %}Columns{% endif %}</div></div>
       {% if result.goal == 'schema_discovery' %}
       <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}</div><div class="l">Candidate relationships</div></div>
+      {% elif result.goal == 'profile' %}
+      <div class="stat{% if issues %} flag{% endif %}" role="listitem"><div class="n mono">{{ issues | length | format_value }}</div><div class="l">Issue{% if issues | length != 1 %}s{% endif %}</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ observations | length | format_value }}</div><div class="l">Alert{% if observations | length != 1 %}s{% endif %}</div></div>
       {% else %}
       <div class="stat" role="listitem"><div class="n mono">{{ result.findings | length | format_value }}</div><div class="l">Finding{% if result.findings | length != 1 %}s{% endif %}</div></div>
       {% if result.goal == 'image_profile' and result.metadata.get('invalid_image_count') %}
@@ -465,6 +551,18 @@
       {% endif %}
     </div>
   </section>
+
+  {# Plain anchors, so the bar still navigates with JavaScript disabled; the
+     script below only adds the active-section highlight. #}
+  {% if sections | length > 1 %}
+  <nav class="navbar" aria-label="Report sections">
+    <div class="navbar-inner">
+      {% for section in sections %}
+      <a href="#{{ section.anchor }}">{{ section.label }}</a>
+      {% endfor %}
+    </div>
+  </nav>
+  {% endif %}
 
   {% set ai = result.metadata.get('ai_interpretation') %}
   {% if ai %}
@@ -498,15 +596,18 @@
   {% endif %}
 
   {% if result.warnings %}
-  <section class="page">
-    <div class="sec-head"><div class="sec-idx">!</div><div class="sec-title"><h2>Evidence warnings</h2></div></div>
+  <section class="page" id="section-warnings">
+    <div class="sec-head"><div class="sec-idx">{{ sections.number('warnings') }}</div><div class="sec-title"><h2>Evidence warnings</h2><p>What this run could not cover, and why.</p></div></div>
     {% for warning in result.warnings %}
     <p class="notice"><strong>{{ warning.code }}</strong>: {{ warning.message }}</p>
     {% endfor %}
+    {% if result.sampling %}
+    {% for record in result.sampling %}
+    <p class="notice"><strong>{{ record.operation }}</strong>: {{ record.sampled_rows | format_value }} of {{ record.source_rows | format_value }} rows, sampled with seed {{ record.seed }} ({{ record.strategy }}).{% for limitation in record.limitations %} {{ limitation }}{% endfor %}</p>
+    {% endfor %}
+    {% endif %}
   </section>
   {% endif %}
-
-  {% set section_index = namespace(n=0) %}
 
   {% if result.goal == 'schema_discovery' %}
     {% for artifact in result.artifacts %}
@@ -515,10 +616,9 @@
       {% endif %}
     {% endfor %}
 
-    {% set section_index.n = section_index.n + 1 %}
-    <section class="page">
+    <section class="page" id="section-keys">
       <div class="sec-head">
-        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-idx">{{ sections.number('keys') }}</div>
         <div class="sec-title"><h2>Candidate keys</h2><p>Minimal combinations only; business confirmation is required.</p></div>
       </div>
       <div class="tbl-wrap">
@@ -536,10 +636,9 @@
     </section>
 
     {% set relationships = result.evidence | selectattr('kind', 'equalto', 'candidate_relationship') | sort(attribute='confidence', reverse=true) | list %}
-    {% set section_index.n = section_index.n + 1 %}
-    <section class="page">
+    <section class="page" id="section-relationships">
       <div class="sec-head">
-        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-idx">{{ sections.number('relationships') }}</div>
         <div class="sec-title"><h2>Candidate relationships</h2><p>Direction runs from the unique parent key to the referencing child columns. Sorted by confidence — filter by table to focus a pair.</p></div>
       </div>
       <div class="rel-controls" data-rel-controls>
@@ -573,10 +672,9 @@
   {% if result.goal not in ('anomaly_detection', 'image_profile') %}
   {% for artifact in result.artifacts %}
     {% if artifact.kind == 'metric_table' %}
-    {% set section_index.n = section_index.n + 1 %}
-    <section class="page">
+    <section class="page" id="section-metrics-{{ loop.index0 }}">
       <div class="sec-head">
-        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-idx">{{ sections.number('metrics-' ~ loop.index0) }}</div>
         <div class="sec-title"><h2>{{ artifact.title }}</h2>{% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}</div>
       </div>
       <div class="tbl-wrap">
@@ -594,15 +692,20 @@
   {% endfor %}
   {% endif %}
 
-  <!-- ============ FINDINGS ============ -->
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="page">
+  <!-- ============ ISSUES ============ -->
+  <section class="page" id="section-issues">
     <div class="sec-head">
-      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
-      <div class="sec-title"><h2>Prioritized findings</h2><p>Ranked by severity so the most important issues are reviewed first.</p></div>
+      <div class="sec-idx">{{ sections.number('issues') }}</div>
+      <div class="sec-title">
+        {% if result.goal == 'profile' %}
+        <h2>Issues</h2><p>Things wrong with the data: values that are missing, duplicated, mistyped, or standing in for something else. Ranked by severity.</p>
+        {% else %}
+        <h2>Prioritized findings</h2><p>Ranked by severity so the most important issues are reviewed first.</p>
+        {% endif %}
+      </div>
     </div>
-    {% if result.findings %}
-      {% for finding in result.findings %}
+    {% if issues %}
+      {% for finding in issues %}
       {% set sev = finding.severity if finding.severity in ['high', 'medium', 'low'] else 'high' %}
       {% set related_tables = namespace(items=[]) %}
       {% if result.goal == 'image_profile' %}
@@ -646,16 +749,35 @@
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No prioritized quality issues were found by the baseline profile.{% endif %}</div>
+      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No data-quality issues were found. Every check that ran is listed in the guide; none of them fired.{% endif %}</div>
     {% endif %}
   </section>
 
+  <!-- ============ ALERTS ============ -->
+  {% if observations %}
+  <section class="page" id="section-alerts">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('alerts') }}</div>
+      <div class="sec-title"><h2>Alerts</h2><p>True of this data, and worth knowing — but not defects. Nothing here needs fixing; some of it changes how you model.</p></div>
+    </div>
+    {% for finding in observations %}
+    <div class="finding alert-finding" style="--sev: var(--low); --sev-bg: var(--low-bg)">
+      <span class="sev-tag">note</span>
+      <div class="finding-body">
+        <h3>{{ finding.title }}</h3>
+        <p>{{ finding.summary }}</p>
+        {% if finding.recommendation %}<p class="rec">{{ finding.recommendation }}</p>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
   <!-- ============ ROWS TO REVIEW ============ -->
   {% for item in result.evidence if item.kind == 'anomaly_consensus_review' and item.value.rows %}
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="page">
+  <section class="page"{% if loop.first %} id="section-rows"{% endif %}>
     <div class="sec-head">
-      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-idx">{{ sections.number('rows') }}</div>
       <div class="sec-title">
         <h2>Rows to review</h2>
         <p>{{ item.value.review_row_count }} of {{ item.value.evaluated_row_count }} row{% if item.value.evaluated_row_count != 1 %}s{% endif %}, ranked by how many independent checks flagged them. Highlighted cells are the values that stand out; expand a row to see how each check flagged it.</p>
@@ -726,10 +848,9 @@
   <!-- ============ FLAGGED IMAGES (contact sheets) ============ -->
   {% set sheets = result.artifacts | selectattr('kind', 'equalto', 'image_contact_sheet') | list %}
   {% if sheets %}
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="page">
+  <section class="page" id="section-flagged-images">
     <div class="sec-head">
-      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-idx">{{ sections.number('flagged-images') }}</div>
       <div class="sec-title">
         <h2>The flagged images</h2>
         <p>Every image the checks above called out, shown rather than listed. Duplicate candidates are paired side by side so you can confirm or dismiss them without opening a file browser.</p>
@@ -785,10 +906,9 @@
   {% set dimension = result.evidence | selectattr('kind', 'equalto', 'image_dimension_distribution') | first %}
   {% set brightness = result.evidence | selectattr('kind', 'equalto', 'image_brightness_distribution') | first %}
   {% set label_evidence = result.evidence | selectattr('kind', 'equalto', 'image_label_distribution') | first %}
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="page">
+  <section class="page" id="section-image-shape">
     <div class="sec-head">
-      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-idx">{{ sections.number('image-shape') }}</div>
       <div class="sec-title">
         <h2>Shape, exposure, and balance</h2>
         <p>One dot per distinct image size — a single dot means the dataset already agrees on a shape, a spread means your resize policy has to make a decision.</p>
@@ -829,11 +949,10 @@
       {% endfor %}
     {% endfor %}
     {% if not linked_to_finding.value %}
-    {% set section_index.n = section_index.n + 1 %}
-    <section class="page">
+    <section class="page" id="section-metrics-{{ loop.index0 }}">
       <details class="deep">
         <summary>
-          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+          <div class="sec-idx">{{ sections.number('metrics-' ~ loop.index0) }}</div>
           <div class="sec-title">
             <h2>{{ artifact.title }}</h2>
             {% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}
@@ -859,10 +978,9 @@
   <!-- ============ DISTRIBUTIONS ============ -->
   {% set distributions = result.evidence | selectattr('kind', 'equalto', 'anomaly_distribution_shape') | list %}
   {% if distributions %}
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="wide">
+  <section class="wide" id="section-distributions">
     <div class="sec-head">
-      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-idx">{{ sections.number('distributions') }}</div>
       <div class="sec-title"><h2>Distributions</h2><p>Where each numeric column's values sit. Bars are row counts; the strip below each shows the median, the middle 50%, and the whiskers. Red marks the flagged values.</p></div>
     </div>
     <div class="chart-grid">
@@ -884,10 +1002,9 @@
 
   <!-- ============ SCATTER ============ -->
   {% for item in result.evidence if item.kind == 'anomaly_scatter_pair' and item.value.points %}
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="page">
+  <section class="page"{% if loop.first %} id="section-scatter"{% endif %}>
     <div class="sec-head">
-      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-idx">{{ sections.number('scatter') }}</div>
       <div class="sec-title"><h2>{{ item.value.y_column }} vs {{ item.value.x_column }}</h2><p>Each point is a row; red points are the flagged rows. Shows whether a flagged row is also unusual in context, not just on one column.</p></div>
     </div>
     <div style="max-width: 760px">{{ item.value | scatter_svg }}</div>
@@ -899,11 +1016,10 @@
   {% if result.goal == 'anomaly_detection' %}
   {% for artifact in result.artifacts %}
     {% if artifact.kind == 'metric_table' %}
-    {% set section_index.n = section_index.n + 1 %}
-    <section class="page">
+    <section class="page" id="section-metrics-{{ loop.index0 }}">
       <details class="deep">
         <summary>
-          <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+          <div class="sec-idx">{{ sections.number('metrics-' ~ loop.index0) }}</div>
           <div class="sec-title">
             <h2>{{ artifact.title }}</h2>
             {% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}
@@ -927,11 +1043,10 @@
 
   <!-- ============ COLUMN PROFILE (deep) ============ -->
   {% for table in result.catalog.tables %}
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="page">
+  <section class="page" id="section-columns-{{ loop.index0 }}">
     <details class="deep"{% if result.goal != 'anomaly_detection' %} open{% endif %}>
       <summary>
-        <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+        <div class="sec-idx">{{ sections.number('columns-' ~ loop.index0) }}</div>
         <div class="sec-title">
           <h2>{{ table.name }}</h2>
           {% if result.goal == 'image_profile' %}
@@ -941,52 +1056,281 @@
           {% endif %}
         </div>
       </summary>
-      <div class="deep-body tbl-wrap">
-        <table>
-          <thead>
-            <tr><th>Column</th><th>Type</th><th>Role candidates</th><th>Missing</th><th class="num">Distinct</th><th>Range / shape</th></tr>
-          </thead>
-          <tbody>
-            {% for column in table.columns %}
-            <tr>
-              <td><strong>{{ column.name }}</strong><br><span class="mono" style="color:var(--ink-3);font-size:11px">{{ column.physical_type }}</span></td>
-              <td>
-                {{ column.semantic_type }}
-                {% for warning in column.warnings %}<span class="chip-warn">{{ warning }}</span>{% endfor %}
-              </td>
-              <td>{% if column.roles %}{% for role in column.roles %}<span class="role">{{ role }}</span>{% endfor %}{% else %}<span style="color:var(--ink-3)">None inferred</span>{% endif %}</td>
-              <td>
-                <div class="miss"><span class="num">{{ "%.1f%%" | format(column.missing_rate * 100) }}</span><div class="mbar"><span style="width: {{ [column.missing_rate * 100, 100] | min }}%"></span></div></div>
-              </td>
-              <td class="num">{{ column.unique_count | format_value }}{% if column.unique_rate is not none %} · {{ "%.1f%%" | format(column.unique_rate * 100) }}{% endif %}</td>
-              <td class="shape">
-                {% if column.semantic_type in ('categorical', 'boolean') and column.top_values and column.row_count %}
-                  {% set shown = column.top_values[:5] %}
-                  {% set covered = shown | sum(attribute='count') %}
-                  {% for item in shown %}<code>{% if item.value is none %}(missing){% else %}{{ item.value | string | truncate(24, true, '…') }}{% endif %} <b>{{ "%.0f%%" | format(item.count / column.row_count * 100) }}</b></code>{% endfor %}
-                  {% if column.unique_count is not none and column.unique_count > shown | length %}
-                  <span class="shape-note">+{{ (column.unique_count - (shown | length)) | format_value }} more · top {{ shown | length }} cover {{ "%.0f%%" | format(covered / column.row_count * 100) }} of rows</span>
-                  {% endif %}
-                {% elif column.statistics %}
-                  {% for key, value in column.statistics.items() %}<code>{{ key }} <b>{{ value | format_value }}</b></code>{% endfor %}
-                {% else %}
-                  <span style="color:var(--ink-3)">No values</span>
-                {% endif %}
-              </td>
-            </tr>
+      <div class="deep-body">
+        {# Filter box is progressive enhancement: with JS off every card shows. #}
+        <div class="col-controls" data-col-controls>
+          <label class="sr-only" for="colFilter{{ loop.index0 }}">Filter columns</label>
+          <input type="search" id="colFilter{{ loop.index0 }}" placeholder="Filter columns by name or type" data-col-filter>
+          <select data-col-type>
+            <option value="">All types</option>
+            {% for kind in table.columns | map(attribute='semantic_type') | unique | sort %}
+            <option value="{{ kind }}">{{ kind }}</option>
             {% endfor %}
-          </tbody>
-        </table>
+          </select>
+          <span class="count" data-col-count>{{ table.columns | length }} columns</span>
+        </div>
+
+        {% for column in table.columns %}
+        {% set stats = column.statistics %}
+        {% set distribution = column_charts.get((table.name, column.name)) %}
+        {% set frequency = column_frequencies.get((table.name, column.name)) %}
+        {% set timeline = column_timelines.get((table.name, column.name)) %}
+        {% set shape = distribution.shape if distribution else none %}
+        {% set fit = distribution.fit if distribution else none %}
+        <div class="col-card" data-col-card data-col-name="{{ column.name | lower }}" data-col-type="{{ column.semantic_type }}">
+          <div class="col-head">
+            <h3>{{ column.name }}</h3>
+            <span class="col-type">{{ column.semantic_type }} · <span class="mono">{{ column.physical_type }}</span></span>
+          </div>
+          <div class="col-tags">
+            {% if shape %}<span class="tag shape">{{ shape.label }}</span>{% endif %}
+            {% if fit and fit.family %}<span class="tag fit">fits {{ fit.label }}</span>{% endif %}
+            {% for role in column.roles %}<span class="tag">{{ role | replace('_candidate', '') | replace('_', ' ') }}</span>{% endfor %}
+            {% if column.missing_rate >= 0.2 %}<span class="tag issue">{{ "%.0f%%" | format(column.missing_rate * 100) }} missing</span>{% endif %}
+            {% if column.unique_count == 1 %}<span class="tag issue">constant</span>{% endif %}
+            {% if column.unique_count is not none and column.row_count and column.unique_count == column.row_count %}<span class="tag alert">all unique</span>{% endif %}
+          </div>
+
+          <div class="col-body">
+            <div class="col-stats">
+              <div><span class="k">Distinct</span><span class="v">{{ column.unique_count | format_value }}{% if column.unique_rate is not none %} · {{ "%.1f%%" | format(column.unique_rate * 100) }}{% endif %}</span></div>
+              <div><span class="k">Missing</span><span class="v{% if column.missing_rate >= 0.2 %} flag{% endif %}">{{ column.missing_count | format_value }} · {{ "%.1f%%" | format(column.missing_rate * 100) }}</span></div>
+              {% if column.semantic_type == 'numeric' %}
+              <div><span class="k">Minimum</span><span class="v">{{ stats.get('min') | format_value }}</span></div>
+              <div><span class="k">Maximum</span><span class="v">{{ stats.get('max') | format_value }}</span></div>
+              <div><span class="k">Mean</span><span class="v">{{ stats.get('mean') | format_value }}</span></div>
+              <div><span class="k">Median</span><span class="v">{{ stats.get('median') | format_value }}</span></div>
+              <div><span class="k">Zeros</span><span class="v">{{ stats.get('zero_count') | format_value }}</span></div>
+              <div><span class="k">Negative</span><span class="v">{{ stats.get('negative_count') | format_value }}</span></div>
+              {% if stats.get('infinite_count') %}
+              <div><span class="k">Infinite</span><span class="v flag">{{ stats.get('infinite_count') | format_value }}</span></div>
+              {% endif %}
+              {% elif column.semantic_type == 'datetime' %}
+              <div><span class="k">Earliest</span><span class="v">{{ stats.get('min') | format_value }}</span></div>
+              <div><span class="k">Latest</span><span class="v">{{ stats.get('max') | format_value }}</span></div>
+              {% elif column.semantic_type == 'text' %}
+              <div><span class="k">Shortest</span><span class="v">{{ stats.get('min_length') | format_value }}</span></div>
+              <div><span class="k">Longest</span><span class="v">{{ stats.get('max_length') | format_value }}</span></div>
+              <div><span class="k">Mean length</span><span class="v">{{ stats.get('mean_length') | format_value }}</span></div>
+              {% elif column.top_values %}
+              <div><span class="k">Most common</span><span class="v">{% if column.top_values[0].value is none %}(missing){% else %}{{ column.top_values[0].value | string | truncate(18, true, '…') }}{% endif %}</span></div>
+              <div><span class="k">Its share</span><span class="v">{{ "%.1f%%" | format(column.top_values[0].count / column.row_count * 100) }}</span></div>
+              {% endif %}
+              {% if column.memory_bytes is not none %}
+              <div><span class="k">In memory</span><span class="v">{{ column.memory_bytes | filesizeformat }}</span></div>
+              {% endif %}
+            </div>
+
+            <div class="col-chart">
+              {% if distribution %}
+                {{ distribution | histogram_svg(true) }}
+                {% if shape and shape.descriptors %}<p class="col-note">{{ shape.descriptors | join('; ') }}</p>{% endif %}
+              {% elif frequency %}
+                {{ frequency | category_bars_svg }}
+              {% elif timeline %}
+                {{ timeline | timeline_svg }}
+              {% elif column.top_values and column.row_count %}
+                <div class="shape">
+                  {% for item in column.top_values[:6] %}<code>{% if item.value is none %}(missing){% else %}{{ item.value | string | truncate(24, true, '…') }}{% endif %} <b>{{ "%.0f%%" | format(item.count / column.row_count * 100) }}</b></code>{% endfor %}
+                </div>
+              {% else %}
+                <p class="col-note">No chart for this column.</p>
+              {% endif %}
+            </div>
+          </div>
+
+          {% for warning in column.warnings %}<span class="chip-warn">{{ warning }}</span>{% endfor %}
+
+          <details class="col-more">
+            <summary>More details</summary>
+            <div class="col-more-body">
+              <div class="kv">
+                <span><span class="k">rows</span><span class="v">{{ column.row_count | format_value }}</span></span>
+                <span><span class="k">non-null</span><span class="v">{{ column.non_null_count | format_value }}</span></span>
+                {% for key, value in stats.items() %}
+                <span><span class="k">{{ key | replace('_', ' ') }}</span><span class="v">{{ value | format_value }}</span></span>
+                {% endfor %}
+              </div>
+              {% if fit %}
+              <p class="col-note">
+                {% if fit.family %}
+                Closest standard distribution: <strong>{{ fit.label }}</strong>{% for name, value in fit.parameters.items() %}{% if loop.first %} ({% endif %}{{ name }}={{ value | format_value }}{% if loop.last %}){% else %}, {% endif %}{% endfor %} — {{ fit.quality }} fit, KS distance {{ "%.3f" | format(fit.ks_distance) }}.
+                {% elif fit.reason == 'no_family_fits_well' %}
+                No standard distribution fits this column well (closest is {{ fit.ranked[0].label }} at KS distance {{ "%.3f" | format(fit.best_distance) }}).
+                {% elif fit.reason == 'too_few_values' %}
+                Too few distinct values to fit a distribution.
+                {% endif %}
+                The KS distance is measured with parameters estimated from this same column, so it describes how close the fit is — it is not a hypothesis test, and no p-value is implied.
+              </p>
+              {% endif %}
+              {% if frequency and frequency.other_category_count %}
+              <p class="col-note">{{ frequency.other_category_count | format_value }} further label(s) are folded into “other”.</p>
+              {% endif %}
+            </div>
+          </details>
+        </div>
+        {% endfor %}
       </div>
     </details>
   </section>
   {% endfor %}
 
-  {% if result.transformation_plan.steps %}
-  {% set section_index.n = section_index.n + 1 %}
-  <section class="page">
+  <!-- ============ CORRELATIONS ============ -->
+  {% if 'correlations' in sections %}
+  {% set matrix = (result.evidence | selectattr('kind', 'equalto', 'profile_association_matrix') | first).value %}
+  <section class="page" id="section-correlations">
     <div class="sec-head">
-      <div class="sec-idx">{{ '%02d' | format(section_index.n) }}</div>
+      <div class="sec-idx">{{ sections.number('correlations') }}</div>
+      <div class="sec-title">
+        <h2>Correlations</h2>
+        <p>How strongly each pair of columns moves together, on a 0–1 scale. Three statistics share that scale because the columns are of different types: <strong>Spearman ρ</strong> between two numbers (signed, so the cell shows direction), <strong>Cramér's V</strong> between two categories, and the <strong>correlation ratio</strong> between a category and a number. Hover a cell for the exact figure and the statistic used. Association is not causation.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="padding:16px">{{ matrix | association_heatmap_svg }}</div>
+    {% set strong = matrix.pairs | selectattr('strength', 'ge', 0.8) | list %}
+    {% if strong %}
+    <div class="tbl-wrap" style="margin-top:22px">
+      <table>
+        <thead><tr><th>Pair</th><th>Strength</th><th>Statistic</th><th>Reading</th></tr></thead>
+        <tbody>
+          {% for pair in strong[:12] %}
+          <tr>
+            <td><strong>{{ pair.left }}</strong> &amp; <strong>{{ pair.right }}</strong></td>
+            <td class="num">{% if pair.method == 'spearman' %}{{ "%+.2f" | format(pair.spearman) }}{% else %}{{ "%.2f" | format(pair.strength) }}{% endif %}</td>
+            <td>{% if pair.method == 'spearman' %}Spearman ρ{% if pair.pearson is not none %} (Pearson {{ "%+.2f" | format(pair.pearson) }}){% endif %}{% elif pair.method == 'cramers_v' %}Cramér's V{% else %}correlation ratio{% endif %}</td>
+            <td>{% if pair.strength >= 0.99 %}Effectively one variable.{% elif pair.method == 'spearman' %}Move {% if pair.spearman > 0 %}together{% else %}in opposition{% endif %}.{% else %}One largely determines the other.{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="col-note" style="margin-top:18px">No pair reaches 0.80, so no column here is a restatement of another.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- ============ INTERACTIONS ============ -->
+  {% if 'interactions' in sections %}
+  {% set scatters = result.evidence | selectattr('kind', 'equalto', 'profile_scatter') | list %}
+  {% set highlights = scatters | selectattr('value.role', 'equalto', 'highlight') | list %}
+  {% set explorer = scatters | selectattr('value.role', 'equalto', 'explorer') | list %}
+  <section class="page" id="section-interactions">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('interactions') }}</div>
+      <div class="sec-title">
+        <h2>Interactions</h2>
+        <p>Each point is a row. The pairs below are the most strongly associated ones; use the selector to plot any other pair. A correlation number says how much two columns move together — a scatter says <em>how</em>, which is where curves, clusters, and ceilings show up.</p>
+      </div>
+    </div>
+    <div class="pair-grid">
+      {% for item in highlights %}
+      <div class="pair">
+        <h3>{{ item.value.y_column }} against {{ item.value.x_column }}</h3>
+        <p>association {{ "%.2f" | format(item.value.association) }}{% if item.value.point_count < item.value.available_point_count %} · {{ item.value.point_count | format_value }} of {{ item.value.available_point_count | format_value }} rows drawn{% endif %}</p>
+        {{ item.value | scatter_svg(true) }}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if explorer %}
+    <div style="margin-top:30px">
+      <div class="explorer-controls" data-explorer>
+        <label for="explorerPair">Plot another pair</label>
+        <select id="explorerPair" data-explorer-select>
+          {% for item in explorer %}
+          <option value="explorer-{{ loop.index0 }}">{{ item.value.y_column }} against {{ item.value.x_column }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% for item in explorer %}
+      <div class="explorer-plot{% if loop.first %} is-active{% endif %}" id="explorer-{{ loop.index0 }}" data-explorer-plot>
+        <div class="pair" style="max-width:560px">
+          <h3>{{ item.value.y_column }} against {{ item.value.x_column }}</h3>
+          <p>association {{ "%.2f" | format(item.value.association) }} · {{ item.value.point_count | format_value }} rows drawn</p>
+          {{ item.value | scatter_svg(true) }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- ============ MISSING VALUES ============ -->
+  {% if 'missing' in sections %}
+  {% set missingness = (result.evidence | selectattr('kind', 'equalto', 'profile_missingness') | first).value %}
+  {% set co_missing = result.evidence | selectattr('kind', 'equalto', 'profile_co_missingness') | list %}
+  <section class="page" id="section-missing">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('missing') }}</div>
+      <div class="sec-title">
+        <h2>Missing values</h2>
+        <p>{{ missingness.complete_row_count | format_value }} of {{ missingness.row_count | format_value }} rows are complete. Bars past 20% are the ones the profile promotes to an issue.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="padding:16px">{{ missingness | missing_bars_svg }}</div>
+    {% if co_missing %}
+    <div class="sec-head" style="margin-top:34px;margin-bottom:16px">
+      <div class="sec-idx" style="visibility:hidden">--</div>
+      <div class="sec-title"><h2 style="font-size:18px">Missing together</h2><p>How often two columns are blank on the same row. A high overlap usually means one optional section of a form, or a field added partway through collection — which is a different problem from values lost at random.</p></div>
+    </div>
+    <div class="tbl-wrap" style="padding:16px">{{ co_missing[0].value | co_missing_heatmap_svg }}</div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- ============ SAMPLE ROWS ============ -->
+  {% if 'sample' in sections %}
+  {% set sample = (result.evidence | selectattr('kind', 'equalto', 'profile_sample_rows') | first).value %}
+  {% set duplicates = result.evidence | selectattr('kind', 'equalto', 'profile_duplicate_groups') | list %}
+  <section class="page" id="section-sample">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('sample') }}</div>
+      <div class="sec-title">
+        <h2>Sample rows</h2>
+        <p>The first and last rows as they were loaded{% if sample.hidden_column_count %}, showing {{ sample.columns | length }} of {{ sample.columns | length + sample.hidden_column_count }} columns{% endif %}. Every summary above is a claim about these values; this is what they actually look like.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th>{% for name in sample.columns %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for row in sample.head %}
+          <tr><td class="mono" style="color:var(--ink-3)">{{ row.index }}</td>{% for value in row['values'] %}<td>{{ value | format_cell }}</td>{% endfor %}</tr>
+          {% endfor %}
+          {% if sample.tail %}
+          <tr><td class="mono" style="color:var(--ink-3)">⋯</td>{% for name in sample.columns %}<td style="color:var(--ink-3)">⋯</td>{% endfor %}</tr>
+          {% for row in sample.tail %}
+          <tr><td class="mono" style="color:var(--ink-3)">{{ row.index }}</td>{% for value in row['values'] %}<td>{{ value | format_cell }}</td>{% endfor %}</tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+    {% if duplicates %}
+    <div class="sec-head" style="margin-top:34px;margin-bottom:16px">
+      <div class="sec-idx" style="visibility:hidden">--</div>
+      <div class="sec-title"><h2 style="font-size:18px">Duplicated rows</h2><p>{{ duplicates[0].value.duplicate_row_count | format_value }} row(s) repeat an earlier row exactly. Examples:</p></div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Copies</th><th>Row indexes</th>{% for name in duplicates[0].value.columns %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for group in duplicates[0].value.groups %}
+          <tr><td class="num">{{ group.row_count }}</td><td class="mono" style="color:var(--ink-3)">{{ group.indexes | join(', ') }}</td>{% for value in group['values'] %}<td>{{ value | format_cell }}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if result.transformation_plan.steps %}
+  <section class="page" id="section-plan">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('plan') }}</div>
       <div class="sec-title"><h2>Reviewable transformation plan</h2><p>These are recommendations only. Prism EDA has not modified the data.</p></div>
     </div>
     {% for step in result.transformation_plan.steps %}
@@ -1018,7 +1362,7 @@
       <div class="lin-body">{% for failure in result.failures %}{{ failure.stage }}: {{ failure.message }}<br>{% endfor %}</div>
     </details>
     {% endif %}
-    <p class="foot-note">Generated locally by Prism EDA. Every numeric claim is backed by structured evidence available in the result and JSON export.</p>
+    <p class="foot-note">Generated locally by Prism EDA.</p>
   </footer>
 
   <dialog class="image-preview" id="imagePreview" aria-labelledby="imagePreviewCaption">
@@ -1029,6 +1373,104 @@
     </figure>
   </dialog>
   <div class="chart-tooltip" id="chartTooltip"></div>
+
+  <script>
+  (function () {
+    "use strict";
+    // Section navigation: plain anchors already work. This only marks which
+    // section is on screen, so the bar tracks the reader.
+    var links = Array.prototype.slice.call(
+      document.querySelectorAll(".navbar a")
+    );
+    if (!links.length || !window.IntersectionObserver) return;
+    var byId = {};
+    links.forEach(function (link) {
+      byId[link.getAttribute("href").slice(1)] = link;
+    });
+    var visible = {};
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        visible[entry.target.id] = entry.isIntersecting;
+      });
+      var current = null;
+      links.forEach(function (link) {
+        var id = link.getAttribute("href").slice(1);
+        if (!current && visible[id]) current = id;
+      });
+      links.forEach(function (link) {
+        var id = link.getAttribute("href").slice(1);
+        if (id === current) {
+          link.setAttribute("aria-current", "true");
+        } else {
+          link.removeAttribute("aria-current");
+        }
+      });
+    }, { rootMargin: "-56px 0px -70% 0px" });
+    Object.keys(byId).forEach(function (id) {
+      var target = document.getElementById(id);
+      if (target) observer.observe(target);
+    });
+  })();
+  </script>
+
+  <script>
+  (function () {
+    "use strict";
+    // Column filter. Server-rendered cards are all visible; without JS the
+    // controls simply do nothing and the full list stays on the page.
+    document.querySelectorAll("[data-col-controls]").forEach(function (controls) {
+      var scope = controls.parentElement;
+      var cards = Array.prototype.slice.call(
+        scope.querySelectorAll("[data-col-card]")
+      );
+      var search = controls.querySelector("[data-col-filter]");
+      var type = controls.querySelector("[data-col-type]");
+      var count = controls.querySelector("[data-col-count]");
+
+      function apply() {
+        var term = (search.value || "").trim().toLowerCase();
+        var wanted = type.value;
+        var shown = 0;
+        cards.forEach(function (card) {
+          var name = card.getAttribute("data-col-name") || "";
+          var kind = card.getAttribute("data-col-type") || "";
+          var ok =
+            (!term || name.indexOf(term) !== -1 || kind.indexOf(term) !== -1) &&
+            (!wanted || kind === wanted);
+          card.classList.toggle("is-hidden", !ok);
+          if (ok) shown++;
+        });
+        count.textContent =
+          shown === cards.length
+            ? cards.length + " columns"
+            : shown + " of " + cards.length + " columns";
+      }
+
+      search.addEventListener("input", apply);
+      type.addEventListener("change", apply);
+      apply();
+    });
+  })();
+  </script>
+
+  <script>
+  (function () {
+    "use strict";
+    // Scatter explorer: every pair is already rendered, so this only swaps
+    // which one is on screen. Without JS the first pair stays visible.
+    var controls = document.querySelector("[data-explorer]");
+    if (!controls) return;
+    var select = controls.querySelector("[data-explorer-select]");
+    var plots = Array.prototype.slice.call(
+      document.querySelectorAll("[data-explorer-plot]")
+    );
+    select.addEventListener("change", function () {
+      plots.forEach(function (plot) {
+        plot.classList.toggle("is-active", plot.id === select.value);
+      });
+    });
+  })();
+  </script>
 
   <script>
   (function () {

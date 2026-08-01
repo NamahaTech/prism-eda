@@ -17,6 +17,12 @@ class AnalysisMode(StrEnum):
 
 SamplingMode = Literal["auto", "disabled"]
 
+#: How much of the wide-dataset analysis a report includes. ``standard`` applies
+#: caps that keep a report readable and its file size sane; ``full`` raises them
+#: for the analyst who genuinely wants the whole matrix. Whatever a cap removes
+#: is always stated in the report rather than dropped silently.
+DetailLevel = Literal["standard", "full"]
+
 
 @dataclass(slots=True)
 class AnalysisContext:

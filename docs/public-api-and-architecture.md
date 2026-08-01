@@ -161,6 +161,12 @@ result = dataset.analyze(
 Typed task methods:
 
 ```python
+result = dataset.profile(
+    detail="standard",          # or "full" to raise the wide-data caps
+    mode="standard",
+    sampling="auto",
+)
+
 result = dataset.anomaly_detection(
     table="events",
     target=None,
@@ -432,7 +438,12 @@ src/prism_eda/
   evidence/
     models.py
   analysis/
-    profile.py
+    _limits.py              # per-detail-level caps for chart/association work
+    _numeric.py             # histogram binning + modality, shared by recipes
+    profile.py              # orchestration: evidence, findings, result
+    quality_checks.py       # data-quality defect detectors (issues)
+    distributions.py        # shape labels, family fitting, per-column charts
+    associations.py         # association matrix, alerts, scatters, missingness
     schema_discovery.py
     anomaly.py
     classification.py
@@ -440,6 +451,8 @@ src/prism_eda/
     models.py
   reporting/
     renderer.py
+    sections.py             # the ordered section list: nav, anchors, numbering
+    charts.py               # dependency-free inline SVG
     templates/
   privacy/                  # allow/redact/alias/exclude policy for AI payloads
     models.py

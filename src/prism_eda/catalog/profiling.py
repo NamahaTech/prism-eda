@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from pandas.api import types as ptypes
 
@@ -29,6 +30,9 @@ CATEGORICAL_UNIQUE_CAP = 200
 # Categorical columns above this distinct count get an analyst-facing warning:
 # downstream category-based checks stop using them around this cardinality.
 HIGH_CARDINALITY_WARNING_THRESHOLD = 100
+# How many most-frequent values are kept per column. The report's per-column card
+# charts these as a frequency bar, so five is too few to show a shape.
+TOP_VALUE_LIMIT = 10
 
 
 def _semantic_type(series: pd.Series, unique_count: int | None) -> str:
@@ -85,7 +89,9 @@ def _unique_count(series: pd.Series) -> tuple[int | None, str | None]:
         return None, f"Distinct count failed: {error}"
 
 
-def _top_values(series: pd.Series, limit: int = 5) -> tuple[dict[str, Any], ...]:
+def _top_values(
+    series: pd.Series, limit: int = TOP_VALUE_LIMIT
+) -> tuple[dict[str, Any], ...]:
     try:
         counts = series.value_counts(dropna=False).head(limit)
     except (TypeError, ValueError):
@@ -104,15 +110,32 @@ def _statistics(series: pd.Series, semantic_type: str) -> dict[str, Any]:
         numeric = pd.to_numeric(non_null, errors="coerce").dropna()
         if numeric.empty:
             return {}
+        # Infinities are counted, then excluded from every summary statistic.
+        # Leaving them in silently turns min/max into +/-inf and mean into NaN,
+        # which reads as "no data" when the real answer is "one bad value".
+        infinite_mask = np.isinf(numeric.to_numpy(dtype="float64"))
+        infinite_count = int(infinite_mask.sum())
+        finite = numeric[~infinite_mask]
+        if finite.empty:
+            return to_jsonable({"infinite_count": infinite_count})
         return to_jsonable(
             {
-                "min": numeric.min(),
-                "max": numeric.max(),
-                "mean": numeric.mean(),
-                "median": numeric.median(),
-                "std": numeric.std(ddof=1) if len(numeric) > 1 else None,
-                "q1": numeric.quantile(0.25),
-                "q3": numeric.quantile(0.75),
+                "min": finite.min(),
+                "max": finite.max(),
+                "mean": finite.mean(),
+                "median": finite.median(),
+                "std": finite.std(ddof=1) if len(finite) > 1 else None,
+                "q1": finite.quantile(0.25),
+                "q3": finite.quantile(0.75),
+                "p5": finite.quantile(0.05),
+                "p95": finite.quantile(0.95),
+                # Shape moments: the report names the distribution from these,
+                # and both are undefined for tiny columns.
+                "skewness": finite.skew() if len(finite) > 2 else None,
+                "kurtosis": finite.kurt() if len(finite) > 3 else None,
+                "zero_count": int((finite == 0).sum()),
+                "negative_count": int((finite < 0).sum()),
+                "infinite_count": infinite_count,
             }
         )
     if semantic_type == "datetime":
@@ -157,6 +180,11 @@ def profile_column(name: str, series: pd.Series) -> ColumnCatalog:
             f"distinct values{rate_note} — likely not a true category."
         )
 
+    try:
+        memory_bytes: int | None = int(series.memory_usage(index=False, deep=True))
+    except (TypeError, ValueError):
+        memory_bytes = None
+
     return ColumnCatalog(
         name=name,
         physical_type=str(series.dtype),
@@ -168,6 +196,7 @@ def profile_column(name: str, series: pd.Series) -> ColumnCatalog:
         missing_rate=missing_rate,
         unique_count=unique_count,
         unique_rate=unique_rate,
+        memory_bytes=memory_bytes,
         statistics=_statistics(series, semantic_type),
         top_values=_top_values(series),
         warnings=tuple(warnings),

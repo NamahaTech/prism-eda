@@ -10,6 +10,66 @@ stabilizes.
 
 ### Added
 
+- **Issues and alerts are separate channels.** `Finding` gains a `category`
+  field (`quality_issue` | `observation`) and `prism_eda.evidence.models` gains
+  `split_findings()`. Data-quality defects and true-but-not-broken observations
+  are no longer filed in one list, and the HTML report renders them as separate
+  **Issues** and **Alerts** sections. Existing recipes are unchanged: the field
+  defaults to `quality_issue`.
+- **Data-quality detectors in the baseline profile.** The profile now finds
+  case/whitespace variants of the same label, disguised missing values (text
+  placeholders such as `N/A` and `unknown`, plus repeated negative sentinels like
+  `-999` in otherwise non-negative columns), numbers stored as text, mixed Python
+  types in one column, dates stored as text, mixed date layouts, ambiguous
+  day/month ordering, placeholder and implausible dates, future-dated rows,
+  reversed start/end date pairs, duplicate columns, unnamed columns, and mangled
+  duplicate headers. All are computed over every row — the profile's quality
+  claims are exact counts, never sampled estimates.
+- **Distribution shape and family fitting.** Every numeric column gets a
+  plain-language shape label (bell-shaped, right-skewed with a long tail,
+  bimodal, uniform, zero-inflated, count-like, near-constant) and, where one
+  fits, a named distribution family: Normal, Log-normal, Exponential, Gamma,
+  Weibull, Uniform, Beta, or Poisson. Fit quality is reported as a
+  Kolmogorov-Smirnov *distance* and never as a p-value, because the parameters
+  are estimated from the same data; continuous families are selected by AIC so a
+  more flexible family cannot win on flexibility alone; and the fit abstains
+  ("no standard family fits well") rather than naming the least-bad option.
+- **Correlations, interactions, missing structure, and sample rows.** The profile
+  measures every usable column pair with the statistic that suits its types —
+  Spearman rho (with Pearson alongside) for numeric pairs, bias-corrected
+  Cramér's V for categorical pairs, the correlation ratio for mixed pairs —
+  records which was used per pair, and renders the matrix as a heatmap. It adds
+  ranked scatter plots with a selector for any other numeric pair, per-column
+  missingness bars with a pairwise co-missingness view, and head/tail sample rows
+  with duplicate-row examples.
+- **`detail="standard" | "full"`** on `profile()` / `Dataset.profile()`, choosing
+  the budget for charts, correlation width, scatter pairs and points, sampled
+  rows, and sample size. Every limit that truncates output records an
+  `AnalysisWarning` and says so on the page.
+- **Per-column statistics** now include `p5`, `p95`, `skewness`, `kurtosis`,
+  `zero_count`, `negative_count`, and `infinite_count`, and `ColumnCatalog` gains
+  `memory_bytes`. Infinities are counted and then excluded from every summary
+  statistic, so one bad value no longer turns `min`/`max` into ±inf and `mean`
+  into NaN.
+- **Report navigation.** Reports gain a sticky section bar. `reporting/sections.py`
+  owns the ordered section list that drives the navigation, the anchors, and the
+  section numbering, so the three cannot drift apart.
+
+### Changed
+
+- **Column detail is now cards, not a table row per column.** The shared
+  per-table section renders one card per column — type, tags, a two-column stat
+  grid, a chart, and a "More details" expander — with a name/type filter. All
+  five report types get the new layout; the baseline profile additionally fills
+  the charts with histograms, category-frequency bars, and timelines.
+- **Reports no longer carry product copy.** The heading is the dataset being
+  profiled rather than a tagline, the masthead records the source path, and the
+  footer note is a single line.
+- `scipy` is now a declared dependency. It was already installed transitively via
+  scikit-learn; the profile depends on it directly for distribution fitting.
+- `ColumnCatalog.top_values` keeps 10 values rather than 5, so a column's
+  frequency chart shows a shape.
+
 - **Classification neighborhood-disagreement diagnostics.** The classification
   recipe now identifies rows surrounded by differently labelled nearest
   neighbors after excluding leakage, identifier-like, and high-cardinality

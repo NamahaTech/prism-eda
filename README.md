@@ -25,6 +25,28 @@ result.to_html("profile.html")
 result.to_json("profile.json")
 ```
 
+The profile separates two things most profilers merge. **Issues** are defects —
+missing, duplicated, mistyped, or placeholder values, mixed date formats,
+sentinel numbers, columns that are copies of each other. **Alerts** are facts
+that are true but not broken — columns that move together, a column that is
+all-unique, the window a timestamp covers. Filing those in one list devalues
+both, so they are separate fields and separate report sections:
+
+```python
+from prism_eda.evidence.models import split_findings
+
+issues, alerts = split_findings(result.findings)
+```
+
+The report shows one card per column with its distribution, and names the
+distribution family where one fits — reporting a Kolmogorov-Smirnov distance
+rather than a p-value, and abstaining when nothing fits well. It then measures
+every column pair with the statistic that suits their types (Spearman, Cramér's
+V, or the correlation ratio), plots the strongest pairs, shows which columns go
+missing together, and prints the first and last rows. Pass `detail="full"` to
+raise the caps on wide data; anything a cap removes is stated in the report
+rather than dropped silently.
+
 DataFrames, CSV files, Parquet files, Excel files, mappings of related tables, and
 directories are accepted. Analysis does not mutate input DataFrames and does not
 write files until an explicit export method is called. (Excel needs the optional

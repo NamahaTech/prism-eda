@@ -61,10 +61,18 @@ python -m build
   not a table collection, so it does not go through `catalog/`.
 - `catalog/`: loading, fingerprints, column catalog, keys, and relationships.
 - `analysis/`: task recipes that turn deterministic computations into evidence,
-  findings, artifacts, warnings, and statuses.
+  findings, artifacts, warnings, and statuses. The baseline profile is split by
+  question: `quality_checks.py` (is anything *wrong*?), `distributions.py` (what
+  shape is each column?), `associations.py` (how do columns relate, and what is
+  missing together?), with `profile.py` orchestrating. `_limits.py` holds the
+  per-detail caps; `_numeric.py` holds binning/modality shared with `anomaly.py`.
 - `evidence/`: provider-neutral evidence and finding contracts.
 - `artifacts.py`: structured report artifacts such as schema graphs.
-- `reporting/`: the shared self-contained renderer.
+- `reporting/`: the shared self-contained renderer. `sections.py` owns which
+  sections a report has, in what order — the navigation, the anchors, and the
+  numbering all read from that one list, so they cannot drift apart. Add a
+  section there and in the template together, and `tests/test_report_sections.py`
+  will hold the two in agreement.
 - `transformations/`: declarative recommendations; no automatic mutation.
 - `results.py`: stable result object and explicit exports.
 - `privacy/`: allow/redact/alias/exclude controls for AI-assisted payloads.
@@ -97,6 +105,13 @@ Do not postpone documentation into a future cleanup task.
 ## Important limitations
 
 - Pandas is the only in-memory backend.
+- Profile data-quality checks scan every row and never sample; correlations,
+  scatters, and distribution fitting sample above the `detail` budget and record
+  it. Do not quietly extend sampling to the quality checks: those are exact
+  claims about defects.
+- Distribution fitting reports a KS *distance*, never a p-value, because the
+  parameters are estimated from the same data. Continuous families are chosen by
+  AIC so a more flexible family cannot win on flexibility alone.
 - CSV inputs are currently loaded eagerly; chunked execution is still planned.
 - Schema discovery considers at most 12 likely columns per table and key width is
   capped at three.

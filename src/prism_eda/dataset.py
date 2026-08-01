@@ -15,7 +15,12 @@ from prism_eda.analysis.schema_discovery import discover_schema_dataset
 from prism_eda.catalog.loaders import DataSource, load_tables
 from prism_eda.catalog.models import DatasetCatalog, SourceInfo
 from prism_eda.catalog.profiling import build_catalog
-from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
+from prism_eda.config import (
+    AnalysisConfig,
+    AnalysisContext,
+    AnalysisMode,
+    DetailLevel,
+)
 from prism_eda.events import EventCallback
 from prism_eda.exceptions import AnalysisError
 from prism_eda.results import AnalysisResult
@@ -91,17 +96,22 @@ class Dataset:
             ),
         )
         if normalized_goal in {"profile", "minimal_eda"}:
+            detail = options.pop("detail", "standard")
             if options:
                 unknown = ", ".join(sorted(options))
                 raise TypeError(f"Unexpected analysis options: {unknown}")
+            if detail not in {"standard", "full"}:
+                raise ValueError("detail must be 'standard' or 'full'")
             try:
                 catalog = self.catalog(refresh=True)
             except Exception as error:
                 raise AnalysisError(f"Catalog generation failed: {error}") from error
             return profile_dataset(
+                self._tables,
                 catalog,
                 context=analysis_context,
                 config=analysis_config,
+                detail=detail,
                 callbacks=tuple(callbacks),
             )
         if normalized_goal in {"schema_discovery", "discover_schema"}:
@@ -189,6 +199,7 @@ class Dataset:
         sampling: str = "auto",
         random_seed: int = 42,
         allow_insufficient_evidence: bool = False,
+        detail: DetailLevel = "standard",
     ) -> AnalysisResult:
         if config is None:
             config = AnalysisConfig(
@@ -202,6 +213,7 @@ class Dataset:
             context=context,
             config=config,
             callbacks=callbacks,
+            detail=detail,
         )
 
     def discover_schema(

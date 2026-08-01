@@ -70,6 +70,14 @@ class Evidence:
 # leads with what blocks a decision, not whatever was computed first.
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 
+# A finding is either something *wrong* with the data or something *true about*
+# it. Mixing the two is what turns a findings list into noise: "these two columns
+# correlate" is genuinely useful, but it is not a defect, and filing it next to
+# "40% of this column is missing" devalues both. Reports render them as separate
+# sections; consumers can filter on this field.
+QUALITY_ISSUE = "quality_issue"
+OBSERVATION = "observation"
+
 
 def sort_findings(findings: Sequence[Finding]) -> list[Finding]:
     """Order findings by severity, then by descending confidence."""
@@ -82,6 +90,15 @@ def sort_findings(findings: Sequence[Finding]) -> list[Finding]:
     )
 
 
+def split_findings(
+    findings: Sequence[Finding],
+) -> tuple[list[Finding], list[Finding]]:
+    """Split findings into (data-quality issues, observations), each sorted."""
+    issues = [finding for finding in findings if finding.category != OBSERVATION]
+    observations = [finding for finding in findings if finding.category == OBSERVATION]
+    return sort_findings(issues), sort_findings(observations)
+
+
 @dataclass(frozen=True, slots=True)
 class Finding:
     id: str
@@ -91,6 +108,7 @@ class Finding:
     confidence: float
     evidence_ids: tuple[str, ...]
     recommendation: str | None = None
+    category: str = QUALITY_ISSUE
 
     @classmethod
     def create(
@@ -102,6 +120,7 @@ class Finding:
         confidence: float,
         evidence_ids: tuple[str, ...],
         recommendation: str | None = None,
+        category: str = QUALITY_ISSUE,
     ) -> Finding:
         digest = hashlib.sha256(
             json.dumps(
@@ -116,4 +135,5 @@ class Finding:
             confidence=confidence,
             evidence_ids=evidence_ids,
             recommendation=recommendation,
+            category=category,
         )

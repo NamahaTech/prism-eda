@@ -13,6 +13,7 @@ from pandas.api import types as ptypes
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 
+from prism_eda.analysis._numeric import HIST_BINS, as_float, detect_modality
 from prism_eda.artifacts import Artifact
 from prism_eda.catalog.models import DatasetCatalog, TableCatalog
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
@@ -79,19 +80,9 @@ _CORROBORATING_SIGNAL_KINDS = {
     "anomaly_local_density_outlier",
 }
 
-# Distribution-shape diagnostics. A column with two separated clusters is not a
-# clean distribution with a few tail outliers — it is two populations, and that
-# reframing is usually the single most useful thing to tell an analyst. We detect
-# it with a robust largest-gap split (on a log axis for heavily skewed positive
-# columns) and only call it when both sides hold a real share of the rows.
-_HIST_BINS = 24
-_BIMODAL_MIN_FRACTION = 0.15
-_BIMODAL_MIN_GROUP = 4
-_BIMODAL_GAP_RATIO = 2.5
-# The separating gap must also span a real share of the column's spread, so that
-# the small ±1 gaps in ordinary discrete/uniform data (e.g. integer tenures) are
-# not mistaken for a true two-population split.
-_BIMODAL_MIN_RANGE_FRACTION = 0.10
+# Distribution-shape diagnostics (histogram binning and the two-population split
+# test) are shared with the baseline profile so both reports describe a column the
+# same way. See prism_eda.analysis._numeric.
 _SCATTER_MAX_POINTS = 2000
 
 
@@ -593,11 +584,6 @@ def _numeric_robust_z(
     return list(z_by_column), z_by_column, median_by_column
 
 
-def _as_float(value: Any) -> float:
-    """Coerce a pandas/numpy scalar to ``float`` (keeps the type-checker happy)."""
-    return float(value)
-
-
 def _format_number(value: float) -> str:
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return "n/a"
@@ -840,8 +826,8 @@ def _consensus_evidence(
             why = _conditional_why(
                 context["condition_column"],
                 context["value_column"],
-                _as_float(frame.at[row_label, context["value_column"]]),
-                _as_float(frame.at[row_label, context["condition_column"]]),
+                as_float(frame.at[row_label, context["value_column"]]),
+                as_float(frame.at[row_label, context["condition_column"]]),
                 len(methods),
                 total_methods,
             )
@@ -894,67 +880,6 @@ def _consensus_evidence(
     )
 
 
-def _detect_modality(series: pd.Series) -> dict[str, Any]:
-    """Robust largest-gap test for a two-population split."""
-    values = np.sort(series.to_numpy(dtype="float64"))
-    n = len(values)
-    result: dict[str, Any] = {"is_multimodal": False, "clusters": []}
-    if n < 20:
-        return result
-    work = values
-    log_space = False
-    if float(values.min()) > 0:
-        skew = _as_float(series.skew()) if n > 2 else 0.0
-        spread = values.max() / max(values.min(), 1e-9)
-        if abs(skew) >= 1.0 or spread >= 50:
-            work = np.log10(values)
-            log_space = True
-    gaps = np.diff(work)
-    positive = gaps[gaps > 0]
-    if gaps.size == 0 or positive.size == 0:
-        return result
-    median_gap = float(np.median(positive))
-    work_range = float(work[-1] - work[0])
-    max_idx = int(np.argmax(gaps))
-    max_gap = float(gaps[max_idx])
-    lower_n = max_idx + 1
-    upper_n = n - lower_n
-    if (
-        median_gap > 0
-        and max_gap >= _BIMODAL_GAP_RATIO * median_gap
-        and work_range > 0
-        and max_gap >= _BIMODAL_MIN_RANGE_FRACTION * work_range
-        and lower_n >= _BIMODAL_MIN_GROUP
-        and upper_n >= _BIMODAL_MIN_GROUP
-        and lower_n / n >= _BIMODAL_MIN_FRACTION
-        and upper_n / n >= _BIMODAL_MIN_FRACTION
-    ):
-        boundary_low = float(values[max_idx])
-        boundary_high = float(values[max_idx + 1])
-        result.update(
-            {
-                "is_multimodal": True,
-                "log_space": log_space,
-                "gap": {"low": boundary_low, "high": boundary_high},
-                "clusters": [
-                    {
-                        "min": float(values[0]),
-                        "max": boundary_low,
-                        "count": lower_n,
-                        "fraction": lower_n / n,
-                    },
-                    {
-                        "min": boundary_high,
-                        "max": float(values[-1]),
-                        "count": upper_n,
-                        "fraction": upper_n / n,
-                    },
-                ],
-            }
-        )
-    return result
-
-
 def _distribution_evidence(
     frame: pd.DataFrame,
     table: TableCatalog,
@@ -985,14 +910,14 @@ def _distribution_evidence(
             "lower_fence": q1 - 1.5 * iqr,
             "upper_fence": q3 + 1.5 * iqr,
         }
-        bin_count = min(_HIST_BINS, max(8, len(series) // 2))
+        bin_count = min(HIST_BINS, max(8, len(series) // 2))
         counts, edges = np.histogram(values, bins=bin_count)
         flagged_values = [
-            _as_float(frame.at[label, column])
+            as_float(frame.at[label, column])
             for label in flagged_labels
             if label in frame.index and pd.notna(frame.at[label, column])
         ]
-        modality = _detect_modality(series)
+        modality = detect_modality(series)
         evidence.append(
             Evidence.create(
                 kind="anomaly_distribution_shape",
@@ -1207,8 +1132,8 @@ def _conditional_examples(
             {
                 "row_index": str(index),
                 "score": float(score),
-                "value": _as_float(pair.at[index, value_column]),
-                "condition_value": _as_float(pair.at[index, condition_column]),
+                "value": as_float(pair.at[index, value_column]),
+                "condition_value": as_float(pair.at[index, condition_column]),
                 "bin_low": float(interval.left) if interval is not None else None,
                 "bin_high": float(interval.right) if interval is not None else None,
                 "peer_count": int(len(peers)),
