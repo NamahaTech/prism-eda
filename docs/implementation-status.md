@@ -75,6 +75,9 @@ removed, or materially re-scoped.
 - Leakage-screened logistic-regression diagnostic probe with fold-local
   preprocessing and cross-validated separability metrics
 - Cross-validated hard-example candidates from probe errors
+- Leakage-screened nearest-neighbor class-overlap candidates, with deterministic
+  local label-disagreement review rows
+- Context-aware group/time split guidance from `entity_id` and `timestamp`
 - Class-balance and feature-signal report artifacts
 
 ### Image dataset profile
@@ -163,8 +166,7 @@ removed, or materially re-scoped.
 
 ### Classification improvements
 
-- Class overlap and neighborhood-disagreement detection
-- Group/time split guidance and opt-in fairness coverage
+- Opt-in fairness coverage
 - Train/test comparison when both are supplied
 
 ### Image dataset improvements

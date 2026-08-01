@@ -10,6 +10,13 @@ stabilizes.
 
 ### Added
 
+- **Classification neighborhood-disagreement diagnostics.** The classification
+  recipe now identifies rows surrounded by differently labelled nearest
+  neighbors after excluding leakage, identifier-like, and high-cardinality
+  features. It reports deterministic local-overlap evidence, review rows, a
+  finding, and a non-mutating review recommendation; it is explicitly a signal
+  for label ambiguity, class overlap, or missing features, not a model score or
+  proof that a label is wrong.
 - **Image dataset profiling.** New `ImageDataset`, `load_images()`, and
   `profile_images()` APIs profile image folders without forcing them through the
   tabular loader. The recipe reports unreadable files, dimensions and

@@ -197,6 +197,62 @@ def test_classification_probe_surfaces_hard_examples() -> None:
     assert any("Probe hard examples" in finding.title for finding in result.findings)
 
 
+def test_classification_surfaces_local_class_overlap(tmp_path) -> None:
+    # The two classes intentionally occupy the same repeated feature
+    # neighborhoods, so a local label diagnostic should surface the ambiguity.
+    frame = pd.DataFrame(
+        {
+            "target": [index % 2 for index in range(80)],
+            "x": [index // 10 for index in range(80)],
+            "region": ["north" if index < 40 else "south" for index in range(80)],
+        }
+    )
+
+    result = pe.classification(frame, target="target", sampling="disabled")
+
+    overlap = next(
+        item
+        for item in result.evidence
+        if item.kind == "classification_neighborhood_disagreement"
+    )
+    assert overlap.value["high_disagreement_row_rate"] >= 0.4
+    assert overlap.value["neighbor_count"] == 9
+    assert overlap.value["examples"]
+    assert any("Local class overlap" in finding.title for finding in result.findings)
+    assert any(
+        step.operation == "review_class_overlap_candidates"
+        for step in result.transformation_plan.steps
+    )
+    html = result.to_html(tmp_path / "classification-overlap.html").read_text()
+    payload = json.loads(
+        result.to_json(tmp_path / "classification-overlap.json").read_text()
+    )
+    assert "local class overlap" in html
+    assert any(
+        item["kind"] == "classification_neighborhood_disagreement"
+        for item in payload["evidence"]
+    )
+
+
+def test_classification_omits_overlap_evidence_for_separated_classes() -> None:
+    frame = pd.DataFrame(
+        {
+            "target": [0] * 40 + [1] * 40,
+            "x": [index / 100 for index in range(40)]
+            + [10 + index / 100 for index in range(40)],
+            "y": [index / 100 for index in range(40)]
+            + [10 + index / 100 for index in range(40)],
+        }
+    )
+
+    result = pe.classification(frame, target="target", sampling="disabled")
+
+    assert not any(
+        item.kind == "classification_neighborhood_disagreement"
+        for item in result.evidence
+    )
+
+
 def test_classification_uses_context_for_split_guidance() -> None:
     frame = pd.DataFrame(
         {

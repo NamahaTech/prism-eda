@@ -196,8 +196,9 @@ Schema discovery returns candidate keys and relationships, not declared
 constraints. Anomaly detection returns statistical review candidates, not
 confirmed anomaly labels; `expected_contamination` is an optional review-sizing
 assumption, not a confirmed prevalence estimate. Classification returns
-target-readiness, association, leakage, and diagnostic probe-model evidence; it
-does not return a production model object. Image profiling returns metadata,
+target-readiness, association, leakage, local-overlap, split-guidance, and
+diagnostic probe-model evidence; it does not return a production model object.
+Image profiling returns metadata,
 quality, duplicate, leakage, loader-trap, and per-label evidence; near-duplicate
 and quality flags are candidates for review, not confirmed removal instructions.
 Image leakage and per-label checks depend on the directory layout, so a flat

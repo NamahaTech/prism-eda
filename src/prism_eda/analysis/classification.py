@@ -15,6 +15,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.neighbors import NearestNeighbors
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -44,6 +45,8 @@ _ROW_BUDGETS = {
 
 _MAX_PROBE_FEATURES = 30
 _MAX_HARD_EXAMPLES = 20
+_MAX_NEIGHBORHOOD_EXAMPLES = 20
+_NEIGHBOR_DISAGREEMENT_THRESHOLD = 0.5
 
 # A simple value->label rule that is near-perfect *and* clears the majority
 # baseline by a real margin is a leakage signal. The bar must stay reachable
@@ -298,9 +301,9 @@ def _probe_folds(y: pd.Series, mode: AnalysisMode | str) -> int | None:
     return min(max_folds, min_class_count)
 
 
-def _classification_probe_pipeline(
+def _classification_preprocessor(
     numeric_features: list[str], categorical_features: list[str]
-) -> Pipeline:
+) -> ColumnTransformer:
     transformers: list[tuple[str, Pipeline, list[str]]] = []
     if numeric_features:
         transformers.append(
@@ -334,9 +337,18 @@ def _classification_probe_pipeline(
                 categorical_features,
             )
         )
+    return ColumnTransformer(transformers=transformers)
+
+
+def _classification_probe_pipeline(
+    numeric_features: list[str], categorical_features: list[str]
+) -> Pipeline:
     return Pipeline(
         [
-            ("preprocess", ColumnTransformer(transformers=transformers)),
+            (
+                "preprocess",
+                _classification_preprocessor(numeric_features, categorical_features),
+            ),
             (
                 "model",
                 LogisticRegression(
@@ -485,6 +497,129 @@ def _classification_probe_evidence(
             )
         )
     return evidence
+
+
+def _neighborhood_disagreement_evidence(
+    frame: pd.DataFrame,
+    table: TableCatalog,
+    target: str,
+    *,
+    config: AnalysisConfig,
+    max_categories: int,
+    prior_evidence: list[Evidence],
+) -> Evidence | None:
+    """Measure label disagreement among nearby rows in leakage-screened feature space.
+
+    This is a local diagnostic, not a classifier evaluation: it asks whether
+    examples with similar available features often carry different labels.
+    """
+    usable = frame[frame[target].notna()].copy()
+    y = usable[target].astype("string")
+    if len(usable) < 20 or y.nunique() < 2 or int(y.value_counts().min()) < 3:
+        return None
+
+    numeric, categorical, excluded = _probe_feature_groups(
+        usable,
+        table,
+        target,
+        max_categories=max_categories,
+        leakage_features=_leakage_feature_names(prior_evidence),
+    )
+    features = numeric + categorical
+    if not features:
+        return None
+
+    neighbor_count = min(
+        9 if AnalysisMode(config.mode) != AnalysisMode.QUICK else 5, len(usable) - 1
+    )
+    if neighbor_count < 3:
+        return None
+    transformed = _classification_preprocessor(numeric, categorical).fit_transform(
+        usable[features]
+    )
+    neighbors = NearestNeighbors(n_neighbors=neighbor_count + 1).fit(transformed)
+    _, indices = neighbors.kneighbors(transformed)
+
+    labels = y.to_numpy(dtype=str)
+    disagreement_rates: list[float] = []
+    opposing_labels: list[str | None] = []
+    for position, nearby in enumerate(indices):
+        # The nearest row is normally the source row. Filter by position as a
+        # safeguard for tied vectors, then retain exactly the configured budget.
+        neighbor_positions = [int(item) for item in nearby if int(item) != position][
+            :neighbor_count
+        ]
+        neighbor_labels = labels[neighbor_positions]
+        disagreement = float(np.mean(neighbor_labels != labels[position]))
+        disagreement_rates.append(disagreement)
+        alternatives = neighbor_labels[neighbor_labels != labels[position]]
+        if len(alternatives):
+            opposing_labels.append(str(pd.Series(alternatives).mode().iloc[0]))
+        else:
+            opposing_labels.append(None)
+
+    high_positions = [
+        position
+        for position, rate in enumerate(disagreement_rates)
+        if rate >= _NEIGHBOR_DISAGREEMENT_THRESHOLD
+    ]
+    if not high_positions:
+        return None
+
+    pair_counts: dict[str, int] = {}
+    for position in high_positions:
+        opposing = opposing_labels[position]
+        if opposing is not None:
+            pair = f"{labels[position]} ↔ {opposing}"
+            pair_counts[pair] = pair_counts.get(pair, 0) + 1
+    ranked_positions = sorted(
+        high_positions,
+        key=lambda position: (
+            -disagreement_rates[position],
+            str(usable.index[position]),
+        ),
+    )
+    examples = [
+        {
+            "row_index": str(usable.index[position]),
+            "label": str(labels[position]),
+            "dominant_neighbor_label": opposing_labels[position],
+            "neighbor_disagreement_rate": disagreement_rates[position],
+        }
+        for position in ranked_positions[:_MAX_NEIGHBORHOOD_EXAMPLES]
+    ]
+    high_rate = len(high_positions) / len(usable)
+    return Evidence.create(
+        kind="classification_neighborhood_disagreement",
+        scope=EvidenceScope(table=table.name, columns=tuple(features + [target])),
+        value={
+            "row_count": int(len(usable)),
+            "feature_count": len(features),
+            "numeric_features": numeric,
+            "categorical_features": categorical,
+            "excluded_features": excluded,
+            "neighbor_count": neighbor_count,
+            "mean_neighbor_disagreement_rate": float(np.mean(disagreement_rates)),
+            "high_disagreement_threshold": _NEIGHBOR_DISAGREEMENT_THRESHOLD,
+            "high_disagreement_row_count": len(high_positions),
+            "high_disagreement_row_rate": high_rate,
+            "class_pair_counts": dict(
+                sorted(pair_counts.items(), key=lambda item: (-item[1], item[0]))
+            ),
+            "examples": examples,
+        },
+        method="leakage_screened_nearest_neighbor_overlap_v1",
+        description=(
+            f"Local label-neighborhood disagreement candidates for {table.name}."
+        ),
+        confidence=0.78,
+        assumptions=(
+            "Nearby rows are compared after median imputation, scaling, and "
+            "one-hot encoding of eligible features.",
+            "This is a local overlap diagnostic, not an estimate of production "
+            "model accuracy or a statement that labels are wrong.",
+        ),
+    )
 
 
 def _split_guidance_evidence(
@@ -1068,6 +1203,49 @@ def _findings_and_steps(
                     ),
                 )
             )
+        elif item.kind == "classification_neighborhood_disagreement":
+            rate = value["high_disagreement_row_rate"]
+            severity = "high" if rate >= 0.4 else "medium"
+            findings.append(
+                Finding.create(
+                    title=f"Local class overlap in {item.scope.table}",
+                    summary=(
+                        f"{value['high_disagreement_row_count']:,} row(s) "
+                        f"({rate:.1%}) have a different label from at least "
+                        f"{value['high_disagreement_threshold']:.0%} of their "
+                        "nearest feature-neighbors."
+                    ),
+                    severity=severity,
+                    confidence=item.confidence,
+                    evidence_ids=(item.id,),
+                    recommendation=(
+                        "Review these local neighborhoods for label ambiguity, "
+                        "overlapping classes, or missing explanatory features."
+                    ),
+                )
+            )
+            steps.append(
+                TransformationStep(
+                    operation="review_class_overlap_candidates",
+                    table=item.scope.table or "",
+                    columns=item.scope.columns,
+                    parameters={
+                        "neighbor_count": value["neighbor_count"],
+                        "high_disagreement_threshold": value[
+                            "high_disagreement_threshold"
+                        ],
+                        "high_disagreement_row_count": value[
+                            "high_disagreement_row_count"
+                        ],
+                    },
+                    rationale=(
+                        "Rows surrounded by differently labeled neighbors can reveal "
+                        "class overlap, label ambiguity, or missing features."
+                    ),
+                    evidence_ids=(item.id,),
+                    risk=severity,
+                )
+            )
         elif item.kind == "classification_split_guidance":
             risk_kinds = {risk["kind"] for risk in value["risks"]}
             if "group_split_recommended" in risk_kinds:
@@ -1196,6 +1374,16 @@ def _artifacts(evidence: list[Evidence]) -> tuple[Artifact, ...]:
                     "feature": "cross-validated errors",
                     "metric": "error rate",
                     "score": f"{item.value['error_rate']:.2f}",
+                    "confidence": f"{item.confidence:.0%}",
+                }
+            )
+        elif item.kind == "classification_neighborhood_disagreement":
+            signal_rows.append(
+                {
+                    "signal": "local class overlap",
+                    "feature": f"{item.value['feature_count']} feature(s)",
+                    "metric": "high-disagreement rows",
+                    "score": f"{item.value['high_disagreement_row_rate']:.1%}",
                     "confidence": f"{item.confidence:.0%}",
                 }
             )
@@ -1346,6 +1534,16 @@ def classification_dataset(
                     prior_evidence=evidence,
                 )
             )
+            neighborhood = _neighborhood_disagreement_evidence(
+                frame,
+                table_catalog,
+                resolved_target,
+                config=config,
+                max_categories=max_categories,
+                prior_evidence=evidence,
+            )
+            if neighborhood is not None:
+                evidence.append(neighborhood)
             split_guidance = _split_guidance_evidence(
                 frame,
                 table_catalog,

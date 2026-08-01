@@ -217,6 +217,10 @@ Implemented diagnostics:
 - separability metrics including accuracy, balanced accuracy, macro F1, and
   majority-baseline lift;
 - cross-validated hard-example candidates from probe errors;
+- leakage-screened nearest-neighbor class-overlap candidates, using deterministic
+  local label disagreement;
+- context-aware group/time split guidance when `entity_id` or `timestamp` is
+  supplied;
 - class-balance and feature-signal metric-table artifacts;
 - evidence-linked findings and transformation recommendations.
 
@@ -225,9 +229,8 @@ Important limitations:
 - probe models are diagnostic instruments, not production model training;
 - the probe excludes obvious leakage, identifiers, and high-cardinality features,
   so it may understate signal when those fields are legitimately predictive;
-- no calibration or neighborhood-disagreement detection yet;
+- no calibration yet;
 - no train/test comparison yet;
-- no group/time split recommendation yet beyond existing context fields;
 - fairness or subgroup coverage is not implemented.
 
 ### Image Profile

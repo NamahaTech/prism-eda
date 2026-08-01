@@ -163,7 +163,8 @@ rows as confirmed anomalies.
 Classification currently reports target validity, class imbalance, conflicting
 labels, typed feature-target associations, missingness by class, high-cardinality
 risks, identifier-like columns to exclude, deterministic leakage candidates,
-leakage-screened probe-model separability, and hard-example candidates. Findings
+leakage-screened probe-model separability, local class-overlap candidates,
+hard-example candidates, and context-aware group/time split guidance. Findings
 lead with severity (so confirmed-style leakage surfaces first) and the summary
 states a readiness verdict. It is a readiness diagnostic, not a production model
 training pipeline.

@@ -3,8 +3,8 @@
 `classification("target")` answers a question you should ask *before* training a
 model: **is this data actually ready to learn from?** It runs a battery of
 deterministic diagnostics — leakage screening, class balance, feature/target
-association, missingness, and a leakage-screened probe model — and leads with a
-**readiness verdict**.
+association, local class overlap, missingness, and a leakage-screened probe
+model — and leads with a **readiness verdict**.
 
 It is a *readiness diagnostic*, not a training pipeline. It returns evidence and
 findings, never a fitted production model.
@@ -75,7 +75,9 @@ This is the whole product thesis in one report. Read it top to bottom:
 | **Identifier-like features** | Columns that label rows rather than explain the target |
 | **High-cardinality risk** | Categorical/text features with too many distinct values |
 | **Leakage-screened probe** | Cross-validated separability of a logistic probe with fold-local preprocessing |
+| **Local class overlap** | Rows whose nearest eligible-feature neighbors commonly have a different label |
 | **Hard examples** | Cross-validated probe errors retained for review |
+| **Split guidance** | Group/time-aware validation advice when `entity_id` or `timestamp` is supplied in the context |
 
 The leakage screen is reachable even on **imbalanced** targets (a near-perfect
 rule escalates to `critical`), and the probe's preprocessing is fit **per fold**
@@ -104,7 +106,13 @@ instead of the positional argument.
 ## Artifacts and the transformation plan
 
 Classification produces two `metric_table` artifacts — **Class balance** and
-**Feature-target diagnostic signals** — rendered in the HTML report. Its
+**Feature-target diagnostic signals** — rendered in the HTML report. Local
+overlap uses leakage-screened eligible features, median imputation/scaling for
+numeric features, one-hot encoding for categorical features, and a deterministic
+5- or 9-neighbor comparison (quick vs. standard/deep). A row is retained when at
+least half of its neighbors have another label. This is a review signal for label
+ambiguity, overlapping classes, or missing features; it is not proof that a
+label is wrong or a production-model score. Its
 transformation plan contains non-mutating recommendations, e.g. *exclude the
 identifier column* and *review the leakage candidate*, each citing its evidence:
 
@@ -120,6 +128,5 @@ review_target_leakage_candidate ('exit_survey_sent', 'churned') | risk: high
 
 ## What's next for this recipe
 
-Class-overlap/neighborhood-disagreement detection, group/time split guidance,
-opt-in fairness coverage, and train/test comparison are planned. See the
+Opt-in fairness coverage and train/test comparison are planned. See the
 [implementation status](../implementation-status.md).
