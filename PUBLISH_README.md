@@ -1,12 +1,12 @@
 <p align="center">
   <!-- Replace this text mark with docs/assets/prism-eda-logo.svg when the public asset is added. -->
-  <strong>◈ PRISM EDA</strong>
+  <strong>PRISM-EDA</strong>
 </p>
 
-<h1 align="center">Prism EDA</h1>
+<h1 align="center">Prism-EDA</h1>
 
 <p align="center">
-  <strong>Give Prism EDA your data, and it turns it into decision-ready evidence through seven task-aware recipes.</strong>
+  <strong>Give Prism EDA your data, and it turns it into decision ready insights through seven task aware recipes.</strong>
 </p>
 
 <p align="center">
@@ -21,12 +21,12 @@
 </p>
 
 > **One dataset in. Seven useful rays out.** Prism EDA is a Python library for
-> deterministic, task-aware exploratory data analysis across tabular and image
-> datasets.
+> deterministic, task aware exploratory data analysis across **tabular and image
+> datasets**.
 
 ## What is Prism EDA?
 
-Most EDA libraries answer “what columns do I have?” Prism EDA also asks “what
+Most EDA libraries answer “what columns do I have?” Prism-EDA additionaly asks “what
 decision are you trying to make?” A dataset can be profiled, explored as a
 schema, checked for suspicious observations, or assessed for a modelling task
 without turning exploratory analysis into a collection of disconnected scripts.
@@ -37,7 +37,7 @@ to choose relevant diagnostics and explain their limits. Prism never treats an
 inferred key, relationship, anomaly, or leakage signal as confirmed business
 truth. It gives you citable evidence and review recommendations.
 
-The prism metaphor guides the product: one input—data—can be examined through
+The prism metaphor: one input—data can be examined through
 seven distinct objectives:
 
 | Prism-rays (recipes)     | Objectives                                            |
@@ -52,8 +52,7 @@ seven distinct objectives:
 
 ## Why it exists
 
-Traditional profiling tools are excellent at producing a broad catalog:
-types, missing values, duplicates, distributions, and correlations. But a raw
+Traditional profiling tools produces a broad catalog: types, missing values, duplicates, distributions, and correlations. But a raw
 profile often leaves the most important next question unanswered:
 
 - Can these tables safely be joined, and what are the likely keys?
@@ -85,11 +84,11 @@ JavaScript, or an AI provider.
 
 - Infer candidate single/composite keys and directional table relationships with
   coverage, orphan counts, cardinality, confidence, and an ER diagram.
-- Find numeric tails, multivariate candidates, local-density candidates,
+- Find numeric tails, multivariate candidates, local density candidates,
   conditional surprises, rare categories, distribution regimes, and ranked
   anomaly review rows.
 - Assess classification targets for balance, label conflicts, associations,
-  missingness gaps, identifier/high-cardinality risks, deterministic leakage,
+  missing gaps, deterministic leakage,
   probe separability, hard examples, local class overlap, and split guidance.
 - Profile image datasets for decode failures, dimensions, formats, EXIF,
   duplicates, near-duplicates, split leakage, label conflicts, quality flags,
@@ -287,14 +286,6 @@ images = pe.profile_images("images/", thumbnails=True)
 images.to_html("image-profile.html")
 ```
 
-### The remaining Prism objectives
-
-The Prism Seven gives every analysis a consistent goal and result contract:
-numeric prediction uses the **Predict** objective, timestamped data uses the
-**Forecast** objective, and segmentation uses the **Group** objective. Each
-recipe follows the same pattern—local deterministic evidence, caveated findings,
-non-mutating recommendations, and HTML/JSON output.
-
 ### AI-assisted exploration
 
 ```python
@@ -313,7 +304,7 @@ Set `GEMINI_API_KEY` in the environment before creating `GeminiProvider`.
 
 ## AI features
 
-The optional investigator gives an LLM a tightly constrained role: it chooses
+The optional option gives an LLM a tightly constrained role: it chooses
 which Prism tools to call and explains their evidence. It does not inspect raw
 rows, run arbitrary code, or create findings without citations.
 
@@ -343,10 +334,22 @@ bounded provider/tool loop ──► deterministic recipes ──► evidence ba
 See [AI-assisted analysis](docs/usage_docs/ai-assisted-analysis.md) and
 [Privacy](docs/usage_docs/privacy.md) for configuration and provider details.
 
+
+
+## Detailed documentation:
+
+- [**Usage Guide**](docs/usage_docs/README.md) — install, load, analyze, export (start here)
+- [AI-assisted investigation](docs/usage_docs/ai-assisted-analysis.md) · [Privacy](docs/usage_docs/privacy.md)
+- [Schema discovery](docs/schema-discovery.md)
+- [Implementation plan and handoff](docs/implementation-plan.md)
+- [Implementation status](docs/implementation-status.md)
+- [Maintainer guide](docs/maintainer-guide.md)
+- [Agent handoff](AGENTS.md)
+
 ## Generated reports
 
-Every result can become a single offline HTML file. The report design is
-decision-first: it leads with the verdict and severe findings, then preserves
+Every result can become a single offline HTML file. The report design 
+leads with the verdict and severe findings, then preserves
 the catalog, evidence, assumptions, warnings, sampling disclosure, artifacts,
 and transformation recommendations needed to audit that conclusion.
 
@@ -398,28 +401,6 @@ DataFrame / files / folders / image roots
 
 Core code does not import Plotly, LangChain, LangGraph, or a model-provider SDK.
 Those capabilities remain optional at the package boundary.
-
-## Supported tasks
-
-Prism EDA is organized around these seven objectives:
-
-1. **Baseline Profiling** — catalog data, quality, types, distributions, and
-   data-shape risks.
-2. **Schema Discovery** — surface keys, relationships, cardinality, and
-   referential-integrity candidates.
-3. **Anomaly Detection** — rank observations and patterns for human review.
-4. **Classification Readiness** — evaluate target health, leakage, feature
-   signal, overlap, and validation design.
-5. **Regression Readiness** — inspect continuous targets, residual risks,
-   associations, leakage, and error concentration.
-6. **Time-Series Readiness** — inspect temporal frequency, gaps, drift,
-   seasonality, and forecasting constraints.
-7. **Clustering Readiness** — inspect scale sensitivity, clusterability,
-   stability, and feature dominance without claiming a universal “best k.”
-
-Image datasets use the same evidence-first philosophy: profile the collection,
-audit labels/splits, detect duplicate and quality risks, and review visual
-outliers without sending raw pixels to an AI provider.
 
 ## Configuration
 
@@ -526,7 +507,7 @@ checking classification readiness, or auditing an image dataset.
 No. They are candidates supported by evidence and confidence, designed for user
 or domain-expert confirmation.
 
-## Contributing
+## Open Contribution
 
 Prism EDA is currently under active private development and will open for
 community contributions as the public workflow matures.
@@ -543,16 +524,6 @@ The intended contribution workflow is:
 Until public contribution channels are announced, please use the repository’s
 issue/contact path for feedback and collaboration requests.
 
-## Citation
-
-A formal citation record and accompanying paper will be published with the
-public research/release materials. Until then, cite the project as:
-
-```text
-Thanvi, Khushal. (2026). Prism EDA: task-aware exploratory data analysis for Python.
-https://github.com/NamahaTech/prism-eda
-```
-
 ## License
 
 Prism EDA is released under the [MIT License](LICENSE). You may use, copy,
@@ -562,4 +533,4 @@ provided without warranty; see [LICENSE](LICENSE) for the complete terms.
 
 ---
 
-**Explore the data. Choose the question. Follow the evidence.**
+**Explore the data now...**
