@@ -95,7 +95,7 @@ removed, or materially re-scoped.
   height), extension/encoding mismatch, greyscale stored in colour mode, used
   alpha channels, and truncated-but-decodable files
 - Lightweight visual-quality flags for very dark, very bright, low-contrast,
-  low-sharpness, and low-entropy images
+  low-sharpness, and low-entropy imagesw
 - Robust outlier candidates for file size, resolution, and aspect ratio, with a
   mean-absolute-deviation fallback so uniform datasets still surface odd files
 - Per-label dimension and brightness profiles, plus deviating-label findings
