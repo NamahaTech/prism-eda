@@ -26,8 +26,7 @@
 
 ## What is Prism EDA?
 
-Most EDA libraries answer “what columns do I have?” Prism-EDA additionaly asks “what
-decision are you trying to make?” A dataset can be profiled, explored as a
+Prism-eda is a modular python library built for EDA (exploratory data analysis). Using Prism-eda, a dataset can be profiled, explored as a
 schema, checked for suspicious observations, or assessed for a modelling task
 without turning exploratory analysis into a collection of disconnected scripts.
 
