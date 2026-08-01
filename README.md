@@ -19,13 +19,9 @@
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/dm/prism-eda?label=downloads" alt="PyPI downloads"></a>
 </p>
 
-> **One dataset in. Seven useful rays out.** Prism EDA is a Python library for
-> deterministic, task aware exploratory data analysis across **tabular and image
-> datasets**.
-
 ## What is Prism EDA?
 
-Prism-eda is a modular python library built for EDA (exploratory data analysis). Using Prism-eda, a dataset can be profiled, explored as a
+Prism-eda is a modular python library built for EDA (exploratory data analysis) across tabular and image datasets. Using Prism-eda, a dataset can be profiled, explored as a
 schema, checked for suspicious observations, or assessed for a modelling task
 without turning exploratory analysis into a collection of disconnected scripts.
 
@@ -115,18 +111,7 @@ JavaScript, or an AI provider.
 - Privacy controls to allow, redact, alias, or exclude columns from provider
   context; raw values are withheld by default.
 
-## Demo GIFs
 
-> Add compact, looped GIFs to `docs/assets/demos/` before public release and
-> replace the placeholders below. Keep each under roughly 10 MB and provide a
-> static screenshot for accessibility.
-
-| Demo | Asset placeholder | What it should show |
-|---|---|---|
-| First report | `docs/assets/demos/profile.gif` | Load a CSV and open one self-contained HTML report. |
-| Schema map | `docs/assets/demos/schema.gif` | Infer joins and explore the interactive ER diagram. |
-| Investigation | `docs/assets/demos/ai-investigation.gif` | State a goal, show deterministic tool calls, then view cited findings. |
-| Image audit | `docs/assets/demos/image-profile.gif` | Surface split leakage and review paired duplicate thumbnails. |
 
 ```md
 <!-- Example once the asset exists -->
