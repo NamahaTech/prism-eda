@@ -4,15 +4,6 @@
   <img src="https://raw.githubusercontent.com/NamahaTech/prism-eda/main/docs/assets/prism-eda-logo.png" alt="Prism EDA" width="150">
 </p>
 
-<h1 align="center">Prism EDA</h1>
-
-<p align="center">
-  <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/v/prism-eda.svg" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/pyversions/prism-eda.svg" alt="Supported Python versions"></a>
-  <a href="https://github.com/NamahaTech/prism-eda/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/prism-eda.svg" alt="MIT license"></a>
-  <a href="https://github.com/NamahaTech/prism-eda/actions/workflows/ci.yml"><img src="https://github.com/NamahaTech/prism-eda/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-</p>
-
 <h1 align="center">Prism-EDA</h1>
 <h2 align="center">A python library for exploratory data analysis</h2>
 
