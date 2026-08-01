@@ -15,11 +15,8 @@
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/v/prism-eda?color=6f52ed&label=PyPI" alt="PyPI version"></a>
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/pyversions/prism-eda?color=6f52ed" alt="Python 3.11+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-1f9d55" alt="MIT license"></a>
-  <a href="https://github.com/NamahaTech/prism-eda/actions"><img src="https://github.com/NamahaTech/prism-eda/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="https://codecov.io/gh/NamahaTech/prism-eda"><img src="https://codecov.io/gh/NamahaTech/prism-eda/branch/main/graph/badge.svg" alt="Test coverage"></a>
   <a href="https://github.com/NamahaTech/prism-eda"><img src="https://img.shields.io/badge/docs-guide-0b7285" alt="Documentation"></a>
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/dm/prism-eda?label=downloads" alt="PyPI downloads"></a>
-  <a href="https://github.com/NamahaTech/prism-eda"><img src="https://img.shields.io/badge/code%20style-ruff-261230" alt="Ruff"></a>
 </p>
 
 > **One dataset in. Seven useful rays out.** Prism EDA is a Python library for
