@@ -12,7 +12,9 @@ result = pe.load(load_sample()).classification("churned", table="customers")
 
 ## HTML reports
 
-`to_html(path)` writes a **self-contained** HTML report and returns the path:
+`to_html(path)` writes a **self-contained** HTML report and returns the path.
+Dataset fingerprints remain available in the result catalog and JSON export for
+reproducibility, but are not shown in the reader-facing HTML report:
 
 ```python
 path = result.to_html("churn-readiness.html")

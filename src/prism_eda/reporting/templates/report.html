@@ -1349,7 +1349,6 @@
   <!-- ============ FOOTER ============ -->
   <footer class="page">
     <div class="repro">
-      <span class="k">Dataset fingerprint</span><span class="v">{{ result.catalog.fingerprint }}</span>
       {% if result.metadata.get('engine') == 'assisted' %}
       <span class="k">Engine</span><span class="v">AI-assisted · {{ result.metadata.get('provider', 'n/a') }} / {{ result.metadata.get('model', 'n/a') }} · {{ result.metadata.get('tool_calls', 0) }} tool call(s)</span>
       {% else %}

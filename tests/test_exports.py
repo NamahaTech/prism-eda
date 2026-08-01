@@ -33,7 +33,8 @@ def test_html_export_is_self_contained(tmp_path) -> None:
     html = target.read_text(encoding="utf-8")
 
     assert "<!doctype html>" in html
-    assert "Dataset fingerprint" in html
+    assert "Dataset fingerprint" not in html
+    assert result.catalog.fingerprint not in html
     assert "https://" not in html
     assert "<style>" in html
     # The report names the data it profiled, and carries no product copy.
