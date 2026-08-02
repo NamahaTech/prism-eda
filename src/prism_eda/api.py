@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from prism_eda.catalog.loaders import DataSource
+from prism_eda.comparison_results import ComparisonResult
 from prism_eda.config import (
     AnalysisConfig,
     AnalysisContext,
@@ -273,9 +274,50 @@ def discover_schema(
     )
 
 
+def compare_datasets(
+    base: DataSource | Dataset,
+    comparator: DataSource | Dataset,
+    *,
+    context: AnalysisContext | Mapping[str, Any] | None = None,
+    config: AnalysisConfig | None = None,
+    callbacks: Sequence[EventCallback] = (),
+    mode: AnalysisMode | str = AnalysisMode.STANDARD,
+    recursive: bool = False,
+    include: Sequence[str] | None = None,
+    exclude: Sequence[str] | None = None,
+    names: Mapping[str, str] | None = None,
+    read_options: Mapping[str, Any] | None = None,
+) -> ComparisonResult:
+    """Load two sources and run deterministic comparison diagnostics."""
+    base_ds = load(
+        base,
+        recursive=recursive,
+        include=include,
+        exclude=exclude,
+        names=names,
+        read_options=read_options,
+    )
+    comp_ds = load(
+        comparator,
+        recursive=recursive,
+        include=include,
+        exclude=exclude,
+        names=names,
+        read_options=read_options,
+    )
+    return base_ds.compare(
+        comp_ds,
+        context=context,
+        config=config,
+        callbacks=callbacks,
+        mode=mode,
+    )
+
+
 __all__ = [
     "anomaly_detection",
     "classification",
+    "compare_datasets",
     "discover_schema",
     "load",
     "load_images",

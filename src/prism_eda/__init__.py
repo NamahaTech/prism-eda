@@ -3,6 +3,7 @@
 from prism_eda.api import (
     anomaly_detection,
     classification,
+    compare_datasets,
     discover_schema,
     load,
     load_images,
@@ -11,6 +12,7 @@ from prism_eda.api import (
     profile_images,
 )
 from prism_eda.artifacts import Artifact
+from prism_eda.comparison_results import ComparisonResult
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.dataset import Dataset
 from prism_eda.events import Event, EventKind
@@ -24,12 +26,14 @@ __all__ = [
     "AnalysisResult",
     "AnalysisStatus",
     "Artifact",
+    "ComparisonResult",
     "Dataset",
     "Event",
     "EventKind",
     "ImageDataset",
     "anomaly_detection",
     "classification",
+    "compare_datasets",
     "discover_schema",
     "load",
     "load_images",
