@@ -9,11 +9,14 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
+from prism_eda.comparison_results import ComparisonResult
 from prism_eda.evidence.models import split_findings
 from prism_eda.reporting.charts import (
     association_heatmap_svg,
     category_bars_svg,
     co_missing_heatmap_svg,
+    dual_bar_svg,
+    dual_histogram_svg,
     format_cell,
     histogram_svg,
     image_dimension_svg,
@@ -53,6 +56,8 @@ def _environment() -> Environment:
     environment.filters["format_value"] = _format_value
     environment.filters["format_cell"] = format_cell
     environment.filters["histogram_svg"] = histogram_svg
+    environment.filters["dual_histogram_svg"] = dual_histogram_svg
+    environment.filters["dual_bar_svg"] = dual_bar_svg
     environment.filters["scatter_svg"] = scatter_svg
     environment.filters["why_bars_svg"] = why_bars_svg
     environment.filters["peer_group_svg"] = peer_group_svg
@@ -112,6 +117,16 @@ def render_html(result: AnalysisResult) -> str:
         column_charts=_by_column(result, "profile_distribution"),
         column_frequencies=_by_column(result, "profile_category_frequency"),
         column_timelines=_by_column(result, "profile_timeline"),
+    )
+
+
+def render_comparison_html(result: ComparisonResult) -> str:
+    """Render a complete comparison report as a standalone HTML document."""
+    template = _environment().get_template("comparison_report.html")
+    return template.render(
+        result=result,
+        logo_uri=_data_uri("assets/logo.png", "image/png"),
+        favicon_uri=_data_uri("assets/favicon.png", "image/png"),
     )
 
 

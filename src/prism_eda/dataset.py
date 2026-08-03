@@ -10,11 +10,13 @@ import pandas as pd
 
 from prism_eda.analysis.anomaly import anomaly_detection_dataset
 from prism_eda.analysis.classification import classification_dataset
+from prism_eda.analysis.compare import compare_datasets_recipe
 from prism_eda.analysis.profile import profile_dataset
 from prism_eda.analysis.schema_discovery import discover_schema_dataset
 from prism_eda.catalog.loaders import DataSource, load_tables
 from prism_eda.catalog.models import DatasetCatalog, SourceInfo
 from prism_eda.catalog.profiling import build_catalog
+from prism_eda.comparison_results import ComparisonResult
 from prism_eda.config import (
     AnalysisConfig,
     AnalysisContext,
@@ -314,4 +316,38 @@ class Dataset:
             table=table,
             target=target,
             max_categories=max_categories,
+        )
+
+    def compare(
+        self,
+        other: Dataset,
+        *,
+        context: AnalysisContext | Mapping[str, Any] | None = None,
+        config: AnalysisConfig | None = None,
+        callbacks: Sequence[EventCallback] = (),
+        mode: AnalysisMode | str = AnalysisMode.STANDARD,
+    ) -> ComparisonResult:
+        """Run deterministic comparison diagnostics against another dataset."""
+        if context is None:
+            context = AnalysisContext(goal="compare")
+        elif not isinstance(context, AnalysisContext):
+            context = AnalysisContext(goal="compare", **dict(context))
+
+        if config is None:
+            config = AnalysisConfig(mode=mode)
+
+        try:
+            base_catalog = self.catalog(refresh=True)
+            compare_catalog = other.catalog(refresh=True)
+        except Exception as error:
+            raise AnalysisError(f"Catalog generation failed: {error}") from error
+
+        return compare_datasets_recipe(
+            self._tables,
+            base_catalog,
+            other._tables,
+            compare_catalog,
+            context=context,
+            config=config,
+            callbacks=tuple(callbacks),
         )

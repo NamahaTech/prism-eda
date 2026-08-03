@@ -135,6 +135,72 @@ def histogram_svg(distribution: dict[str, Any], compact: bool = False) -> Markup
     return Markup("".join(parts))
 
 
+def dual_histogram_svg(distribution: dict[str, Any]) -> Markup:
+    """A dual-series histogram comparing two datasets with different colors."""
+    edges = distribution.get("edges", [])
+    base_counts = distribution.get("base_counts", [])
+    comp_counts = distribution.get("compare_counts", [])
+    if not edges or not base_counts or not comp_counts:
+        return Markup("")
+
+    width, height = 680.0, 184.0
+    pad_l, pad_r, pad_t, pad_b = 14.0, 14.0, 12.0, 24.0
+    hist_h = height - pad_t - pad_b
+    x_lo, x_hi = float(edges[0]), float(edges[-1])
+    max_count = max(max(base_counts), max(comp_counts)) or 1
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Comparison Distribution">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t + hist_h}" '
+        f'x2="{width - pad_r}" y2="{pad_t + hist_h}"></line>',
+    ]
+
+    bar_gap = 1.0
+    for index in range(len(base_counts)):
+        b_count = base_counts[index]
+        c_count = comp_counts[index]
+        left = _scale(float(edges[index]), x_lo, x_hi, pad_l, width - pad_r)
+        right = _scale(float(edges[index + 1]), x_lo, x_hi, pad_l, width - pad_r)
+
+        # We split the bin width in two for side-by-side bars
+        bin_w = max(right - left, 1.2)
+        bar_w = max((bin_w - bar_gap * 2) / 2.0, 0.4)
+
+        b_h = (b_count / max_count) * hist_h if b_count else 0.0
+        c_h = (c_count / max_count) * hist_h if c_count else 0.0
+
+        b_top = pad_t + hist_h - b_h
+        c_top = pad_t + hist_h - c_h
+
+        # Base series (blue-ish)
+        if b_count > 0:
+            parts.append(
+                f'<rect class="chart-bar" style="fill: #2563eb; opacity: 0.8;" '
+                f'x="{left + bar_gap / 2:.1f}" y="{b_top:.1f}" '
+                f'width="{bar_w:.1f}" height="{b_h:.1f}">'
+                f"<title>Base: {b_count}</title></rect>"
+            )
+        # Compare series (red-ish)
+        if c_count > 0:
+            parts.append(
+                f'<rect class="chart-bar" style="fill: #dc2626; opacity: 0.8;" '
+                f'x="{left + bar_gap / 2 + bar_w:.1f}" y="{c_top:.1f}" '
+                f'width="{bar_w:.1f}" height="{c_h:.1f}">'
+                f"<title>Compare: {c_count}</title></rect>"
+            )
+
+    parts.append(
+        f'<text class="chart-label" x="{pad_l}" y="{height - 4}" '
+        f'text-anchor="start">{escape(_format_number(edges[0]))}</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 4}" '
+        f'text-anchor="end">{escape(_format_number(edges[-1]))}</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
 def scatter_svg(scatter: dict[str, Any], compact: bool = False) -> Markup:
     """A scatter of the most relevant numeric pair, flagged rows highlighted."""
     points = scatter.get("points", [])
@@ -442,6 +508,73 @@ def _bars_svg(
             f'<text class="chart-label" x="{label_width + bar_w + 8:.1f}" '
             f'y="{y + 15:.1f}">{count:,}</text></g>'
         )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def dual_bar_svg(distribution: dict[str, Any]) -> Markup:
+    """A dual-series bar chart for comparing categorical frequencies."""
+    labels = distribution.get("labels", [])
+    base_counts = distribution.get("base_counts", [])
+    comp_counts = distribution.get("compare_counts", [])
+    if not labels:
+        return Markup("")
+
+    width = 680.0
+    bar_h = 16.0
+    group_pad = 8.0
+    # Two bars per label + padding
+    group_h = (bar_h * 2) + group_pad
+    pad_t, pad_b, pad_r = 16.0, 16.0, 16.0
+    label_w = 160.0
+    height = pad_t + pad_b + (len(labels) * group_h)
+
+    max_count = max(max(base_counts), max(comp_counts)) or 1
+
+    parts = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" '
+        'role="img" class="chart" aria-label="Comparison Categories">'
+    ]
+
+    for i, label in enumerate(labels):
+        y_top = pad_t + i * group_h
+
+        # Label text
+        display_label = escape(_truncate(str(label), 22))
+        parts.append(
+            f'<text class="chart-label" x="{label_w - 8}" y="{y_top + bar_h + 4}" '
+            f'text-anchor="end">{display_label}</text>'
+        )
+
+        # Base bar (blue)
+        b_count = base_counts[i]
+        if b_count > 0:
+            b_w = max((b_count / max_count) * (width - label_w - pad_r), 2.0)
+            parts.append(
+                f'<rect class="chart-bar" style="fill: #2563eb; opacity: 0.8;" '
+                f'x="{label_w}" y="{y_top}" '
+                f'width="{b_w:.1f}" height="{bar_h}">'
+                f"<title>Base: {b_count}</title></rect>"
+                f'<text class="chart-label" style="fill: white; font-weight: bold;" '
+                f'x="{label_w + b_w - 6}" y="{y_top + 11}" '
+                f'text-anchor="end">{b_count}</text>'
+            )
+
+        # Compare bar (red)
+        c_count = comp_counts[i]
+        if c_count > 0:
+            c_w = max((c_count / max_count) * (width - label_w - pad_r), 2.0)
+            parts.append(
+                f'<rect class="chart-bar" style="fill: #dc2626; opacity: 0.8;" '
+                f'x="{label_w}" y="{y_top + bar_h + 2}" '
+                f'width="{c_w:.1f}" height="{bar_h}">'
+                f"<title>Compare: {c_count}</title></rect>"
+                f'<text class="chart-label" style="fill: white; font-weight: bold;" '
+                f'x="{label_w + c_w - 6}" y="{y_top + bar_h + 13}" '
+                f'text-anchor="end">{c_count}</text>'
+            )
+
     parts.append("</svg>")
     return Markup("".join(parts))
 
