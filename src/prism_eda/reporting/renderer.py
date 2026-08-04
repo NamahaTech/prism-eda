@@ -15,6 +15,7 @@ from prism_eda.reporting.charts import (
     association_heatmap_svg,
     category_bars_svg,
     co_missing_heatmap_svg,
+    conditional_bias_svg,
     dual_bar_svg,
     dual_histogram_svg,
     format_cell,
@@ -23,6 +24,7 @@ from prism_eda.reporting.charts import (
     label_bars_svg,
     missing_bars_svg,
     peer_group_svg,
+    residual_scatter_svg,
     scatter_svg,
     timeline_svg,
     why_bars_svg,
@@ -59,6 +61,8 @@ def _environment() -> Environment:
     environment.filters["dual_histogram_svg"] = dual_histogram_svg
     environment.filters["dual_bar_svg"] = dual_bar_svg
     environment.filters["scatter_svg"] = scatter_svg
+    environment.filters["residual_scatter_svg"] = residual_scatter_svg
+    environment.filters["conditional_bias_svg"] = conditional_bias_svg
     environment.filters["why_bars_svg"] = why_bars_svg
     environment.filters["peer_group_svg"] = peer_group_svg
     environment.filters["image_dimension_svg"] = image_dimension_svg

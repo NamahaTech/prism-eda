@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-07-13 (image dataset profiling)
+Last updated: 2026-08-04 (regression readiness)
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -99,6 +99,33 @@ removed, or materially re-scoped.
 - Context-aware group/time split guidance from `entity_id` and `timestamp`
 - Class-balance and feature-signal report artifacts
 
+### Regression
+
+- `regression()` / `Dataset.regression()` public API for one numeric target
+- Target summary, shape label, and `log1p`/`sqrt`/Yeo-Johnson candidates whose
+  skew reduction is **measured on the data**, with abstention when none helps
+- Value-spike scan for censoring, floors, defaults, and zero inflation in an
+  otherwise continuous target; round-number heaping scan
+- Feature association measured three ways (Pearson, Spearman, binned eta-squared)
+  so a curved relationship is not reported as no relationship
+- Redundant-pair detection with VIF and design condition number reported as
+  measurements, never thresholded against a universal VIF cutoff
+- Deterministic leakage screen: affine copies of the target, near-perfect
+  univariate fit, and shared **name tokens** (never raw substrings)
+- Leakage-screened cross-validated Ridge and Huber probes against a median
+  baseline; the robust-versus-conventional gap on the typical row distinguishes
+  weak features from a few distorting rows
+- Residual shape with a KS *distance* and no p-value; binned residual spread with
+  Breusch-Pagan; conditional bias per fitted decile
+- Scale-normalized, peer-relative subgroup error concentration
+- OLS leverage and Cook's distance, with a ranked review-row table carrying
+  per-row reasons and robust feature deviations
+- Weak-support scan for genuine holes in the target range and feature gaps
+- Context-aware group/time split guidance from `entity_id` and `timestamp`
+- Report sections (rows to review, residuals, target shape) plus new
+  residual-scatter and diverging conditional-bias charts
+- `assess_regression` registered in the assisted-analysis tool registry
+
 ### Image dataset profile
 
 - `ImageDataset`, `load_images()`, and `profile_images()` public API
@@ -188,6 +215,14 @@ removed, or materially re-scoped.
 - Opt-in fairness coverage
 - Train/test comparison when both are supplied
 
+### Regression improvements
+
+- Quantile-regression probe for targets where the conditional median is the
+  quantity of interest
+- Interaction screening, so a group-specific slope is distinguished from a
+  group-specific intercept
+- Partial-dependence style summaries for the strongest non-linear features
+
 ### Image dataset improvements
 
 - Optional deep visual embeddings for stronger near-duplicate and semantic
@@ -201,7 +236,7 @@ removed, or materially re-scoped.
 
 ## Later
 
-- Regression, time-series, and clustering recipes
+- Time-series and clustering recipes
 - Chunked CSV execution and a general execution planner
 - Functional dependencies and denormalization analysis
 - Plotly interactive artifact implementations

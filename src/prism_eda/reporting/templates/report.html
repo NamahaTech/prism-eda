@@ -229,6 +229,20 @@
     .chart-label { fill: var(--ink-3); font-size: 10.5px; font-family: var(--mono); }
     .chart-dot { fill: var(--taupe); opacity: .85; }
     .chart-dot-flagged { fill: var(--high); stroke: var(--surface); stroke-width: 1; }
+    /* Residual diagnostics. The zero rule is the reference every residual is
+       read against, so it is drawn stronger than the axis; the band behind the
+       points is the local spread, which is what makes uneven error visible
+       rather than merely asserted. */
+    .chart-zero { stroke: var(--accent-ink); stroke-width: 2; }
+    /* A point pinned to the axis edge is not at that value. The ring says so. */
+    .chart-dot-clipped { stroke: var(--accent-ink); stroke-width: 1.5; opacity: 1; }
+    .chart-note-mark { fill: var(--ink-3); font-style: italic; }
+    .chart-band { fill: rgba(51,112,122,.11); }
+    .chart-band-edge { stroke: var(--accent); stroke-width: 1; opacity: .5; fill: none; }
+    /* Signed bars diverge from the zero rule. Direction carries the sign as
+       well as the hue, so the reading never depends on colour alone. */
+    .chart-bar-pos { fill: var(--high); }
+    .chart-bar-neg { fill: var(--low); }
     .chart-legend, .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: var(--ink-2); }
     .chart-legend span, .legend span { display: inline-flex; align-items: center; gap: 7px; }
 
@@ -484,7 +498,10 @@
 <body>
   {% set verdict = result.metadata.get('verdict') %}
   {% set consensus = result.evidence | selectattr('kind', 'equalto', 'anomaly_consensus_review') | list %}
-  {% set review_count = consensus[0].value.review_row_count if consensus else 0 %}
+  {# Both the anomaly review and the regression influence pass end in a list of
+     rows a person should open, so both feed the same masthead counter. #}
+  {% set regression_review = result.evidence | selectattr('kind', 'equalto', 'regression_review_rows') | list %}
+  {% set review_count = consensus[0].value.review_row_count if consensus else (regression_review[0].value.row_count if regression_review else 0) %}
 
   <!-- ============ MASTHEAD ============ -->
   <header class="page mast">
@@ -497,7 +514,7 @@
         </div>
       </div>
       <div class="recipe-pill" aria-label="Report recipe">
-        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
+        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'regression' %}Regression readiness{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
       </div>
     </div>
     <div class="mast-meta">
@@ -521,6 +538,8 @@
         Anomaly candidate review
       {%- elif result.goal == 'classification' -%}
         Classification readiness map
+      {%- elif result.goal == 'regression' -%}
+        Regression readiness map
       {%- elif result.goal == 'image_profile' -%}
         Image dataset quality profile
       {%- else -%}
@@ -535,7 +554,9 @@
       <div class="stat" role="listitem"><div class="n mono">{{ result.catalog.column_count | format_value }}</div><div class="l">{% if result.goal == 'image_profile' %}Manifest fields{% else %}Columns{% endif %}</div></div>
       {% if result.goal == 'schema_discovery' %}
       <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}</div><div class="l">Candidate relationships</div></div>
-      {% elif result.goal == 'profile' %}
+      {# Recipes that genuinely separate defects from observations count them
+         separately here too, so the masthead agrees with the verdict line. #}
+      {% elif result.goal in ('profile', 'regression') %}
       <div class="stat{% if issues %} flag{% endif %}" role="listitem"><div class="n mono">{{ issues | length | format_value }}</div><div class="l">Issue{% if issues | length != 1 %}s{% endif %}</div></div>
       <div class="stat" role="listitem"><div class="n mono">{{ observations | length | format_value }}</div><div class="l">Alert{% if observations | length != 1 %}s{% endif %}</div></div>
       {% else %}
@@ -667,7 +688,7 @@
 
   {# Image profiles defer their tables until after the findings and the contact
      sheets: the decision comes first, the reference tables back it up. #}
-  {% if result.goal not in ('anomaly_detection', 'image_profile') %}
+  {% if result.goal not in ('anomaly_detection', 'image_profile', 'regression') %}
   {% for artifact in result.artifacts %}
     {% if artifact.kind == 'metric_table' %}
     <section class="page" id="section-metrics-{{ loop.index0 }}">
@@ -747,7 +768,7 @@
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No data-quality issues were found. Every check that ran is listed in the guide; none of them fired.{% endif %}</div>
+      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'regression' %}No prioritized regression readiness issues were found.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No data-quality issues were found. Every check that ran is listed in the guide; none of them fired.{% endif %}</div>
     {% endif %}
   </section>
 
@@ -769,6 +790,166 @@
     </div>
     {% endfor %}
   </section>
+  {% endif %}
+
+  <!-- ============ REGRESSION: ROWS TO REVIEW ============ -->
+  {# A residual is a claim about a row. This table is where that claim becomes
+     something a person can act on, so it names why each row was flagged rather
+     than only how far off it was. #}
+  {% for item in result.evidence if item.kind == 'regression_review_rows' and item.value.rows %}
+  <section class="page"{% if loop.first %} id="section-rows"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('rows') }}</div>
+      <div class="sec-title">
+        <h2>Rows to review</h2>
+        <p>{{ item.value.rows | length }} row{% if item.value.rows | length != 1 %}s{% endif %} that move the fit more than any others — extreme in the features, badly predicted, or both. A data-entry error and a genuinely unusual record look identical here and need opposite treatment, so these are candidates, not corrections.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Row</th>
+            <th>Actual</th>
+            <th>Predicted</th>
+            <th>Residual</th>
+            <th>Std. residual</th>
+            <th>Leverage</th>
+            <th>Cook's D</th>
+            <th>Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in item.value.rows %}
+          <tr>
+            <td class="mono">{{ row.row_index }}</td>
+            <td class="mono">{{ row.actual | format_value }}</td>
+            <td class="mono">{{ row.predicted | format_value }}</td>
+            <td class="mono">{{ row.residual | format_value }}</td>
+            <td class="mono">{{ row.standardized_residual | format_value }}</td>
+            <td class="mono">{{ row.leverage | format_value }}</td>
+            <td class="mono">{{ row.cooks_distance | format_value }}</td>
+            <td>{{ row.reasons | join(', ') }}</td>
+          </tr>
+          {% if row.extreme_features %}
+          <tr>
+            <td></td>
+            <td colspan="7">{{ row.extreme_features | why_bars_svg }}</td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="chart-note">Residual σ for this fit is {{ item.value.residual_std | format_value }}. Cook's distance is screened at the 4/n convention — a rule of thumb for “worth opening”, not a test of significance.</p>
+  </section>
+  {% endfor %}
+
+  <!-- ============ REGRESSION: RESIDUALS ============ -->
+  {% if result.goal == 'regression' and (sections.number('residuals')) %}
+  <section class="wide" id="section-residuals">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('residuals') }}</div>
+      <div class="sec-title">
+        <h2>Residuals</h2>
+        <p>What the diagnostic probe left over. Everything here describes <em>that fit on this data</em> — it is model-conditional, not a property of the dataset.</p>
+      </div>
+    </div>
+    <div class="chart-grid">
+      {% for item in result.evidence if item.kind == 'regression_residual_scatter' and item.value.points %}
+      <div class="chart-card" style="grid-column: 1 / -1">
+        <h3>Residual against predicted value</h3>
+        <p class="chart-note">A trustworthy fit straddles the zero rule evenly at every prediction. The band is the local spread: where it fans out, one prediction interval will not hold.{% if item.value.sampled %} Showing a deterministic sample of {{ item.value.point_count }} points.{% endif %}</p>
+        {{ item.value | residual_scatter_svg }}
+      </div>
+      {% endfor %}
+      {% for item in result.evidence if item.kind == 'regression_conditional_bias' and item.value.bins %}
+      <div class="chart-card" style="grid-column: 1 / -1">
+        <h3>Average error by predicted range</h3>
+        <p class="chart-note">Bars above the rule are ranges the model under-predicts; below, ranges it over-predicts. A fit can average out to zero error and still be wrong at both ends.</p>
+        {{ item.value | conditional_bias_svg }}
+      </div>
+      {% endfor %}
+      {% for item in result.evidence if item.kind == 'regression_residual_shape' and item.value.distribution %}
+      <div class="chart-card" style="grid-column: 1 / -1">
+        <h3>Residual distribution</h3>
+        <p class="chart-note">skew {{ item.value.skewness | format_value }} · kurtosis {{ item.value.kurtosis | format_value }}{% if item.value.normality_distance is not none %} · normality distance {{ item.value.normality_distance | format_value }}{% endif %}</p>
+        {{ item.value.distribution | histogram_svg }}
+        <p class="chart-note">The normality figure is a Kolmogorov–Smirnov distance, not a p-value: the reference is estimated from these same residuals.</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- ============ REGRESSION: TARGET SHAPE ============ -->
+  {% for item in result.evidence if item.kind == 'regression_target_shape' %}
+  <section class="wide"{% if loop.first %} id="section-target"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('target') }}</div>
+      <div class="sec-title">
+        <h2>Target shape</h2>
+        <p>Skew is a property of {{ item.value.target }}, not a defect in it. Shown so you can decide, not so you feel obliged to transform.</p>
+      </div>
+    </div>
+    <div class="chart-grid">
+      {% if item.value.distribution_raw %}
+      <div class="chart-card">
+        <h3>{{ item.value.target }} as recorded</h3>
+        <p class="chart-note">{{ item.value.shape | replace('_', ' ') }} · skew {{ item.value.skewness | format_value }}</p>
+        {{ item.value.distribution_raw | histogram_svg }}
+      </div>
+      {% endif %}
+      {% if item.value.distribution_transformed %}
+      <div class="chart-card">
+        <h3>After {{ item.value.best_candidate }}</h3>
+        <p class="chart-note">skew {{ item.value.best_skewness_after | format_value }} — measured on this data, not assumed</p>
+        {{ item.value.distribution_transformed | histogram_svg }}
+      </div>
+      {% endif %}
+    </div>
+    <div class="tbl-wrap" style="margin-top: 22px">
+      <table>
+        <thead><tr><th>Transform</th><th>Applicable</th><th>Skew after</th><th>Reduction</th><th>Note</th></tr></thead>
+        <tbody>
+          {% for candidate in item.value.candidates %}
+          <tr>
+            <td class="mono">{{ candidate.transform }}</td>
+            <td>{{ candidate.applicable | format_value }}</td>
+            <td class="mono">{{ candidate.skewness_after | format_value }}</td>
+            <td class="mono">{{ candidate.skew_reduction | format_value }}</td>
+            <td>{{ candidate.reason }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="chart-note">A transformed target changes what an error means; back-transformed predictions are biased unless corrected.</p>
+  </section>
+  {% endfor %}
+
+  <!-- ============ REGRESSION: REFERENCE TABLES ============ -->
+  {% if result.goal == 'regression' %}
+  {% for artifact in result.artifacts %}
+    {% if artifact.kind == 'metric_table' %}
+    <section class="page" id="section-metrics-{{ loop.index0 }}">
+      <div class="sec-head">
+        <div class="sec-idx">{{ sections.number('metrics-' ~ loop.index0) }}</div>
+        <div class="sec-title"><h2>{{ artifact.title }}</h2>{% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}</div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in artifact.data.rows %}
+            <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+  {% endfor %}
   {% endif %}
 
   <!-- ============ ROWS TO REVIEW ============ -->

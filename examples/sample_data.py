@@ -13,6 +13,19 @@ analysis recipes have something meaningful (but not noisy) to surface:
   column.
 * ``orders`` references ``customers`` through ``customer_id`` (a one-to-many
   relationship) and contains one extreme ``amount``.
+* ``subscriptions`` is the regression fixture: a right-skewed numeric target
+  that is censored at a per-plan contract ceiling, an affine leak, a collinear
+  feature pair, noise that widens with tenure, and two influential rows.
+
+``subscriptions`` is deliberately **not** part of :func:`load_sample`. The
+snippets in ``docs/usage_docs/`` quote captured output, and adding a third table
+to the shared mapping would change the row, column, and table counts every
+existing example prints. Load it on its own instead::
+
+    from examples.sample_data import subscriptions
+    import prism_eda as pe
+
+    result = pe.load({"subscriptions": subscriptions()}).regression("monthly_revenue")
 
 Usage::
 
@@ -121,6 +134,112 @@ def orders() -> pd.DataFrame:
 def load_sample() -> dict[str, pd.DataFrame]:
     """Return both tables as a ``{name: DataFrame}`` mapping ready for ``pe.load``."""
     return {"customers": customers(), "orders": orders()}
+
+
+#: Number of subscription accounts in the regression sample.
+N_ACCOUNTS = 300
+
+#: Contract revenue ceiling per plan. A real subscription contract caps what can
+#: be billed in one month, so the recorded revenue piles up at exactly the
+#: ceiling instead of continuing into a tail. That censoring is invisible in a
+#: mean or a histogram bucket, and it makes the top of the range fictional.
+PLAN_CAPS = {"starter": 200.0, "growth": 700.0, "enterprise": 2000.0}
+
+
+def subscriptions() -> pd.DataFrame:
+    """Return the seeded ``subscriptions`` table used by the regression guide.
+
+    The target is ``monthly_revenue``. The planted problems are the ones a
+    regression readiness check exists to catch:
+
+    * ``renewal_invoice_total`` is ``monthly_revenue`` annualized — an affine
+      copy of the target, and therefore a leak. Its name shares no token with
+      the target, so only a value-based screen finds it.
+    * ``account_id`` is unique per row and identifies records rather than
+      explaining revenue.
+    * ``monthly_revenue`` is censored at the per-plan ceiling in
+      :data:`PLAN_CAPS`, so a real share of rows sit at exactly the cap.
+    * ``seats`` and ``licenses_purchased`` are near-duplicates of one another
+      (redundant, not wrong).
+    * Residual noise widens with ``tenure_months`` — heteroscedasticity, which
+      makes one uniform prediction interval wrong at both ends.
+    * Two accounts carry extreme ``seats`` with unremarkable revenue: high
+      leverage *and* a large residual, which is what influence actually means.
+
+    Genuine signal comes from ``seats`` and ``plan``, so a diagnostic probe
+    should do clearly better than predicting the median once the leak is
+    screened out.
+
+    Columns:
+        account_id: Unique account key.
+        industry: Categorical industry.
+        region: Categorical region.
+        plan: ``"starter"``, ``"growth"``, or ``"enterprise"``.
+        seats: Purchased seats, right-skewed (log-normal).
+        licenses_purchased: Near-copy of ``seats``.
+        tenure_months: Account age in months, 1..60.
+        support_tickets: Ticket count, ~7% missing.
+        renewal_invoice_total: ``monthly_revenue * 12`` — the planted leak.
+        monthly_revenue: The regression target.
+    """
+    rng = np.random.default_rng(SEED)
+    n = N_ACCOUNTS
+
+    account_id = np.arange(5000, 5000 + n)
+    industry = rng.choice(
+        ["retail", "saas", "finance", "health"], size=n, p=[0.30, 0.30, 0.25, 0.15]
+    )
+    region = rng.choice(["west", "east", "north", "south"], size=n)
+    plan = rng.choice(["starter", "growth", "enterprise"], size=n, p=[0.5, 0.35, 0.15])
+
+    # Log-normal seats give the target a genuine right skew rather than one
+    # bolted on afterwards.
+    seats = np.exp(rng.normal(3.0, 0.9, size=n)).round().clip(1, None).astype(int)
+    licenses_purchased = (
+        (seats + rng.normal(0.0, 0.6, size=n)).round().clip(1, None).astype(int)
+    )
+    tenure_months = rng.integers(1, 61, size=n)
+
+    support_tickets = rng.poisson(2.0, size=n).astype(float)
+    support_tickets[rng.choice(n, size=int(n * 0.07), replace=False)] = np.nan
+
+    # Two accounts with enormous seat counts and ordinary revenue. Extreme in a
+    # feature *and* badly fitted is what makes a row influential; either alone
+    # is not enough.
+    seats[7] = 420
+    licenses_purchased[7] = 421
+    seats[123] = 360
+    licenses_purchased[123] = 359
+
+    uplift = np.select(
+        [plan == "starter", plan == "growth"], [0.0, 120.0], default=400.0
+    )
+    # Noise scale grows with tenure: older accounts have accumulated add-ons and
+    # discounts, so their revenue is genuinely harder to predict.
+    noise = rng.normal(0.0, 5.0 + tenure_months * 0.8)
+    raw_revenue = 20.0 + seats * 3.5 + uplift + noise
+
+    ceiling = np.array([PLAN_CAPS[value] for value in plan])
+    monthly_revenue = np.clip(raw_revenue, 5.0, ceiling).round(2)
+
+    # The influential pair: huge seat counts, unremarkable billing.
+    monthly_revenue[7] = 140.0
+    monthly_revenue[123] = 95.0
+
+    return pd.DataFrame(
+        {
+            "account_id": account_id,
+            "industry": industry,
+            "region": region,
+            "plan": plan,
+            "seats": seats,
+            "licenses_purchased": licenses_purchased,
+            "tenure_months": tenure_months,
+            "support_tickets": support_tickets,
+            "renewal_invoice_total": (monthly_revenue * 12).round(2),
+            "monthly_revenue": monthly_revenue,
+        }
+    )
 
 
 # --------------------------------------------------------------------------

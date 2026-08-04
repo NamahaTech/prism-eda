@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 import prism_eda as pe
-from examples.sample_data import load_sample, sample_images
+from examples.sample_data import load_sample, sample_images, subscriptions
 
 NAV_LINK = re.compile(r'<a href="#(section-[\w-]+)">([^<]*)</a>')
 SECTION_ID = re.compile(r'<section[^>]*id="(section-[\w-]+)"')
@@ -39,6 +39,9 @@ def _reports(dataset: pe.Dataset, tmp_path_factory) -> dict[str, str]:
         "classification": dataset.classification(
             "churned", table="customers"
         ).render_html(),
+        "regression": pe.load({"subscriptions": subscriptions()})
+        .regression("monthly_revenue")
+        .render_html(),
         "image_profile": pe.profile_images(folder).render_html(),
     }
 

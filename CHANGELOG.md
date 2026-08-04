@@ -10,6 +10,60 @@ stabilizes.
 
 ### Added
 
+- **Regression readiness recipe.** `pe.regression(source, target)` and
+  `Dataset.regression(target)` assess whether a numeric target can support a
+  regression. It screens leakage (affine copies of the target, near-perfect
+  univariate fit, shared name tokens), detects censoring at a cap and zero
+  inflation through repeated values in an otherwise continuous target, measures
+  feature association three ways so a curve is not reported as no relationship,
+  reports redundant pairs with VIF and the design condition number, and runs two
+  leakage-screened cross-validated probes — Ridge and Huber — against a median
+  baseline. Residual shape (a KS *distance*, never a p-value), binned residual
+  spread with Breusch–Pagan, conditional bias per fitted decile, scale-normalized
+  subgroup error, OLS leverage/Cook's distance with a ranked review-row table,
+  weak-support ranges, and group/time split guidance follow from the probes and
+  are labelled model-conditional throughout. The report gains **Rows to review**,
+  **Residuals**, and **Target shape** sections, and `assess_regression` joins the
+  assisted-analysis tool registry.
+- **Skew is an alert, not a defect.** The regression recipe never files target
+  shape as a data-quality issue, and instead of asserting that a skewed target
+  should be log-transformed it *measures* what `log1p`, `sqrt`, and Yeo–Johnson
+  each do to the skew and names only the one that measurably helps — abstaining
+  when none does. On the sample data the reflexive `log1p` answer overcorrects
+  into left skew and is correctly rejected.
+- **Two residual charts.** `residual_scatter_svg` (residual against fitted, with
+  the zero rule and a per-bin spread band) and `conditional_bias_svg` (mean
+  residual per fitted bin, diverging from zero). Both are dependency-free inline
+  SVG. The residual scatter sets its vertical axis from a robust range and pins
+  extreme points to the edge with a ring and an on-chart count, so a handful of
+  enormous residuals cannot compress everything else into an unreadable strip —
+  and is not silently dropped either.
+- **`subscriptions()` sample table** in `examples/sample_data.py`, with a planted
+  affine leak, a per-plan revenue ceiling, a collinear pair, tenure-scaled noise,
+  and two influential rows. It is deliberately *not* part of `load_sample()`, so
+  no existing documented output changes.
+
+### Changed
+
+- `statsmodels>=0.14` is now a core dependency, used for the Breusch–Pagan
+  heteroscedasticity statistic and OLS influence diagnostics, and required by the
+  time-series recipe that follows.
+
+### Fixed
+
+- **Diagnostics that fired on clean data.** Three regression checks were
+  reporting on well-behaved datasets and have been guarded. Cook's `4/n` rule
+  flags a few percent of rows in any fit, so review rows now require decisive
+  influence rather than merely clearing the screen. Equal-width binning always
+  leaves thin bins in a bell curve's tails, so a weak-support gap now requires
+  real mass on both sides of it. Subgroup error is scaled by each group's own
+  target spread *and* compared against sibling levels, because raw error tracks
+  target magnitude and a grouping column that predicts the target shrinks
+  within-group spread — so the naive comparison flagged either the largest group
+  or every group at once.
+- **Leakage name matching no longer uses raw substrings.** A target named `y`
+  matched inside `x1_copy`. Name evidence is now taken from whole name tokens of
+  at least three characters.
 - **Issues and alerts are separate channels.** `Finding` gains a `category`
   field (`quality_issue` | `observation`) and `prism_eda.evidence.models` gains
   `split_findings()`. Data-quality defects and true-but-not-broken observations

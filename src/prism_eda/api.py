@@ -228,6 +228,48 @@ def classification(
     )
 
 
+def regression(
+    source: DataSource | Dataset,
+    target: str | None = None,
+    *,
+    context: AnalysisContext | Mapping[str, Any] | None = None,
+    config: AnalysisConfig | None = None,
+    callbacks: Sequence[EventCallback] = (),
+    mode: AnalysisMode | str = AnalysisMode.STANDARD,
+    sampling: str = "auto",
+    random_seed: int = 42,
+    allow_insufficient_evidence: bool = False,
+    table: str | None = None,
+    max_categories: int = 50,
+    recursive: bool = False,
+    include: Sequence[str] | None = None,
+    exclude: Sequence[str] | None = None,
+    names: Mapping[str, str] | None = None,
+    read_options: Mapping[str, Any] | None = None,
+) -> AnalysisResult:
+    """Load sources and run deterministic regression diagnostics."""
+    dataset = load(
+        source,
+        recursive=recursive,
+        include=include,
+        exclude=exclude,
+        names=names,
+        read_options=read_options,
+    )
+    return dataset.regression(
+        target=target,
+        context=context,
+        config=config,
+        callbacks=callbacks,
+        mode=mode,
+        sampling=sampling,
+        random_seed=random_seed,
+        allow_insufficient_evidence=allow_insufficient_evidence,
+        table=table,
+        max_categories=max_categories,
+    )
+
+
 def discover_schema(
     source: DataSource | Dataset,
     *,
@@ -324,4 +366,5 @@ __all__ = [
     "minimal_eda",
     "profile",
     "profile_images",
+    "regression",
 ]

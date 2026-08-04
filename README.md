@@ -41,7 +41,7 @@ objectives. Five rays ship today; the rest are the roadmap.
 | **Anomaly Detection**     | Observations, combinations, outliers detection.         | Available |
 | **Classification**        | Target readiness, leakage, and split guidance.          | Available |
 | **Image Dataset Profile** | Split leakage, loader traps, duplicates, quality flags. | Available |
-| **Regression**            | Prediction and regression for numerical outcomes.       | Planned |
+| **Regression**            | Prediction and regression for numerical outcomes.       | Available |
 | **Time Series Analysis**  | Time-based data forecasting analysis.                   | Planned |
 | **Clustering**            | Categorization, clustering and segmentation support.    | Planned |
 
@@ -93,6 +93,11 @@ JavaScript, or an AI provider.
 - Assess classification targets for balance, label conflicts, associations,
   missing gaps, deterministic leakage,
   probe separability, hard examples, local class overlap, and split guidance.
+- Assess regression targets for leakage, censoring at a cap, redundancy,
+  residual bias and uneven error spread, influential rows, and thinly supported
+  ranges — running a robust probe alongside a conventional one, because their
+  disagreement tells you whether the features are weak or a few rows are
+  distorting the fit.
 - Profile image datasets for decode failures, dimensions, formats, EXIF,
   duplicates, near-duplicates, split leakage, label conflicts, quality flags,
   loader traps, outliers, and label-level imbalance.
@@ -253,6 +258,35 @@ for finding in result.findings:
 result.to_html("classification-readiness.html")
 ```
 
+### Regression: check a numeric target before you fit it
+
+```python
+import prism_eda as pe
+
+result = pe.regression("data/accounts.csv", target="monthly_revenue")
+print(result.summary)
+result.to_html("regression-readiness.html")
+```
+
+```text
+accounts.monthly_revenue: not ready to model. Top issue — Potential target leakage:
+renewal_invoice_total. 7 prioritized issue(s) (1 critical, 2 high, 4 medium).
+4 alert(s) are listed separately.
+```
+
+Issues and alerts stay separate, and the split is the point. A leak, an
+identifier in the features, or a target silently capped at a contract ceiling
+are **issues** — they will mislead you. A skewed target is an **alert**: true,
+worth knowing, not a defect. Rather than telling you to log-transform, Prism
+measures what each candidate transform actually does to your data and names only
+the one that helps.
+
+Two probes run, not one. Ridge minimizes squared error and is dragged by
+outliers; Huber is not. When the robust probe fits the typical row much better,
+the data is predictable and a handful of rows is distorting the fit — a
+different problem from weak features, and one the ranked review rows fix. See
+[the regression guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md).
+
 ### Anomaly detection: make a review list, not a verdict
 
 ```python
@@ -358,6 +392,7 @@ See [AI-assisted analysis](https://github.com/NamahaTech/prism-eda/blob/main/doc
 
 - [**Usage Guide**](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/README.md) — install, load, analyze, export (start here)
 - [AI-assisted investigation](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) · [Privacy](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md)
+- [Regression readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md) · [Classification readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/classification.md)
 - [Schema discovery](https://github.com/NamahaTech/prism-eda/blob/main/docs/schema-discovery.md)
 - [Implementation plan and handoff](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-plan.md)
 - [Implementation status](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-status.md)
@@ -377,6 +412,7 @@ and transformation recommendations needed to audit that conclusion.
 | Schema discovery | Candidate keys/relationships, confidence, orphan counts, and a static/interactive ER diagram |
 | Anomaly review | Ranked review rows, detector agreement, distribution shape, row-level explanations, and charts |
 | Classification readiness | Class balance, leakage/identifier risks, associations, probe results, hard examples, overlap, and split guidance |
+| Regression readiness | Target shape and censoring, leakage, redundancy/VIF, probe scores, residual and bias charts, and ranked influential rows |
 | Image profile | Quality/loader checks, duplicate and leakage evidence, class balance, charts, and embedded thumbnail contact sheets |
 | Investigation | Deterministic findings plus AI provenance and grounded interpretation |
 

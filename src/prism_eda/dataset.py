@@ -12,6 +12,7 @@ from prism_eda.analysis.anomaly import anomaly_detection_dataset
 from prism_eda.analysis.classification import classification_dataset
 from prism_eda.analysis.compare import compare_datasets_recipe
 from prism_eda.analysis.profile import profile_dataset
+from prism_eda.analysis.regression import regression_dataset
 from prism_eda.analysis.schema_discovery import discover_schema_dataset
 from prism_eda.catalog.loaders import DataSource, load_tables
 from prism_eda.catalog.models import DatasetCatalog, SourceInfo
@@ -185,10 +186,31 @@ class Dataset:
                 max_categories=max_categories,
                 callbacks=tuple(callbacks),
             )
+        if normalized_goal in {"regression", "regress"}:
+            table = options.pop("table", None)
+            target = options.pop("target", None) or analysis_context.target
+            max_categories = options.pop("max_categories", 50)
+            if options:
+                unknown = ", ".join(sorted(options))
+                raise TypeError(f"Unexpected analysis options: {unknown}")
+            try:
+                catalog = self.catalog(refresh=True)
+            except Exception as error:
+                raise AnalysisError(f"Catalog generation failed: {error}") from error
+            return regression_dataset(
+                self._tables,
+                catalog,
+                context=analysis_context,
+                config=analysis_config,
+                target=target,
+                table=table,
+                max_categories=max_categories,
+                callbacks=tuple(callbacks),
+            )
         raise NotImplementedError(
             f"Goal {goal!r} is not implemented yet. Prism EDA 0.1 currently "
-            "supports 'profile', 'schema_discovery', 'anomaly_detection', and "
-            "'classification'."
+            "supports 'profile', 'schema_discovery', 'anomaly_detection', "
+            "'classification', and 'regression'."
         )
 
     def profile(
@@ -310,6 +332,38 @@ class Dataset:
             )
         return self.analyze(
             "classification",
+            context=context,
+            config=config,
+            callbacks=callbacks,
+            table=table,
+            target=target,
+            max_categories=max_categories,
+        )
+
+    def regression(
+        self,
+        target: str | None = None,
+        *,
+        context: AnalysisContext | Mapping[str, Any] | None = None,
+        config: AnalysisConfig | None = None,
+        callbacks: Sequence[EventCallback] = (),
+        mode: AnalysisMode | str = AnalysisMode.STANDARD,
+        sampling: str = "auto",
+        random_seed: int = 42,
+        allow_insufficient_evidence: bool = False,
+        table: str | None = None,
+        max_categories: int = 50,
+    ) -> AnalysisResult:
+        """Run deterministic regression diagnostics for a numeric target column."""
+        if config is None:
+            config = AnalysisConfig(
+                mode=mode,
+                sampling=sampling,  # type: ignore[arg-type]
+                random_seed=random_seed,
+                allow_insufficient_evidence=allow_insufficient_evidence,
+            )
+        return self.analyze(
+            "regression",
             context=context,
             config=config,
             callbacks=callbacks,

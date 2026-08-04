@@ -10,6 +10,7 @@ from prism_eda.api import (
     minimal_eda,
     profile,
     profile_images,
+    regression,
 )
 from prism_eda.artifacts import Artifact
 from prism_eda.comparison_results import ComparisonResult
@@ -40,6 +41,7 @@ __all__ = [
     "minimal_eda",
     "profile",
     "profile_images",
+    "regression",
 ]
 
 __version__ = "0.1.0"

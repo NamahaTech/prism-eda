@@ -187,6 +187,25 @@ def _assess_classification(
     )
 
 
+def _assess_regression(
+    dataset: Dataset, privacy: PrivacyPolicy, args: dict[str, Any]
+) -> ToolOutput:
+    target = args.get("target")
+    if not target:
+        raise ValueError("assess_regression requires a 'target' argument.")
+    result = dataset.regression(
+        target=str(target),
+        table=args.get("table"),
+        max_categories=int(args.get("max_categories", 50)),
+    )
+    return ToolOutput(
+        summary=_recipe_summary(result),
+        evidence=result.evidence,
+        findings=result.findings,
+        artifacts=result.artifacts,
+    )
+
+
 _TABLE_ARG = {"type": "string", "description": "Table name to analyze."}
 
 _TOOLS: tuple[Tool, ...] = (
@@ -278,6 +297,32 @@ _TOOLS: tuple[Tool, ...] = (
             },
         ),
         _assess_classification,
+    ),
+    Tool(
+        ToolSpec(
+            name="assess_regression",
+            description="Assess whether a table is ready to fit a regression for a "
+            "numeric target: leakage, censoring, redundancy, probe fit, residual "
+            "bias, and influential rows. Use this instead of assess_classification "
+            "when the target is a continuous quantity. Citable.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "The numeric target column to assess.",
+                    },
+                    "table": _TABLE_ARG,
+                    "max_categories": {
+                        "type": "integer",
+                        "description": "Cap on distinct categories per feature "
+                        "(default 50).",
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
+        _assess_regression,
     ),
 )
 

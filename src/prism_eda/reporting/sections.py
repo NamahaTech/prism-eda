@@ -106,9 +106,10 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
         entries.append(("keys", "Keys"))
         entries.append(("relationships", "Relationships"))
 
-    # Image and anomaly reports defer their reference tables until after the
-    # findings; every other goal leads with them.
-    if goal not in {"anomaly_detection", "image_profile"}:
+    # Image, anomaly, and regression reports defer their reference tables until
+    # after the findings; every other goal leads with them. For regression the
+    # probe scores and the VIF table are the working out, not the verdict.
+    if goal not in {"anomaly_detection", "image_profile", "regression"}:
         entries.extend(_metric_tables(result))
 
     entries.append(("issues", "Issues" if goal == "profile" else "Findings"))
@@ -120,6 +121,23 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
         for item in result.evidence
     ):
         entries.append(("rows", "Rows to review"))
+
+    if goal == "regression":
+        # Ordered the way the report is argued: which rows to open, then what
+        # the residuals say about the fit, then the target's own shape, and
+        # only then the reference tables behind all three.
+        if any(
+            item.kind == "regression_review_rows" and item.value.get("rows")
+            for item in result.evidence
+        ):
+            entries.append(("rows", "Rows to review"))
+        if _has_evidence(result, "regression_residual_scatter") or _has_evidence(
+            result, "regression_conditional_bias"
+        ):
+            entries.append(("residuals", "Residuals"))
+        if _has_evidence(result, "regression_target_shape"):
+            entries.append(("target", "Target shape"))
+        entries.extend(_metric_tables(result))
 
     if goal == "image_profile":
         if any(artifact.kind == "image_contact_sheet" for artifact in result.artifacts):

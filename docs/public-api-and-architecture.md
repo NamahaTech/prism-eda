@@ -102,6 +102,7 @@ dataset.tables
 dataset.catalog()
 dataset.analyze(...)
 dataset.classification(...)
+dataset.regression(...)
 dataset.anomaly_detection(...)
 dataset.discover_schema(...)
 ```
@@ -196,14 +197,19 @@ image_result = pe.profile_images(
 )
 ```
 
-`discover_schema`, `anomaly_detection`, `classification`, and `profile_images`
-are implemented.
+`discover_schema`, `anomaly_detection`, `classification`, `regression`, and
+`profile_images` are implemented.
 Schema discovery returns candidate keys and relationships, not declared
 constraints. Anomaly detection returns statistical review candidates, not
 confirmed anomaly labels; `expected_contamination` is an optional review-sizing
 assumption, not a confirmed prevalence estimate. Classification returns
 target-readiness, association, leakage, local-overlap, split-guidance, and
 diagnostic probe-model evidence; it does not return a production model object.
+Regression returns target-shape, censoring, association, redundancy, leakage,
+residual, influence, and support evidence for one numeric target. Its probes are
+diagnostic fits, so every residual-derived claim is model-conditional and
+labelled as such; a weak probe means a linear model finds little, not that the
+target is unlearnable. It does not return a production model object either.
 Image profiling returns metadata,
 quality, duplicate, leakage, loader-trap, and per-label evidence; near-duplicate
 and quality flags are candidates for review, not confirmed removal instructions.
@@ -217,6 +223,7 @@ Convenience functions:
 ```python
 result = pe.anomaly_detection(df, mode="standard")
 result = pe.classification(df, target="churned")
+result = pe.regression(df, target="monthly_revenue")
 result = pe.discover_schema("data/", recursive=True)
 result = pe.profile_images("images/train/")
 ```
@@ -447,6 +454,11 @@ src/prism_eda/
     schema_discovery.py
     anomaly.py
     classification.py
+    _regression.py          # shared sampling, target resolution, feature groups
+    regression.py           # orchestration: findings, artifacts, verdict
+    regression_target.py    # target shape, censoring spikes, transformations
+    regression_signal.py    # association, redundancy/VIF, leakage screen
+    regression_probe.py     # probes, residuals, influence, review rows
   transformations/
     models.py
   reporting/
