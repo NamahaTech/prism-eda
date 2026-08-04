@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-08-04 (regression readiness)
+Last updated: 2026-08-04 (regression readiness, time series)
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -126,6 +126,38 @@ removed, or materially re-scoped.
   residual-scatter and diverging conditional-bias charts
 - `assess_regression` registered in the assisted-analysis tool registry
 
+### Time series
+
+- `time_series()` / `Dataset.time_series()` public API taking `value`, optional
+  `timestamp` (inferred when unambiguous), `entity_id`, and `horizon`
+- Frequency inference from the modal gap, tolerant of gaps and duplicates where
+  `pd.infer_freq` returns `None`; calendar frequencies matched by range
+- Hygiene checks computed on the **raw** rows, structural analysis on a
+  regularized reconstruction disclosed as a `SamplingRecord` plus a warning
+- Entity-aware duplicate-timestamp detection, with conflicting values counted
+- Unrecorded periods and blank periods reported separately, as contiguous blocks
+- Irregular-spacing scan against the dominant interval
+- Per-entity panel coverage, absolute seasonal-history floor, relative imbalance,
+  and **panel composition changes** so a total whose membership changes is not
+  read as a change in demand
+- STL decomposition with variance-share trend and seasonal strength, plus the
+  day-of-week seasonal profile
+- ACF/PACF with confidence band and candidate seasonal periods from local peaks
+- ADF **and** KPSS with the four-way agreement/disagreement classification
+  reported rather than resolved to one verdict
+- Level and variance change points via Theil-Sen-detrended binary segmentation,
+  gated on the step exceeding the series' own noise
+- Temporal outliers on the STL remainder against an interquartile fence, with
+  interpolated periods and change-point neighbourhoods excluded, and the list
+  suppressed when the flag rate indicates changing spread rather than anomalies
+- Syntetos-Boylan intermittent-demand classification, only when zeros are present
+- History-versus-horizon adequacy and an expanding-window backtest plan
+- Leakage-safe lagged cross-correlation, marking which lags are usable at
+  forecast time
+- Report sections (the series, trend and seasonality, memory and stationarity,
+  coverage) with new series-line, ACF-stem, and seasonal-profile charts
+- `analyze_time_series` registered in the assisted-analysis tool registry
+
 ### Image dataset profile
 
 - `ImageDataset`, `load_images()`, and `profile_images()` public API
@@ -215,6 +247,13 @@ removed, or materially re-scoped.
 - Opt-in fairness coverage
 - Train/test comparison when both are supplied
 
+### Time-series improvements
+
+- Per-entity structural analysis for panels, capped, alongside the aggregate
+- Multiple seasonal periods at once (weekly *and* yearly on daily data)
+- Holiday and calendar-effect regressors as candidate explanations for outliers
+- Sub-daily timezone and DST handling beyond reporting the index timezone
+
 ### Regression improvements
 
 - Quantile-regression probe for targets where the conditional median is the
@@ -236,7 +275,7 @@ removed, or materially re-scoped.
 
 ## Later
 
-- Time-series and clustering recipes
+- Clustering recipe
 - Chunked CSV execution and a general execution planner
 - Functional dependencies and denormalization analysis
 - Plotly interactive artifact implementations

@@ -270,6 +270,52 @@ def regression(
     )
 
 
+def time_series(
+    source: DataSource | Dataset,
+    value: str | None = None,
+    *,
+    timestamp: str | None = None,
+    entity_id: str | None = None,
+    horizon: int | None = None,
+    context: AnalysisContext | Mapping[str, Any] | None = None,
+    config: AnalysisConfig | None = None,
+    callbacks: Sequence[EventCallback] = (),
+    mode: AnalysisMode | str = AnalysisMode.STANDARD,
+    sampling: str = "auto",
+    random_seed: int = 42,
+    allow_insufficient_evidence: bool = False,
+    table: str | None = None,
+    recursive: bool = False,
+    include: Sequence[str] | None = None,
+    exclude: Sequence[str] | None = None,
+    names: Mapping[str, str] | None = None,
+    read_options: Mapping[str, Any] | None = None,
+) -> AnalysisResult:
+    """Load sources and run deterministic time-series diagnostics."""
+    dataset = load(
+        source,
+        recursive=recursive,
+        include=include,
+        exclude=exclude,
+        names=names,
+        read_options=read_options,
+    )
+    return dataset.time_series(
+        value=value,
+        timestamp=timestamp,
+        entity_id=entity_id,
+        horizon=horizon,
+        context=context,
+        config=config,
+        callbacks=callbacks,
+        mode=mode,
+        sampling=sampling,
+        random_seed=random_seed,
+        allow_insufficient_evidence=allow_insufficient_evidence,
+        table=table,
+    )
+
+
 def discover_schema(
     source: DataSource | Dataset,
     *,
@@ -367,4 +413,5 @@ __all__ = [
     "profile",
     "profile_images",
     "regression",
+    "time_series",
 ]

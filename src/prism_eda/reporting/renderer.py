@@ -12,6 +12,7 @@ from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescap
 from prism_eda.comparison_results import ComparisonResult
 from prism_eda.evidence.models import split_findings
 from prism_eda.reporting.charts import (
+    acf_stems_svg,
     association_heatmap_svg,
     category_bars_svg,
     co_missing_heatmap_svg,
@@ -26,6 +27,8 @@ from prism_eda.reporting.charts import (
     peer_group_svg,
     residual_scatter_svg,
     scatter_svg,
+    seasonal_profile_svg,
+    series_line_svg,
     timeline_svg,
     why_bars_svg,
 )
@@ -63,6 +66,9 @@ def _environment() -> Environment:
     environment.filters["scatter_svg"] = scatter_svg
     environment.filters["residual_scatter_svg"] = residual_scatter_svg
     environment.filters["conditional_bias_svg"] = conditional_bias_svg
+    environment.filters["series_line_svg"] = series_line_svg
+    environment.filters["acf_stems_svg"] = acf_stems_svg
+    environment.filters["seasonal_profile_svg"] = seasonal_profile_svg
     environment.filters["why_bars_svg"] = why_bars_svg
     environment.filters["peer_group_svg"] = peer_group_svg
     environment.filters["image_dimension_svg"] = image_dimension_svg

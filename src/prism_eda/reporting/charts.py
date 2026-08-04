@@ -523,6 +523,211 @@ def conditional_bias_svg(bias: dict[str, Any]) -> Markup:
     return Markup("".join(parts))
 
 
+def _series_extent(*series: list[dict[str, Any]]) -> tuple[float, float]:
+    values = [
+        float(point["y"])
+        for points in series
+        for point in points
+        if point.get("y") is not None
+    ]
+    if not values:
+        return 0.0, 1.0
+    low, high = min(values), max(values)
+    if low == high:
+        return low - 1.0, high + 1.0
+    pad = (high - low) * 0.08
+    return low - pad, high + pad
+
+
+def _polyline(
+    points: list[dict[str, Any]],
+    px: Any,
+    py: Any,
+    total: int,
+) -> list[str]:
+    """Line segments that break at gaps rather than drawing through them.
+
+    A single polyline across a missing period draws a straight line over the
+    outage, which is the one thing the chart must not imply happened.
+    """
+    runs: list[list[str]] = [[]]
+    for index, point in enumerate(points):
+        if point.get("y") is None:
+            if runs[-1]:
+                runs.append([])
+            continue
+        runs[-1].append(f"{px(index, total):.1f},{py(float(point['y'])):.1f}")
+    return [" ".join(run) for run in runs if len(run) > 1]
+
+
+def series_line_svg(data: dict[str, Any]) -> Markup:
+    """The series over time, with gaps left open and change points marked."""
+    points = data.get("points", [])
+    if not points:
+        return Markup("")
+    trend = data.get("trend_points", []) or []
+    changes = set(data.get("change_points", []) or [])
+
+    width, height = 680.0, 240.0
+    pad_l, pad_r, pad_t, pad_b = 52.0, 16.0, 16.0, 34.0
+    total = len(points)
+    y_lo, y_hi = _series_extent(points, trend)
+
+    def px(index: int, count: int) -> float:
+        if count <= 1:
+            return pad_l
+        return pad_l + (index / (count - 1)) * (width - pad_l - pad_r)
+
+    def py(value: float) -> float:
+        return _scale(value, y_lo, y_hi, height - pad_b, pad_t)
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="{escape(str(data.get("value", "series")))} over time">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{height - pad_b}" '
+        f'x2="{width - pad_r}" y2="{height - pad_b}"></line>',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t}" '
+        f'x2="{pad_l}" y2="{height - pad_b}"></line>',
+    ]
+
+    # Change points first, so the series draws over the rules rather than under.
+    stamps = [point["t"] for point in points]
+    for stamp in changes:
+        if stamp not in stamps:
+            continue
+        x = px(stamps.index(stamp), total)
+        parts.append(
+            f'<line class="chart-changepoint" x1="{x:.1f}" y1="{pad_t}" '
+            f'x2="{x:.1f}" y2="{height - pad_b}"><title>level shift: '
+            f"{escape(str(stamp)[:10])}</title></line>"
+        )
+
+    for run in _polyline(points, px, py, total):
+        parts.append(f'<polyline class="chart-line" points="{run}"></polyline>')
+    for run in _polyline(trend, px, py, len(trend)):
+        parts.append(f'<polyline class="chart-line-trend" points="{run}"></polyline>')
+
+    first = str(points[0]["t"])[:10]
+    last = str(points[-1]["t"])[:10]
+    parts.append(
+        f'<text class="chart-label" x="{pad_l}" y="{height - 12}" '
+        f'text-anchor="start">{escape(first)}</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 12}" '
+        f'text-anchor="end">{escape(last)}</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{pad_t + 4}" '
+        f'text-anchor="end">{escape(_format_number(y_hi))}</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{height - pad_b}" '
+        f'text-anchor="end">{escape(_format_number(y_lo))}</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def acf_stems_svg(data: dict[str, Any]) -> Markup:
+    """Autocorrelation by lag, with the band inside which a lag means nothing."""
+    lags = data.get("lags", [])
+    if not lags:
+        return Markup("")
+    band = float(data.get("confidence_band", 0.0))
+    width, height = 680.0, 190.0
+    pad_l, pad_r, pad_t, pad_b = 44.0, 16.0, 14.0, 30.0
+    plot_h = height - pad_t - pad_b
+    zero_y = pad_t + plot_h / 2
+    extent = max([abs(float(item["acf"])) for item in lags] + [band, 0.2])
+
+    def py(value: float) -> float:
+        return zero_y - (value / extent) * (plot_h / 2)
+
+    slot = (width - pad_l - pad_r) / max(1, len(lags))
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Autocorrelation by lag">',
+        f'<rect class="chart-band" x="{pad_l}" y="{py(band):.1f}" '
+        f'width="{width - pad_l - pad_r:.1f}" '
+        f'height="{max(1.0, py(-band) - py(band)):.1f}"></rect>',
+    ]
+    for index, item in enumerate(lags):
+        value = float(item["acf"])
+        x = pad_l + index * slot + slot / 2
+        css = "chart-stem" if item.get("significant") else "chart-stem-quiet"
+        parts.append(
+            f"<g><title>lag {item['lag']}: {value:+.3f}</title>"
+            f'<line class="{css}" x1="{x:.1f}" y1="{zero_y:.1f}" '
+            f'x2="{x:.1f}" y2="{py(value):.1f}"></line>'
+            f'<circle class="{css}-dot" cx="{x:.1f}" cy="{py(value):.1f}" '
+            f'r="2.2"></circle></g>'
+        )
+    parts.append(
+        f'<line class="chart-zero" x1="{pad_l}" y1="{zero_y:.1f}" '
+        f'x2="{width - pad_r}" y2="{zero_y:.1f}"></line>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{zero_y + 3.5:.1f}" '
+        f'text-anchor="end">0</text>'
+        f'<text class="chart-label" x="{pad_l}" y="{height - 10}" '
+        f'text-anchor="start">lag 1</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 10}" '
+        f'text-anchor="end">lag {lags[-1]["lag"]}</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+#: Weekday names for a 7-period seasonal profile, which is what daily data has.
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def seasonal_profile_svg(data: dict[str, Any]) -> Markup:
+    """The seasonal effect of each position in the cycle, diverging from zero."""
+    profile = data.get("seasonal_profile", [])
+    if not profile:
+        return Markup("")
+    width = 680.0
+    pad_l, pad_r, pad_t, pad_b = 44.0, 16.0, 12.0, 28.0
+    height = 160.0
+    plot_h = height - pad_t - pad_b
+    zero_y = pad_t + plot_h / 2
+    effects = [float(item["effect"]) for item in profile]
+    extent = max(abs(min(effects)), abs(max(effects))) or 1.0
+
+    def py(value: float) -> float:
+        return zero_y - (value / extent) * (plot_h / 2)
+
+    slot = (width - pad_l - pad_r) / len(profile)
+    bar_w = max(3.0, slot - 6.0)
+    weekly = len(profile) == 7
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Seasonal effect by position in the cycle">'
+    ]
+    for index, item in enumerate(profile):
+        effect = float(item["effect"])
+        left = pad_l + index * slot + (slot - bar_w) / 2
+        top = min(py(effect), zero_y)
+        bar_h = max(1.5, abs(py(effect) - zero_y))
+        css = "chart-bar-pos" if effect >= 0 else "chart-bar-neg"
+        label = (
+            _WEEKDAYS[int(item["position"]) % 7] if weekly else str(item["position"])
+        )
+        parts.append(
+            f"<g><title>{escape(label)}: {effect:+.4g}</title>"
+            f'<rect class="{css}" x="{left:.1f}" y="{top:.1f}" '
+            f'width="{bar_w:.1f}" height="{bar_h:.1f}" rx="2"></rect>'
+            f'<text class="chart-label" x="{left + bar_w / 2:.1f}" '
+            f'y="{height - 10}" text-anchor="middle">{escape(label)}</text></g>'
+        )
+    parts.append(
+        f'<line class="chart-zero" x1="{pad_l}" y1="{zero_y:.1f}" '
+        f'x2="{width - pad_r}" y2="{zero_y:.1f}"></line>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{zero_y + 3.5:.1f}" '
+        f'text-anchor="end">0</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
 def _truncate(text: str, limit: int = 13) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 

@@ -206,6 +206,28 @@ def _assess_regression(
     )
 
 
+def _analyze_time_series(
+    dataset: Dataset, privacy: PrivacyPolicy, args: dict[str, Any]
+) -> ToolOutput:
+    value = args.get("value")
+    if not value:
+        raise ValueError("analyze_time_series requires a 'value' argument.")
+    horizon = args.get("horizon")
+    result = dataset.time_series(
+        value=str(value),
+        timestamp=args.get("timestamp"),
+        entity_id=args.get("entity_id"),
+        horizon=int(horizon) if horizon is not None else None,
+        table=args.get("table"),
+    )
+    return ToolOutput(
+        summary=_recipe_summary(result),
+        evidence=result.evidence,
+        findings=result.findings,
+        artifacts=result.artifacts,
+    )
+
+
 _TABLE_ARG = {"type": "string", "description": "Table name to analyze."}
 
 _TOOLS: tuple[Tool, ...] = (
@@ -323,6 +345,42 @@ _TOOLS: tuple[Tool, ...] = (
             },
         ),
         _assess_regression,
+    ),
+    Tool(
+        ToolSpec(
+            name="analyze_time_series",
+            description="Analyze a numeric column over time: frequency, gaps, "
+            "duplicate timestamps, trend, seasonality, stationarity, change "
+            "points, and whether there is enough history to forecast. Use this "
+            "when the question involves a time axis. Citable.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "string",
+                        "description": "The numeric column measured over time.",
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "description": "The time column. Inferred when the table "
+                        "has exactly one datetime column.",
+                    },
+                    "entity_id": {
+                        "type": "string",
+                        "description": "Optional column identifying separate "
+                        "series in a panel.",
+                    },
+                    "horizon": {
+                        "type": "integer",
+                        "description": "Optional forecast horizon in periods, "
+                        "used to judge whether the history is long enough.",
+                    },
+                    "table": _TABLE_ARG,
+                },
+                "required": ["value"],
+            },
+        ),
+        _analyze_time_series,
     ),
 )
 

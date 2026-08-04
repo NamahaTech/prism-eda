@@ -42,7 +42,7 @@ objectives. Five rays ship today; the rest are the roadmap.
 | **Classification**        | Target readiness, leakage, and split guidance.          | Available |
 | **Image Dataset Profile** | Split leakage, loader traps, duplicates, quality flags. | Available |
 | **Regression**            | Prediction and regression for numerical outcomes.       | Available |
-| **Time Series Analysis**  | Time-based data forecasting analysis.                   | Planned |
+| **Time Series Analysis**  | Time-based data forecasting analysis.                   | Available |
 | **Clustering**            | Categorization, clustering and segmentation support.    | Planned |
 
 ## Why it exists
@@ -93,6 +93,11 @@ JavaScript, or an AI provider.
 - Assess classification targets for balance, label conflicts, associations,
   missing gaps, deterministic leakage,
   probe separability, hard examples, local class overlap, and split guidance.
+- Profile a time series for frequency, duplicate timestamps, unrecorded versus
+  blank periods as contiguous blocks, per-entity panel coverage, trend and
+  seasonal strength, autocorrelation, stationarity via ADF *and* KPSS, level and
+  variance change points, temporal outliers, intermittent demand, and a
+  time-ordered backtest plan.
 - Assess regression targets for leakage, censoring at a cap, redundancy,
   residual bias and uneven error spread, influential rows, and thinly supported
   ranges — running a robust probe alongside a conventional one, because their
@@ -287,6 +292,37 @@ the data is predictable and a handful of rows is distorting the fit — a
 different problem from weak features, and one the ranked review rows fix. See
 [the regression guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md).
 
+### Time series: check the clock before you forecast
+
+```python
+import prism_eda as pe
+
+result = pe.time_series("data/sales.csv", value="orders", entity_id="store", horizon=28)
+print(result.summary)
+result.to_html("forecasting-readiness.html")
+```
+
+```text
+sales.orders: not ready to forecast. Top issue — Duplicate timestamps in the series.
+4 prioritized issue(s) (3 high, 1 medium). 6 alert(s) describe what is in the series.
+```
+
+Absence is reported in the two forms it actually takes: a period with **no row**
+is a collection failure, a period with a row and a **blank value** is a
+measurement failure, and both are shown as contiguous blocks — you learn the
+outage ran nine consecutive days, not that 1.2% of rows are missing.
+
+Duplicate detection is entity-aware, because in a panel every date legitimately
+appears once per entity. And totalling an unbalanced panel produces a level
+shift the day a new entity opens, so Prism counts the contributing series over
+time and says when that number changes — otherwise you would read a composition
+artifact as a jump in demand.
+
+Trend, seasonality, and non-stationarity are **alerts**, never defects. ADF and
+KPSS both run, because they have opposite nulls and their disagreement is what
+separates "de-trend it" from "difference it". See
+[the time-series guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/time-series.md).
+
 ### Anomaly detection: make a review list, not a verdict
 
 ```python
@@ -392,7 +428,7 @@ See [AI-assisted analysis](https://github.com/NamahaTech/prism-eda/blob/main/doc
 
 - [**Usage Guide**](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/README.md) — install, load, analyze, export (start here)
 - [AI-assisted investigation](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) · [Privacy](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md)
-- [Regression readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md) · [Classification readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/classification.md)
+- [Regression readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md) · [Classification readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/classification.md) · [Time series](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/time-series.md)
 - [Schema discovery](https://github.com/NamahaTech/prism-eda/blob/main/docs/schema-discovery.md)
 - [Implementation plan and handoff](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-plan.md)
 - [Implementation status](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-status.md)
@@ -413,6 +449,7 @@ and transformation recommendations needed to audit that conclusion.
 | Anomaly review | Ranked review rows, detector agreement, distribution shape, row-level explanations, and charts |
 | Classification readiness | Class balance, leakage/identifier risks, associations, probe results, hard examples, overlap, and split guidance |
 | Regression readiness | Target shape and censoring, leakage, redundancy/VIF, probe scores, residual and bias charts, and ranked influential rows |
+| Time series | The series with gaps left open, trend and seasonal shape, ACF, the ADF/KPSS pair, coverage blocks, per-entity panel coverage, and a backtest plan |
 | Image profile | Quality/loader checks, duplicate and leakage evidence, class balance, charts, and embedded thumbnail contact sheets |
 | Investigation | Deterministic findings plus AI provenance and grounded interpretation |
 

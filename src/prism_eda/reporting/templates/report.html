@@ -152,7 +152,10 @@
     .ai-steps { margin: 0; padding-left: 20px; }
     .ai-steps li { font-size: 14px; color: var(--ink); margin: 4px 0; max-width: 70ch; }
     .ai-note { margin: 18px 0 0; font-size: 12px; color: var(--ink-3); max-width: 80ch; }
-    .notice { padding: 14px 16px; border-radius: var(--radius); background: var(--med-bg); color: #7a4d12; }
+    /* Warning codes and sampling strategies are long snake_case identifiers with
+       no break opportunities, so on a narrow screen they push the page wider
+       than the viewport unless they are allowed to break mid-token. */
+    .notice { padding: 14px 16px; border-radius: var(--radius); background: var(--med-bg); color: #7a4d12; overflow-wrap: anywhere; }
     .notice + .notice { margin-top: 10px; }
 
     /* ---------- controls (filter) ---------- */
@@ -243,6 +246,15 @@
        well as the hue, so the reading never depends on colour alone. */
     .chart-bar-pos { fill: var(--high); }
     .chart-bar-neg { fill: var(--low); }
+    /* Time series. The line breaks at gaps rather than drawing across them, so
+       an outage reads as absence instead of a straight run of invented values. */
+    .chart-line { fill: none; stroke: var(--taupe); stroke-width: 1.4; stroke-linejoin: round; }
+    .chart-line-trend { fill: none; stroke: var(--accent-ink); stroke-width: 2; stroke-linejoin: round; }
+    .chart-changepoint { stroke: var(--high); stroke-width: 2; stroke-dasharray: 4 3; }
+    .chart-stem { stroke: var(--taupe); stroke-width: 2; }
+    .chart-stem-dot { fill: var(--taupe); }
+    .chart-stem-quiet { stroke: var(--line); stroke-width: 2; }
+    .chart-stem-quiet-dot { fill: var(--line); }
     .chart-legend, .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: var(--ink-2); }
     .chart-legend span, .legend span { display: inline-flex; align-items: center; gap: 7px; }
 
@@ -514,7 +526,7 @@
         </div>
       </div>
       <div class="recipe-pill" aria-label="Report recipe">
-        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'regression' %}Regression readiness{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
+        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'regression' %}Regression readiness{% elif result.goal == 'time_series' %}Time series{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
       </div>
     </div>
     <div class="mast-meta">
@@ -540,6 +552,8 @@
         Classification readiness map
       {%- elif result.goal == 'regression' -%}
         Regression readiness map
+      {%- elif result.goal == 'time_series' -%}
+        Forecasting readiness map
       {%- elif result.goal == 'image_profile' -%}
         Image dataset quality profile
       {%- else -%}
@@ -556,7 +570,7 @@
       <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}</div><div class="l">Candidate relationships</div></div>
       {# Recipes that genuinely separate defects from observations count them
          separately here too, so the masthead agrees with the verdict line. #}
-      {% elif result.goal in ('profile', 'regression') %}
+      {% elif result.goal in ('profile', 'regression', 'time_series') %}
       <div class="stat{% if issues %} flag{% endif %}" role="listitem"><div class="n mono">{{ issues | length | format_value }}</div><div class="l">Issue{% if issues | length != 1 %}s{% endif %}</div></div>
       <div class="stat" role="listitem"><div class="n mono">{{ observations | length | format_value }}</div><div class="l">Alert{% if observations | length != 1 %}s{% endif %}</div></div>
       {% else %}
@@ -768,7 +782,7 @@
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'regression' %}No prioritized regression readiness issues were found.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No data-quality issues were found. Every check that ran is listed in the guide; none of them fired.{% endif %}</div>
+      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'regression' %}No prioritized regression readiness issues were found.{% elif result.goal == 'time_series' %}No blocking problems were found with the time axis or its coverage.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No data-quality issues were found. Every check that ran is listed in the guide; none of them fired.{% endif %}</div>
     {% endif %}
   </section>
 
@@ -927,6 +941,126 @@
     <p class="chart-note">A transformed target changes what an error means; back-transformed predictions are biased unless corrected.</p>
   </section>
   {% endfor %}
+
+  <!-- ============ TIME SERIES ============ -->
+  {% for item in result.evidence if item.kind == 'time_series_chart' and item.value.points %}
+  <section class="wide"{% if loop.first %} id="section-series"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('series') }}</div>
+      <div class="sec-title">
+        <h2>The series</h2>
+        <p>{{ item.value.value }} over time, at {{ item.value.frequency_label }} spacing. The line breaks where nothing was recorded rather than drawing across the gap, and dashed rules mark detected level shifts.</p>
+      </div>
+    </div>
+    {{ item.value | series_line_svg }}
+  </section>
+  {% endfor %}
+
+  {% for item in result.evidence if item.kind == 'time_series_decomposition' %}
+  <section class="wide"{% if loop.first %} id="section-structure"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('structure') }}</div>
+      <div class="sec-title">
+        <h2>Trend and seasonality</h2>
+        <p>What the series is made of. Neither is a defect — a strong {{ item.value.seasonal_label }} cycle is usually the most useful thing in a series.{% if item.value.computed_on_interpolated_series %} Computed on the regularized reconstruction, not the raw rows.{% endif %}</p>
+      </div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card" style="grid-column: 1 / -1">
+        <h3>Level, with the fitted trend</h3>
+        <p class="chart-note">trend strength {{ item.value.trend_strength | format_value }} · {{ item.value.trend_direction }} by {{ item.value.trend_change | format_value }} across the history</p>
+        {{ {'points': item.value.observed_points, 'trend_points': item.value.trend_points, 'value': item.value.value} | series_line_svg }}
+      </div>
+      {% if item.value.seasonal_profile %}
+      <div class="chart-card" style="grid-column: 1 / -1">
+        <h3>The {{ item.value.seasonal_label }} shape</h3>
+        <p class="chart-note">seasonal strength {{ item.value.seasonal_strength | format_value }} · peak-to-trough {{ item.value.seasonal_peak_to_trough | format_value }}</p>
+        {{ item.value | seasonal_profile_svg }}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endfor %}
+
+  {% if result.goal == 'time_series' and sections.number('memory') %}
+  <section class="wide" id="section-memory">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('memory') }}</div>
+      <div class="sec-title">
+        <h2>Memory and stationarity</h2>
+        <p>How far back the series predicts itself, and whether its level holds still. Both describe the series; neither is something to fix.</p>
+      </div>
+    </div>
+    {% for item in result.evidence if item.kind == 'time_series_autocorrelation' %}
+    <div class="chart-card">
+      <h3>Autocorrelation by lag</h3>
+      <p class="chart-note">Bars inside the shaded band are indistinguishable from no correlation.{% if item.value.seasonal_candidates %} Peaks at {{ item.value.seasonal_candidates | map(attribute='period') | join(', ') }} suggest a repeating cycle.{% endif %}</p>
+      {{ item.value | acf_stems_svg }}
+    </div>
+    {% endfor %}
+    {% for item in result.evidence if item.kind == 'time_series_stationarity' %}
+    <div class="tbl-wrap" style="margin-top: 22px">
+      <table>
+        <thead><tr><th>Test</th><th>Null hypothesis</th><th>Statistic</th><th>p-value</th><th>Rejects null</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">ADF</td><td>{{ item.value.adf.null_hypothesis }}</td><td class="mono">{{ item.value.adf.statistic | format_value }}</td><td class="mono">{{ item.value.adf.p_value | format_value }}</td><td>{{ item.value.adf.rejects_null | format_value }}</td></tr>
+          <tr><td class="mono">KPSS</td><td>{{ item.value.kpss.null_hypothesis }}</td><td class="mono">{{ item.value.kpss.statistic | format_value }}</td><td class="mono">{{ item.value.kpss.p_value | format_value }}</td><td>{{ item.value.kpss.rejects_null | format_value }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="chart-note">{{ item.value.explanation }}{% if not item.value.tests_agree %} The two tests disagree, and that disagreement is the informative result — it distinguishes a deterministic trend from a shifting level.{% endif %}</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% for item in result.evidence if item.kind == 'time_series_gaps' %}
+  <section class="page"{% if loop.first %} id="section-coverage"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('coverage') }}</div>
+      <div class="sec-title">
+        <h2>Coverage</h2>
+        <p>Absence comes in two forms and they have different causes. A period with no row at all is a collection failure; a period with a row and a blank value is a measurement failure. Counting them together would hide both.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Kind</th><th>From</th><th>To</th><th>{{ item.value.frequency_label | capitalize }} periods</th></tr></thead>
+        <tbody>
+          {% for block in item.value.unrecorded_blocks %}
+          <tr><td>No row recorded</td><td class="mono">{{ block.start[:10] }}</td><td class="mono">{{ block.end[:10] }}</td><td class="mono">{{ block.periods }}</td></tr>
+          {% endfor %}
+          {% for block in item.value.blank_blocks %}
+          <tr><td>Row present, value blank</td><td class="mono">{{ block.start[:10] }}</td><td class="mono">{{ block.end[:10] }}</td><td class="mono">{{ block.periods }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="chart-note">{{ item.value.unrecorded_period_count }} of {{ item.value.expected_periods }} period(s) unrecorded, {{ item.value.blank_period_count }} blank.</p>
+  </section>
+  {% endfor %}
+
+  {% if result.goal == 'time_series' %}
+  {% for artifact in result.artifacts %}
+    {% if artifact.kind == 'metric_table' %}
+    <section class="page" id="section-metrics-{{ loop.index0 }}">
+      <div class="sec-head">
+        <div class="sec-idx">{{ sections.number('metrics-' ~ loop.index0) }}</div>
+        <div class="sec-title"><h2>{{ artifact.title }}</h2>{% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}</div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in artifact.data.rows %}
+            <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
 
   <!-- ============ REGRESSION: REFERENCE TABLES ============ -->
   {% if result.goal == 'regression' %}

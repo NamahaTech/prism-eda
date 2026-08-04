@@ -109,7 +109,7 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
     # Image, anomaly, and regression reports defer their reference tables until
     # after the findings; every other goal leads with them. For regression the
     # probe scores and the VIF table are the working out, not the verdict.
-    if goal not in {"anomaly_detection", "image_profile", "regression"}:
+    if goal not in {"anomaly_detection", "image_profile", "regression", "time_series"}:
         entries.extend(_metric_tables(result))
 
     entries.append(("issues", "Issues" if goal == "profile" else "Findings"))
@@ -137,6 +137,19 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
             entries.append(("residuals", "Residuals"))
         if _has_evidence(result, "regression_target_shape"):
             entries.append(("target", "Target shape"))
+        entries.extend(_metric_tables(result))
+
+    if goal == "time_series":
+        # The series itself first — most time-series questions are answered by
+        # looking at it — then what it is made of, then the reference tables.
+        if _has_evidence(result, "time_series_chart"):
+            entries.append(("series", "The series"))
+        if _has_evidence(result, "time_series_decomposition"):
+            entries.append(("structure", "Trend and seasonality"))
+        if _has_evidence(result, "time_series_autocorrelation"):
+            entries.append(("memory", "Memory and stationarity"))
+        if _has_evidence(result, "time_series_gaps"):
+            entries.append(("coverage", "Coverage"))
         entries.extend(_metric_tables(result))
 
     if goal == "image_profile":

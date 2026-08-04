@@ -10,6 +10,38 @@ stabilizes.
 
 ### Added
 
+- **Time-series recipe.** `pe.time_series(source, value=...)` and
+  `Dataset.time_series(value)` answer whether a series can be forecast and what
+  is in it. The time column is inferred when unambiguous; `entity_id` enables
+  panel handling and `horizon` is optional. Frequency comes from the modal gap
+  between observations, so it survives the gaps that make `pd.infer_freq` return
+  `None`, and calendar frequencies are matched by range. Checks cover duplicate
+  timestamps (entity-aware), unrecorded versus blank periods as contiguous
+  blocks, irregular spacing, per-entity panel coverage, STL trend and seasonal
+  strength, ACF/PACF, ADF **and** KPSS, level and variance change points,
+  temporal outliers, Syntetos–Boylan intermittency, history versus horizon,
+  lagged cross-correlation restricted to forecast-usable lags, and an
+  expanding-window backtest plan. `analyze_time_series` joins the
+  assisted-analysis tool registry.
+- **Absence is reported in the two forms it takes.** A period with no row is a
+  collection failure; a period with a row and a blank value is a measurement
+  failure. They are counted separately and reported as contiguous blocks, so a
+  nine-day outage reads as an outage rather than as "1.2% of rows missing".
+- **Panel composition changes are surfaced.** Totalling an unbalanced panel
+  produces a level shift the day an entity joins, which every downstream check
+  would otherwise read as a change in demand. Prism counts the contributing
+  series per period and raises an issue when that number moves.
+- **Stationarity reports both tests and their disagreement.** ADF and KPSS have
+  opposite null hypotheses, so running one answers half the question. The
+  four-way outcome distinguishes `trend_stationary` (de-trend) from
+  `difference_stationary` (difference) — a distinction neither test makes alone.
+- **Three time-series charts:** `series_line_svg` (breaks the line at gaps rather
+  than drawing across them, and marks change points), `acf_stems_svg`, and
+  `seasonal_profile_svg`.
+- **`daily_orders()` / `daily_orders_single()` sample tables**, a three-store
+  daily panel with a nine-day outage, duplicate timestamps, a short-history
+  store, a level shift, promotion spikes, and blank values. Standalone, so no
+  existing documented output changes.
 - **Regression readiness recipe.** `pe.regression(source, target)` and
   `Dataset.regression(target)` assess whether a numeric target can support a
   regression. It screens leakage (affine copies of the target, near-perfect
@@ -46,11 +78,31 @@ stabilizes.
 ### Changed
 
 - `statsmodels>=0.14` is now a core dependency, used for the Breusch–Pagan
-  heteroscedasticity statistic and OLS influence diagnostics, and required by the
-  time-series recipe that follows.
+  heteroscedasticity statistic and OLS influence diagnostics in regression, and
+  for STL decomposition, ACF/PACF, and the ADF/KPSS pair in time series.
 
 ### Fixed
 
+- **Time-series diagnostics that fired on clean data.** Four guards were needed
+  for detectors that otherwise report on every series. Binary segmentation chops
+  a smooth trend into a staircase of "regime changes", so change points are found
+  on a **Theil–Sen** detrended series — least squares is dragged by the very
+  steps and spikes being looked for, returning a *negative* slope for a series
+  that is genuinely rising — and a shift must move the level by more than the
+  series' own noise. Outliers use an interquartile fence rather than a MAD-scaled
+  z, which a robust STL fit inflates by a factor that varies with the fit.
+  Interpolated periods and change-point neighbourhoods are excluded from outlier
+  scoring, because both manufacture spikes that are pure artifact. And above a 2%
+  flag rate the series has a changing spread rather than outliers, so the list is
+  suppressed and the rate reported instead.
+- **Warnings section could scroll horizontally on a phone.** Warning codes and
+  sampling strategies are long snake_case identifiers with no break
+  opportunities, so a 46-character token pushed the page wider than a 360px
+  viewport. `.notice` now breaks mid-token.
+- **Pre-existing `compare.py` type error and `test_compare.py` lint errors.**
+  `config.mode.value` assumed the narrowed type that `AnalysisConfig.__post_init__`
+  produces while the declared type stays `AnalysisMode | str`; it now re-wraps the
+  way every other recipe does.
 - **Diagnostics that fired on clean data.** Three regression checks were
   reporting on well-behaved datasets and have been guarded. Cook's `4/n` rule
   flags a few percent of rows in any fit, so review rows now require decisive

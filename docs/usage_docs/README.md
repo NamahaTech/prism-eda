@@ -33,6 +33,7 @@ Read them roughly in this order:
 | [Anomaly detection](anomaly-detection.md) | `anomaly_detection()` — statistical review candidates |
 | [Classification readiness](classification.md) | `classification()` — leakage, imbalance, separability |
 | [Regression readiness](regression.md) | `regression()` — leakage, censoring, residual bias, influential rows |
+| [Time series](time-series.md) | `time_series()` — gaps, duplicates, trend, seasonality, stationarity, change points |
 | [Results & evidence](results-and-evidence.md) | The `AnalysisResult` object, findings, evidence, statuses |
 | [Exporting reports](exporting-reports.md) | HTML reports, JSON, and embedding in your own tools |
 | [Context & configuration](context-and-config.md) | Steering analysis with `AnalysisContext` / `AnalysisConfig` |

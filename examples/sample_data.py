@@ -243,6 +243,113 @@ def subscriptions() -> pd.DataFrame:
 
 
 # --------------------------------------------------------------------------
+# Sample time series
+# --------------------------------------------------------------------------
+
+#: Stores in the panel, and how many days of history each one has. ``harbour``
+#: opened recently, which is the point: a panel is rarely balanced, and an
+#: entity with two months of history cannot support a seasonal forecast even
+#: though the panel as a whole looks long enough.
+STORE_HISTORY_DAYS = {"riverside": 730, "gate": 730, "harbour": 61}
+
+#: The day the outage started, and how long it ran. Rows are absent entirely —
+#: not present-and-null — which is what a collection failure actually looks
+#: like and why a total missing count would report zero.
+OUTAGE_START = "2025-04-07"
+OUTAGE_DAYS = 9
+
+
+def daily_orders() -> pd.DataFrame:
+    """Return the seeded ``daily_orders`` panel used by the time-series guide.
+
+    Two years of daily order counts for three stores. The value column is
+    ``orders`` and the time column is ``order_date``.
+
+    The genuine structure is a rising trend plus a weekly cycle — weekends are
+    busier — because a forecasting-readiness check that cannot find real
+    seasonality is not worth running.
+
+    The planted problems are the ones that break a forecast before a model is
+    ever chosen:
+
+    * A nine-day **outage** starting ``2025-04-07``: the rows are missing
+      entirely, so a naive missing-value count sees nothing wrong.
+    * **Duplicate timestamps** — one store double-reported four days, so any
+      resample silently sums or averages two records into one.
+    * ``harbour`` has only 61 days of history against a two-year panel.
+    * A **level shift**: a price change on ``2025-09-01`` steps ``riverside``
+      down by about a third and holds it there.
+    * Two **promotion spikes**, which are real events rather than errors.
+    * A short run of missing ``orders`` values that are present-but-null, so the
+      two kinds of absence can be told apart.
+    """
+    rng = np.random.default_rng(SEED)
+    frames: list[pd.DataFrame] = []
+    end = pd.Timestamp("2026-01-31")
+
+    for store, history in STORE_HISTORY_DAYS.items():
+        dates = pd.date_range(end=end, periods=history, freq="D")
+        step = np.arange(history, dtype="float64")
+
+        base = {"riverside": 180.0, "gate": 120.0, "harbour": 90.0}[store]
+        trend = base + step * 0.06
+        # Weekly cycle: Saturday and Sunday carry the week.
+        weekday = dates.dayofweek.to_numpy()
+        weekly = np.where(weekday >= 5, 26.0, -9.0) + np.where(weekday == 4, 12.0, 0.0)
+        noise = rng.normal(0.0, 7.0, size=history)
+        values = trend + weekly + noise
+
+        if store == "riverside":
+            # A price change steps the level down and it never recovers. This is
+            # a change point, not an outlier: every later day is affected.
+            after = dates >= pd.Timestamp("2025-09-01")
+            values = np.where(after, values * 0.68, values)
+            # Promotions: real events, genuinely high, not data errors.
+            values[dates == pd.Timestamp("2025-06-14")] *= 2.4
+            values[dates == pd.Timestamp("2025-11-28")] *= 2.6
+
+        frame = pd.DataFrame(
+            {
+                "order_date": dates,
+                "store": store,
+                "orders": np.rint(np.clip(values, 0.0, None)),
+            }
+        )
+        frames.append(frame)
+
+    panel = pd.concat(frames, ignore_index=True)
+
+    # The outage removes rows outright, for every store.
+    outage = pd.date_range(OUTAGE_START, periods=OUTAGE_DAYS, freq="D")
+    panel = panel[~panel["order_date"].isin(outage)].reset_index(drop=True)
+
+    # Present-but-null values, so a blank reading is distinguishable from a day
+    # that was never recorded at all.
+    blanks = (panel["store"] == "gate") & panel["order_date"].between(
+        "2025-12-02", "2025-12-05"
+    )
+    panel.loc[blanks, "orders"] = np.nan
+
+    # One store double-reported four days.
+    repeated = panel[
+        (panel["store"] == "gate")
+        & panel["order_date"].isin(
+            pd.to_datetime(["2025-02-10", "2025-02-11", "2025-07-03", "2025-10-19"])
+        )
+    ]
+    panel = pd.concat([panel, repeated], ignore_index=True)
+
+    return panel.sort_values(["order_date", "store"]).reset_index(drop=True)
+
+
+def daily_orders_single() -> pd.DataFrame:
+    """The ``riverside`` store alone — a single series, for the simple examples."""
+    panel = daily_orders()
+    single = panel[panel["store"] == "riverside"].drop(columns=["store"])
+    return single.reset_index(drop=True)
+
+
+# --------------------------------------------------------------------------
 # Sample image dataset
 #
 # The same idea as the tables above, for ``docs/usage_docs/image-datasets.md``:

@@ -16,10 +16,10 @@ later plan and explain analysis, but it does not invent numeric truth.
 - Import package: `prism_eda`
 - Supported Python: 3.11+
 - Implemented recipes: baseline profile, schema discovery, anomaly detection,
-  classification, regression, image dataset profile
+  classification, regression, time series, image dataset profile
 - Optional AI-assisted investigation via the `ai-gemini` extra
   (`prism_eda.assisted_analysis`): an LLM plans over the deterministic tools only
-- Planned next recipes: time-series, clustering
+- Planned next recipe: clustering
 
 See [implementation status](docs/implementation-status.md) for the exact ledger.
 
@@ -71,7 +71,12 @@ python -m build
   is leaking or merely duplicated?), `regression_probe.py` (what happens when a
   model is actually fitted?), with `regression.py` orchestrating and
   `_regression.py` holding the shared sampling, table resolution, and feature
-  selection every stage must agree on.
+  selection every stage must agree on. Time series follows the same split:
+  `timeseries_index.py` (is the time axis trustworthy?),
+  `timeseries_structure.py` (what shape does the series have?),
+  `timeseries_events.py` (what happened along the way?), with `timeseries.py`
+  orchestrating and `_timeseries.py` holding frequency inference and the
+  raw-versus-regularized distinction described below.
 - `evidence/`: provider-neutral evidence and finding contracts.
 - `artifacts.py`: structured report artifacts such as schema graphs.
 - `reporting/`: the shared self-contained renderer. `sections.py` owns which
@@ -128,6 +133,30 @@ Name-matching heuristics need the same care: a substring test makes a target
 called `y` "leak" into `x1_copy`, so name evidence comes from whole tokens of at
 least three characters.
 
+The time-series recipe needed four guards for the same reason:
+
+- Binary segmentation chops a smooth trend into a staircase of "level shifts",
+  so change points are found on a **Theil–Sen** detrended series (least squares
+  is dragged by the very steps and spikes being looked for) and a shift must
+  move the level by more than the series' own noise.
+- A MAD-scaled z on a robust STL remainder is inflated by a factor that varies
+  with the fit, so outliers use an interquartile fence instead.
+- Interpolated periods and the neighbourhood of a change point are excluded from
+  outlier scoring; both manufacture spikes that are pure artifact.
+- Above a 2% flag rate the series has a changing spread rather than outliers, so
+  the list is suppressed and the rate reported.
+
+## Two representations of a time series, and they are not interchangeable
+
+The raw rows are what the data contains — duplicated timestamps, absent periods,
+uneven spacing. The regular grid is a reconstruction. **Every hygiene claim runs
+on the raw rows**, because those are exact statements about defects and a
+duplicate that has already been collapsed cannot be counted. Decomposition,
+autocorrelation, and stationarity can only run on the grid, so they are computed
+on the reconstruction and every result derived from it is disclosed as such via
+a `SamplingRecord` plus an on-page warning. Do not quietly move a hygiene check
+onto the grid.
+
 ## Important limitations
 
 - Pandas is the only in-memory backend.
@@ -163,6 +192,15 @@ least three characters.
 - Regression review rows carry actual/predicted values and per-row feature
   values. Those live in evidence for the local report only; the assisted-analysis
   layer sends the model just the recipe summary and finding text, never rows.
+- Time-series frequency is the dominant *observed* spacing, not a declared
+  schedule; a series that changes cadence is forced onto one grid.
+- Panel structural analysis runs on the aggregate only. Per-entity decomposition
+  is not implemented; coverage is reported per entity instead.
+- Duplicate timestamps are averaged when the grid is built. That is right for a
+  rate and arguably wrong for a count, which is why the duplicate finding asks
+  for resolution at source rather than choosing silently.
+- ADF and KPSS both lose power on short series, so a `stationary` verdict on a
+  few dozen observations is weak evidence, not reassurance.
 
 ## Key documents
 

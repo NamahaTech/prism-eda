@@ -103,6 +103,7 @@ dataset.catalog()
 dataset.analyze(...)
 dataset.classification(...)
 dataset.regression(...)
+dataset.time_series(...)
 dataset.anomaly_detection(...)
 dataset.discover_schema(...)
 ```
@@ -197,8 +198,8 @@ image_result = pe.profile_images(
 )
 ```
 
-`discover_schema`, `anomaly_detection`, `classification`, `regression`, and
-`profile_images` are implemented.
+`discover_schema`, `anomaly_detection`, `classification`, `regression`,
+`time_series`, and `profile_images` are implemented.
 Schema discovery returns candidate keys and relationships, not declared
 constraints. Anomaly detection returns statistical review candidates, not
 confirmed anomaly labels; `expected_contamination` is an optional review-sizing
@@ -210,6 +211,11 @@ residual, influence, and support evidence for one numeric target. Its probes are
 diagnostic fits, so every residual-derived claim is model-conditional and
 labelled as such; a weak probe means a linear model finds little, not that the
 target is unlearnable. It does not return a production model object either.
+Time series returns time-axis, coverage, panel, decomposition, autocorrelation,
+stationarity, change-point, outlier, intermittency, history, and validation-plan
+evidence for one value column. Hygiene claims are computed on the raw rows;
+structural claims are computed on a regularized reconstruction and disclosed as
+such. It returns no forecast.
 Image profiling returns metadata,
 quality, duplicate, leakage, loader-trap, and per-label evidence; near-duplicate
 and quality flags are candidates for review, not confirmed removal instructions.
@@ -224,6 +230,7 @@ Convenience functions:
 result = pe.anomaly_detection(df, mode="standard")
 result = pe.classification(df, target="churned")
 result = pe.regression(df, target="monthly_revenue")
+result = pe.time_series(df, value="orders", entity_id="store", horizon=28)
 result = pe.discover_schema("data/", recursive=True)
 result = pe.profile_images("images/train/")
 ```
@@ -459,6 +466,11 @@ src/prism_eda/
     regression_target.py    # target shape, censoring spikes, transformations
     regression_signal.py    # association, redundancy/VIF, leakage screen
     regression_probe.py     # probes, residuals, influence, review rows
+    _timeseries.py          # frequency inference, raw vs regularized series
+    timeseries.py           # orchestration: horizon, validation plan, verdict
+    timeseries_index.py     # frequency, gaps, duplicates, panel coverage
+    timeseries_structure.py # STL, ACF/PACF, ADF+KPSS agreement
+    timeseries_events.py    # change points, outliers, intermittency
   transformations/
     models.py
   reporting/
