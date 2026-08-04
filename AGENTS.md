@@ -16,10 +16,10 @@ later plan and explain analysis, but it does not invent numeric truth.
 - Import package: `prism_eda`
 - Supported Python: 3.11+
 - Implemented recipes: baseline profile, schema discovery, anomaly detection,
-  classification, regression, time series, image dataset profile
+  classification, regression, time series, clustering, image dataset profile
 - Optional AI-assisted investigation via the `ai-gemini` extra
   (`prism_eda.assisted_analysis`): an LLM plans over the deterministic tools only
-- Planned next recipe: clustering
+- All eight prism-rays on the README roadmap now ship
 
 See [implementation status](docs/implementation-status.md) for the exact ledger.
 
@@ -76,7 +76,12 @@ python -m build
   `timeseries_structure.py` (what shape does the series have?),
   `timeseries_events.py` (what happened along the way?), with `timeseries.py`
   orchestrating and `_timeseries.py` holding frequency inference and the
-  raw-versus-regularized distinction described below.
+  raw-versus-regularized distinction described below. Clustering likewise:
+  `clustering_readiness.py` (is this even clusterable?),
+  `clustering_search.py` (what structure is there, and does it reproduce?),
+  `clustering_segments.py` (what are the groups?), with `clustering.py`
+  orchestrating the gate described below and `_clustering.py` holding feature
+  admission and the matrix build.
 - `evidence/`: provider-neutral evidence and finding contracts.
 - `artifacts.py`: structured report artifacts such as schema graphs.
 - `reporting/`: the shared self-contained renderer. `sections.py` owns which
@@ -146,6 +151,27 @@ The time-series recipe needed four guards for the same reason:
 - Above a 2% flag rate the series has a changing spread rather than outliers, so
   the list is suppressed and the rate reported.
 
+## Clustering gates its own most persuasive output
+
+A segment profile — sizes, distinguishing features, example rows, a scatter of
+coloured blobs — looks exactly as convincing computed from uniform noise as from
+real groups, and k-means will never refuse. So `clustering.py` produces one only
+when two independent checks agree: the data shows cluster tendency against
+uniform points in its own bounding box, **and** a partition reproduces on
+resampled subsamples. Otherwise the run ends in `NO_MEANINGFUL_STRUCTURE` with
+no segments and no embedding. Do not relax that gate to make a report look
+fuller; the empty result is the feature.
+
+Two related rules. Categorical columns never enter the distance — one-hot
+Euclidean asserts every pair of categories is equally far apart — and are used to
+describe the groups afterwards instead. And no output claims a best k;
+`candidate_k` is labelled a candidate everywhere it appears.
+
+Clustering metrics are rounded to 12 significant digits before being banked
+(`_clustering.stable`). scikit-learn's k-means reduces in parallel, so identical
+labels can yield an inertia differing in the last bit, which would otherwise
+produce a new evidence ID on every run.
+
 ## Two representations of a time series, and they are not interchangeable
 
 The raw rows are what the data contains — duplicated timestamps, absent periods,
@@ -201,6 +227,14 @@ onto the grid.
   for resolution at source rather than choosing silently.
 - ADF and KPSS both lose power on short series, so a `stationary` verdict on a
   few dozen observations is weak evidence, not reassurance.
+- Clustering searches with k-means only, so elongated, nested, or
+  density-varying structure scores poorly and is still real. Other algorithms
+  are suggested, never run.
+- Clustering distance is numeric-only; categorical columns describe groups but
+  never form them.
+- The clustering embedding is a PCA projection offered as a visual aid, drawn as
+  small multiples because past three groups no categorical palette keeps every
+  pair distinguishable under colour-vision deficiency.
 
 ## Key documents
 

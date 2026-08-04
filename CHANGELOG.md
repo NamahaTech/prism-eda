@@ -10,6 +10,37 @@ stabilizes.
 
 ### Added
 
+- **Clustering recipe.** `pe.clustering(source, features=...)` and
+  `Dataset.clustering()` answer whether a table has group structure before
+  describing any groups. Feature admission states a reason for every exclusion;
+  scale ratio, redundancy, exact and near duplicates, PCA intrinsic
+  dimensionality, and distance concentration cover the geometry; a repeated
+  Hopkins statistic covers tendency; and a k-sweep reports silhouette,
+  Calinski–Harabasz, Davies–Bouldin and inertia alongside **resampling
+  stability** — the adjusted Rand index between two independently clustered
+  overlapping subsamples. Sensitivity to standardizing and to dropping each
+  feature is reported. `assess_clustering` joins the assisted-analysis registry.
+- **`NO_MEANINGFUL_STRUCTURE` is a first-class outcome.** Segment profiles are
+  produced only when cluster tendency *and* resampling stability both hold. On
+  uniform noise the run reports no structure and produces no segments and no
+  embedding — the most persuasive parts of the report are exactly the ones
+  withheld, because they look identical computed from noise. No output claims a
+  best k; `candidate_k` is labelled a candidate everywhere it appears.
+- **Categorical columns never enter the clustering distance.** One-hot Euclidean
+  asserts that every pair of categories is equally far apart and weights a
+  five-category column five times a two-category one. They are used instead to
+  describe the groups formed without them, and a categorical that differentiates
+  no segment is itself reported as a finding.
+- **Two clustering charts:** a k-sweep line chart showing silhouette against
+  stability, and the PCA projection drawn as **small multiples, one panel per
+  group**. Past three groups no categorical palette can keep every pair
+  distinguishable under colour-vision deficiency when every pair is on screen at
+  once, so faceting removes the question rather than losing to it. The two
+  colours used were validated with the palette checker.
+- **`customer_segments()` sample table**, with four latent groups plus an
+  identifier, a constant column, a 1,653x scale spread, a perfectly redundant
+  pair, duplicate rows, and missingness. Standalone, so no existing documented
+  output changes.
 - **Time-series recipe.** `pe.time_series(source, value=...)` and
   `Dataset.time_series(value)` answer whether a series can be forecast and what
   is in it. The time column is inferred when unambiguous; `entity_id` enables
@@ -83,6 +114,19 @@ stabilizes.
 
 ### Fixed
 
+- **Reference tables rendered twice on the time-series report.** The list of
+  goals that defer their metric tables lived in two places — `sections.py` and
+  the template — and only one was updated, so the tables rendered both before
+  and after the findings with duplicate `id` attributes that silently broke
+  every anchor. `tests/test_report_sections.py` now covers all eight goals from
+  a single list and asserts that no section renders twice and that the page
+  order matches the navigation; previously it parametrized over a hardcoded five
+  and checked only that anchors existed.
+- **Clustering evidence IDs were not reproducible.** scikit-learn's k-means
+  reduces in parallel, so identical labels could yield an inertia differing in
+  the sixteenth significant digit, and hashing that into the evidence ID
+  produced a different ID on every run. Clustering metrics are now rounded to
+  twelve significant digits before being banked.
 - **Time-series diagnostics that fired on clean data.** Four guards were needed
   for detectors that otherwise report on every series. Binary segmentation chops
   a smooth trend into a staircase of "regime changes", so change points are found

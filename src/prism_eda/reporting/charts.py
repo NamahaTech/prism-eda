@@ -728,6 +728,147 @@ def seasonal_profile_svg(data: dict[str, Any]) -> Markup:
     return Markup("".join(parts))
 
 
+def cluster_facet_svg(embedding: dict[str, Any], segment: int) -> Markup:
+    """One small multiple: a single segment picked out against all the rest.
+
+    A cluster scatter is normally drawn with one hue per group, and for anything
+    past three groups that is a colour problem with no solution — eight hues
+    cannot be told apart by a colour-blind reader when every pair has to be
+    distinguishable from every other, and no re-ordering fixes it because every
+    pair is on screen at once. Faceting sidesteps the question entirely: each
+    panel needs one hue and a grey, every panel is unambiguous, and the reader
+    compares positions instead of matching colours to a legend.
+    """
+    points = embedding.get("points", [])
+    if not points:
+        return Markup("")
+    width, height = 260.0, 190.0
+    pad = 10.0
+    xs = [float(point["x"]) for point in points]
+    ys = [float(point["y"]) for point in points]
+    x_lo, x_hi = min(xs), max(xs)
+    y_lo, y_hi = min(ys), max(ys)
+    x_pad = (x_hi - x_lo) * 0.06 or 1.0
+    y_pad = (y_hi - y_lo) * 0.06 or 1.0
+    x_lo, x_hi = x_lo - x_pad, x_hi + x_pad
+    y_lo, y_hi = y_lo - y_pad, y_hi + y_pad
+
+    def px(value: float) -> float:
+        return _scale(value, x_lo, x_hi, pad, width - pad)
+
+    def py(value: float) -> float:
+        return _scale(value, y_lo, y_hi, height - pad, pad)
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="auto" role="img" class="chart" '
+        f'aria-label="Segment {segment} against the rest">'
+    ]
+    # Everything else first, so the highlighted group draws on top of it.
+    for point in points:
+        if int(point["segment"]) == segment:
+            continue
+        parts.append(
+            f'<circle class="facet-dot-other" cx="{px(float(point["x"])):.1f}" '
+            f'cy="{py(float(point["y"])):.1f}" r="1.8"></circle>'
+        )
+    member = 0
+    for point in points:
+        if int(point["segment"]) != segment:
+            continue
+        member += 1
+        parts.append(
+            f'<circle class="facet-dot" cx="{px(float(point["x"])):.1f}" '
+            f'cy="{py(float(point["y"])):.1f}" r="2.6"></circle>'
+        )
+    parts.append(
+        f'<text class="chart-label" x="{pad}" y="{height - 2}" '
+        f'text-anchor="start">segment {segment} · {member} shown</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def k_sweep_svg(sweep: dict[str, Any]) -> Markup:
+    """Silhouette and stability against k, with the candidate marked.
+
+    Two series deliberately drawn together, because the comparison is the point:
+    a k that scores well on silhouette while its stability collapses is exactly
+    the trap the chart exists to expose.
+    """
+    results = sweep.get("results", [])
+    if not results:
+        return Markup("")
+    width, height = 680.0, 230.0
+    pad_l, pad_r, pad_t, pad_b = 44.0, 16.0, 18.0, 46.0
+    plot_h = height - pad_t - pad_b
+    candidate = sweep.get("candidate_k")
+
+    ks = [int(row["k"]) for row in results]
+    slot = (width - pad_l - pad_r) / max(1, len(ks) - 1) if len(ks) > 1 else 0.0
+
+    def px(index: int) -> float:
+        return pad_l + index * slot if len(ks) > 1 else (width / 2)
+
+    def py(value: float) -> float:
+        # Both series are bounded in [0, 1], so one axis serves them honestly.
+        return pad_t + plot_h - max(0.0, min(1.0, value)) * plot_h
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Silhouette and stability by cluster count">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t + plot_h}" '
+        f'x2="{width - pad_r}" y2="{pad_t + plot_h}"></line>',
+    ]
+    if candidate is not None and candidate in ks:
+        x = px(ks.index(int(candidate)))
+        parts.append(
+            f'<line class="chart-candidate" x1="{x:.1f}" y1="{pad_t}" '
+            f'x2="{x:.1f}" y2="{pad_t + plot_h:.1f}"><title>candidate k='
+            f"{candidate}</title></line>"
+        )
+
+    for key, css in (("silhouette", "sweep-a"), ("stability_mean", "sweep-b")):
+        run: list[str] = []
+        for index, row in enumerate(results):
+            value = row.get(key)
+            if value is None:
+                continue
+            run.append(f"{px(index):.1f},{py(float(value)):.1f}")
+        if len(run) > 1:
+            parts.append(
+                f'<polyline class="chart-line-{css}" points="{" ".join(run)}">'
+                f"</polyline>"
+            )
+        for index, row in enumerate(results):
+            value = row.get(key)
+            if value is None:
+                continue
+            label = "silhouette" if key == "silhouette" else "stability"
+            parts.append(
+                f'<circle class="chart-dot-{css}" cx="{px(index):.1f}" '
+                f'cy="{py(float(value)):.1f}" r="3"><title>k={row["k"]} '
+                f"{label} {float(value):.3f}</title></circle>"
+            )
+
+    for index, k in enumerate(ks):
+        parts.append(
+            f'<text class="chart-label" x="{px(index):.1f}" '
+            f'y="{pad_t + plot_h + 15:.1f}" text-anchor="middle">{k}</text>'
+        )
+    parts.append(
+        f'<text class="chart-label" x="{pad_l - 6}" y="{py(1.0) + 4:.1f}" '
+        f'text-anchor="end">1.0</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{py(0.0) + 4:.1f}" '
+        f'text-anchor="end">0.0</text>'
+        f'<text class="chart-label" x="{(pad_l + width - pad_r) / 2:.0f}" '
+        f'y="{height - 26}" text-anchor="middle">cluster count (k)</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
 def _truncate(text: str, limit: int = 13) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 

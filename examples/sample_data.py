@@ -16,16 +16,23 @@ analysis recipes have something meaningful (but not noisy) to surface:
 * ``subscriptions`` is the regression fixture: a right-skewed numeric target
   that is censored at a per-plan contract ceiling, an affine leak, a collinear
   feature pair, noise that widens with tenure, and two influential rows.
+* ``daily_orders`` is the time-series fixture: a three-store daily panel with a
+  nine-day outage, duplicate timestamps, a short-history store, a level shift,
+  promotion spikes, and blank values. ``daily_orders_single`` is one store of it.
+* ``customer_segments`` is the clustering fixture: four latent groups plus an
+  identifier, a constant column, a 1,653x spread in feature scale, a perfectly
+  redundant pair, duplicate rows, and missingness.
 
-``subscriptions`` is deliberately **not** part of :func:`load_sample`. The
-snippets in ``docs/usage_docs/`` quote captured output, and adding a third table
-to the shared mapping would change the row, column, and table counts every
-existing example prints. Load it on its own instead::
+The last four are deliberately **not** part of :func:`load_sample`. The snippets
+in ``docs/usage_docs/`` quote captured output, and adding a table to the shared
+mapping would change the row, column, and table counts every existing example
+prints. Load them on their own instead::
 
-    from examples.sample_data import subscriptions
+    from examples.sample_data import customer_segments, subscriptions
     import prism_eda as pe
 
     result = pe.load({"subscriptions": subscriptions()}).regression("monthly_revenue")
+    groups = pe.load({"members": customer_segments()}).clustering()
 
 Usage::
 
@@ -347,6 +354,109 @@ def daily_orders_single() -> pd.DataFrame:
     panel = daily_orders()
     single = panel[panel["store"] == "riverside"].drop(columns=["store"])
     return single.reset_index(drop=True)
+
+
+# --------------------------------------------------------------------------
+# Sample clustering data
+# --------------------------------------------------------------------------
+
+#: Latent segments in the clustering sample, as
+#: ``name -> (annual_spend, visits_per_month, tenure_days, share)``. These are
+#: the centres the data is generated around; nothing in the table records which
+#: segment a row came from, which is the point.
+SEGMENT_CENTRES = {
+    "budget": (420.0, 1.5, 240.0, 0.34),
+    "regular": (1_850.0, 6.0, 1_150.0, 0.30),
+    "premium": (7_400.0, 4.0, 1_500.0, 0.18),
+    "lapsed": (1_500.0, 0.4, 1_900.0, 0.18),
+}
+
+#: Members in the clustering sample.
+N_MEMBERS = 600
+
+
+def customer_segments() -> pd.DataFrame:
+    """Return the seeded ``customer_segments`` table used by the clustering guide.
+
+    Four genuine groups are generated from the centres in
+    :data:`SEGMENT_CENTRES`, well enough separated that a clustering run should
+    find them — a clusterability check that cannot recognise real structure is
+    not worth running.
+
+    The planted problems are the ones that quietly ruin a distance-based
+    clustering:
+
+    * ``member_id`` is unique per row. Left in the feature set it contributes a
+      dimension in which every point is equidistant from every other.
+    * ``annual_spend`` spans thousands while ``visits_per_month`` spans single
+      digits. Unscaled, the distance between two members is essentially the
+      difference in their spend and nothing else.
+    * ``visits_per_year`` is ``visits_per_month`` in different units, so the
+      visit frequency is present twice — and a duplicated dimension is silently
+      double-weighted in a Euclidean distance.
+    * ``account_status`` is the same value in every row and contributes nothing.
+    * Twelve rows are exact duplicates, which tighten one region of space and
+      pull a centroid toward it.
+    * ``satisfaction`` is about 9% missing.
+
+    Columns:
+        member_id: Unique member key.
+        region: Categorical region, unrelated to the segments.
+        annual_spend: Spend in currency units (thousands scale).
+        visits_per_month: Visit frequency (single-digit scale).
+        tenure_days: Days since joining (hundreds to thousands).
+        visits_per_year: The same quantity as ``visits_per_month``, rescaled.
+        satisfaction: 1-10 rating, ~9% missing.
+        account_status: Constant.
+    """
+    rng = np.random.default_rng(SEED)
+
+    names: list[str] = []
+    spend: list[float] = []
+    visits: list[float] = []
+    tenure: list[float] = []
+    for name, (
+        centre_spend,
+        centre_visits,
+        centre_tenure,
+        share,
+    ) in SEGMENT_CENTRES.items():
+        count = int(round(N_MEMBERS * share))
+        names.extend([name] * count)
+        # Spread is proportional to the centre so every segment is equally
+        # recognisable in relative terms rather than the large-spend one being
+        # artificially diffuse.
+        spend.extend(rng.normal(centre_spend, centre_spend * 0.16, count))
+        visits.extend(rng.normal(centre_visits, 0.45, count))
+        tenure.extend(rng.normal(centre_tenure, 150.0, count))
+
+    total = len(names)
+    annual_spend = np.clip(np.array(spend), 20.0, None).round(2)
+    visits_per_month = np.clip(np.array(visits), 0.0, None).round(2)
+    tenure_days = np.clip(np.array(tenure), 30.0, None).round().astype(int)
+
+    visits_per_year = (visits_per_month * 12.0 + rng.normal(0.0, 0.05, total)).round(2)
+
+    satisfaction = rng.integers(4, 11, size=total).astype(float)
+    satisfaction[rng.choice(total, size=int(total * 0.09), replace=False)] = np.nan
+
+    frame = pd.DataFrame(
+        {
+            "member_id": np.arange(90_000, 90_000 + total),
+            "region": rng.choice(["west", "east", "north", "south"], size=total),
+            "annual_spend": annual_spend,
+            "visits_per_month": visits_per_month,
+            "tenure_days": tenure_days,
+            "visits_per_year": visits_per_year,
+            "satisfaction": satisfaction,
+            "account_status": "active",
+        }
+    )
+
+    # Twelve exact duplicates, member_id included: the same record loaded twice.
+    repeated = frame.iloc[rng.choice(total, size=12, replace=False)]
+    frame = pd.concat([frame, repeated], ignore_index=True)
+    return frame.sample(frac=1.0, random_state=SEED).reset_index(drop=True)
 
 
 # --------------------------------------------------------------------------

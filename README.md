@@ -34,16 +34,16 @@ truth. It gives you citable evidence and review recommendations.
 The prism metaphor: one input — data — can be examined through several distinct
 objectives. Five rays ship today; the rest are the roadmap.
 
-| Prism-rays (recipes)      | Objectives                                              | Status |
-|---------------------------|---------------------------------------------------------|--------|
-| **Baseline Profiling**    | Data quality issues, distributions, and correlations.   | Available |
-| **Schema Discovery**      | Relationship insights for tables and entities.          | Available |
-| **Anomaly Detection**     | Observations, combinations, outliers detection.         | Available |
-| **Classification**        | Target readiness, leakage, and split guidance.          | Available |
-| **Image Dataset Profile** | Split leakage, loader traps, duplicates, quality flags. | Available |
-| **Regression**            | Prediction and regression for numerical outcomes.       | Available |
-| **Time Series Analysis**  | Time-based data forecasting analysis.                   | Available |
-| **Clustering**            | Categorization, clustering and segmentation support.    | Planned |
+| Prism-rays (recipes)      | Objectives                                              |
+|---------------------------|---------------------------------------------------------|
+| **Baseline Profiling**    | Data quality issues, distributions, and correlations.   |
+| **Schema Discovery**      | Relationship insights for tables and entities.          |
+| **Anomaly Detection**     | Observations, combinations, outliers detection.         |
+| **Classification**        | Target readiness, leakage, and split guidance.          |
+| **Image Dataset Profile** | Split leakage, loader traps, duplicates, quality flags. |
+| **Regression**            | Prediction and regression for numerical outcomes.       |
+| **Time Series Analysis**  | Time-based data forecasting analysis.                   |
+| **Clustering**            | Categorization, clustering and segmentation support.    |
 
 ## Why it exists
 
@@ -93,6 +93,10 @@ JavaScript, or an AI provider.
 - Assess classification targets for balance, label conflicts, associations,
   missing gaps, deterministic leakage,
   probe separability, hard examples, local class overlap, and split guidance.
+- Establish whether a table has cluster structure at all — scaling and
+  redundancy problems, distance concentration, repeated Hopkins tendency, and
+  resampling stability — before describing any segments, and report
+  `no_meaningful_structure` when it does not.
 - Profile a time series for frequency, duplicate timestamps, unrecorded versus
   blank periods as contiguous blocks, per-entity panel coverage, trend and
   seasonal strength, autocorrelation, stationarity via ADF *and* KPSS, level and
@@ -323,6 +327,34 @@ KPSS both run, because they have opposite nulls and their disagreement is what
 separates "de-trend it" from "difference it". See
 [the time-series guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/time-series.md).
 
+### Clustering: find out whether there are groups before describing them
+
+```python
+import prism_eda as pe
+
+result = pe.clustering("data/members.csv")
+print(result.status, "—", result.summary)
+```
+
+```text
+no_meaningful_structure — noise: no stable cluster structure was found.
+Partitioning it anyway would divide something continuous.
+```
+
+Clustering is unfalsifiable by construction: ask k-means for four groups and you
+get four groups, from segmented data and from uniform noise alike, with a
+silhouette score either way. So Prism gates the persuasive part of the report —
+segment sizes, distinguishing features, a coloured scatter — behind two
+independent checks that must agree: the data has to show cluster tendency
+against uniform noise in its own bounding box, **and** a partition has to
+reproduce on resampled rows. When either fails, nothing is profiled and
+`NO_MEANINGFUL_STRUCTURE` is the answer.
+
+Categorical columns never enter the distance — one-hot Euclidean asserts that
+every pair of categories is equally far apart — and are used instead to describe
+the groups that were found without them. See
+[the clustering guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/clustering.md).
+
 ### Anomaly detection: make a review list, not a verdict
 
 ```python
@@ -428,7 +460,7 @@ See [AI-assisted analysis](https://github.com/NamahaTech/prism-eda/blob/main/doc
 
 - [**Usage Guide**](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/README.md) — install, load, analyze, export (start here)
 - [AI-assisted investigation](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) · [Privacy](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md)
-- [Regression readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md) · [Classification readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/classification.md) · [Time series](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/time-series.md)
+- [Regression readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md) · [Classification readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/classification.md) · [Time series](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/time-series.md) · [Clustering](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/clustering.md)
 - [Schema discovery](https://github.com/NamahaTech/prism-eda/blob/main/docs/schema-discovery.md)
 - [Implementation plan and handoff](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-plan.md)
 - [Implementation status](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-status.md)
@@ -450,6 +482,7 @@ and transformation recommendations needed to audit that conclusion.
 | Classification readiness | Class balance, leakage/identifier risks, associations, probe results, hard examples, overlap, and split guidance |
 | Regression readiness | Target shape and censoring, leakage, redundancy/VIF, probe scores, residual and bias charts, and ranked influential rows |
 | Time series | The series with gaps left open, trend and seasonal shape, ACF, the ADF/KPSS pair, coverage blocks, per-entity panel coverage, and a backtest plan |
+| Clustering | Candidate segments with distinguishing features and representative rows, the k-sweep with stability, clusterability checks, and faceted projections |
 | Image profile | Quality/loader checks, duplicate and leakage evidence, class balance, charts, and embedded thumbnail contact sheets |
 | Investigation | Deterministic findings plus AI provenance and grounded interpretation |
 

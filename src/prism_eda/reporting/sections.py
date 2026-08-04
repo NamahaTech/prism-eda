@@ -109,7 +109,13 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
     # Image, anomaly, and regression reports defer their reference tables until
     # after the findings; every other goal leads with them. For regression the
     # probe scores and the VIF table are the working out, not the verdict.
-    if goal not in {"anomaly_detection", "image_profile", "regression", "time_series"}:
+    if goal not in {
+        "anomaly_detection",
+        "image_profile",
+        "regression",
+        "time_series",
+        "clustering",
+    }:
         entries.extend(_metric_tables(result))
 
     entries.append(("issues", "Issues" if goal == "profile" else "Findings"))
@@ -150,6 +156,18 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
             entries.append(("memory", "Memory and stationarity"))
         if _has_evidence(result, "time_series_gaps"):
             entries.append(("coverage", "Coverage"))
+        entries.extend(_metric_tables(result))
+
+    if goal == "clustering":
+        # Segments first when they exist, because that is what a reader came
+        # for; the search that justified them follows. When no structure was
+        # found there is no segment section at all, which is the point.
+        if _has_evidence(result, "clustering_segments"):
+            entries.append(("segments", "Segments"))
+        if _has_evidence(result, "clustering_k_sweep"):
+            entries.append(("search", "How many groups"))
+        if _has_evidence(result, "clustering_tendency"):
+            entries.append(("clusterability", "Is it clusterable"))
         entries.extend(_metric_tables(result))
 
     if goal == "image_profile":

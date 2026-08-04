@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-08-04 (regression readiness, time series)
+Last updated: 2026-08-04 (regression readiness, time series, clustering)
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -158,6 +158,32 @@ removed, or materially re-scoped.
   coverage) with new series-line, ACF-stem, and seasonal-profile charts
 - `analyze_time_series` registered in the assisted-analysis tool registry
 
+### Clustering
+
+- `clustering()` / `Dataset.clustering()` public API with optional `features`
+- Feature admission with a stated reason for every exclusion (identifier,
+  constant, all-missing, datetime, high-cardinality, feature cap)
+- Numeric-only distance; categorical columns profile the groups instead, and the
+  report says so rather than one-hot encoding them into a Euclidean space
+- Scale-ratio, redundancy, exact- and near-duplicate scans
+- PCA intrinsic dimensionality and a percentile-based distance-contrast measure
+  that detects concentration without being destroyed by one near-duplicate pair
+- Repeated Hopkins cluster tendency with mean, range, and an explicit band
+- k-sweep with silhouette, Calinski-Harabasz, Davies-Bouldin, and inertia, plus
+  **resampling stability** (adjusted Rand index between two independently
+  clustered overlapping subsamples) as the check that can fail
+- A candidate k only where separation and stability agree; no "best k" claim
+- Sensitivity to standardizing and to one-feature-out dominance
+- Segment profiles gated behind tendency *and* stability: sizes, distinguishing
+  features in standard deviations, category mix with lift, medoid rows, and
+  per-segment silhouette
+- Redundant twins deduplicated within a segment description; a categorical that
+  differentiates no segment reported as its own finding
+- `NO_MEANINGFUL_STRUCTURE` as a first-class outcome with no segments or
+  embedding produced
+- Faceted PCA projection (one panel per group) and a k-sweep chart
+- Geometry-based algorithm guidance; `assess_clustering` in the AI tool registry
+
 ### Image dataset profile
 
 - `ImageDataset`, `load_images()`, and `profile_images()` public API
@@ -254,6 +280,15 @@ removed, or materially re-scoped.
 - Holiday and calendar-effect regressors as candidate explanations for outliers
 - Sub-daily timezone and DST handling beyond reporting the index timezone
 
+### Clustering improvements
+
+- Density methods (DBSCAN/HDBSCAN) run rather than only suggested, so points can
+  be left unassigned instead of forced into the nearest centroid
+- Gower distance or k-prototypes for genuinely mixed-type data
+- Hierarchical linkage with a dendrogram, so groups can be read as a merge order
+  rather than one partition
+- Per-segment stability, so a report can say which individual groups reproduce
+
 ### Regression improvements
 
 - Quantile-regression probe for targets where the conditional median is the
@@ -275,7 +310,6 @@ removed, or materially re-scoped.
 
 ## Later
 
-- Clustering recipe
 - Chunked CSV execution and a general execution planner
 - Functional dependencies and denormalization analysis
 - Plotly interactive artifact implementations

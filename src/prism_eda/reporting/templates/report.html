@@ -255,6 +255,25 @@
     .chart-stem-dot { fill: var(--taupe); }
     .chart-stem-quiet { stroke: var(--line); stroke-width: 2; }
     .chart-stem-quiet-dot { fill: var(--line); }
+    /* Clustering. The facets need one hue and a grey rather than a hue per
+       group: past three groups no categorical palette can keep every pair
+       distinguishable for a colour-blind reader, and faceting removes the
+       question instead of losing to it. */
+    .facet-dot { fill: #2a78d6; opacity: .9; }
+    .facet-dot-other { fill: var(--line); opacity: .8; }
+    .chart-line-sweep-a { fill: none; stroke: #2a78d6; stroke-width: 2; }
+    .chart-dot-sweep-a { fill: #2a78d6; }
+    .chart-line-sweep-b { fill: none; stroke: #eb6834; stroke-width: 2; stroke-dasharray: 5 3; }
+    .chart-dot-sweep-b { fill: #eb6834; }
+    .chart-candidate { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; opacity: .7; }
+    .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
+    .segment-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-top: 14px; background: #fff; }
+    .segment-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .segment-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .segment-head .note { font-size: 12px; color: var(--ink-3); }
+    .segment-line { margin: 10px 0 0; display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip-flat { font-size: 12px; border: 1px solid var(--line); border-radius: 99px; padding: 4px 11px; color: var(--ink-2); }
+    .chip-flat-strong { border-color: var(--accent); color: var(--accent-ink); }
     .chart-legend, .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: var(--ink-2); }
     .chart-legend span, .legend span { display: inline-flex; align-items: center; gap: 7px; }
 
@@ -526,7 +545,7 @@
         </div>
       </div>
       <div class="recipe-pill" aria-label="Report recipe">
-        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'regression' %}Regression readiness{% elif result.goal == 'time_series' %}Time series{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
+        {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'regression' %}Regression readiness{% elif result.goal == 'time_series' %}Time series{% elif result.goal == 'clustering' %}Clustering{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
       </div>
     </div>
     <div class="mast-meta">
@@ -554,6 +573,8 @@
         Regression readiness map
       {%- elif result.goal == 'time_series' -%}
         Forecasting readiness map
+      {%- elif result.goal == 'clustering' -%}
+        {% if result.metadata.get('structure_found') %}Candidate segment map{% else %}No stable segment structure{% endif %}
       {%- elif result.goal == 'image_profile' -%}
         Image dataset quality profile
       {%- else -%}
@@ -570,7 +591,7 @@
       <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('candidate_relationships', result.findings | length) | format_value }}</div><div class="l">Candidate relationships</div></div>
       {# Recipes that genuinely separate defects from observations count them
          separately here too, so the masthead agrees with the verdict line. #}
-      {% elif result.goal in ('profile', 'regression', 'time_series') %}
+      {% elif result.goal in ('profile', 'regression', 'time_series', 'clustering') %}
       <div class="stat{% if issues %} flag{% endif %}" role="listitem"><div class="n mono">{{ issues | length | format_value }}</div><div class="l">Issue{% if issues | length != 1 %}s{% endif %}</div></div>
       <div class="stat" role="listitem"><div class="n mono">{{ observations | length | format_value }}</div><div class="l">Alert{% if observations | length != 1 %}s{% endif %}</div></div>
       {% else %}
@@ -702,7 +723,10 @@
 
   {# Image profiles defer their tables until after the findings and the contact
      sheets: the decision comes first, the reference tables back it up. #}
-  {% if result.goal not in ('anomaly_detection', 'image_profile', 'regression') %}
+  {# Goals listed here render their reference tables lower down, after the
+     findings. They must match the same list in reporting/sections.py, or the
+     tables render twice and the duplicated ids break every anchor. #}
+  {% if result.goal not in ('anomaly_detection', 'image_profile', 'regression', 'time_series', 'clustering') %}
   {% for artifact in result.artifacts %}
     {% if artifact.kind == 'metric_table' %}
     <section class="page" id="section-metrics-{{ loop.index0 }}">
@@ -782,7 +806,7 @@
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'regression' %}No prioritized regression readiness issues were found.{% elif result.goal == 'time_series' %}No blocking problems were found with the time axis or its coverage.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No data-quality issues were found. Every check that ran is listed in the guide; none of them fired.{% endif %}</div>
+      <div class="empty">{% if result.goal == 'schema_discovery' %}No candidate relationships met the configured evidence thresholds.{% elif result.goal == 'anomaly_detection' %}No anomaly candidate signals met the deterministic review thresholds.{% elif result.goal == 'classification' %}No prioritized classification readiness issues were found.{% elif result.goal == 'regression' %}No prioritized regression readiness issues were found.{% elif result.goal == 'time_series' %}No blocking problems were found with the time axis or its coverage.{% elif result.goal == 'clustering' %}Nothing blocks acting on the groups below.{% elif result.goal == 'image_profile' %}No prioritized image dataset quality issues were found.{% else %}No data-quality issues were found. Every check that ran is listed in the guide; none of them fired.{% endif %}</div>
     {% endif %}
   </section>
 
@@ -941,6 +965,172 @@
     <p class="chart-note">A transformed target changes what an error means; back-transformed predictions are biased unless corrected.</p>
   </section>
   {% endfor %}
+
+  <!-- ============ CLUSTERING ============ -->
+  {% for item in result.evidence if item.kind == 'clustering_segments' %}
+  <section class="wide"{% if loop.first %} id="section-segments"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('segments') }}</div>
+      <div class="sec-title">
+        <h2>Segments</h2>
+        <p>{{ item.value.segment_count }} candidate groups. Each feature is described as a distance from the overall average in standard deviations, so features measured in different units are directly comparable. These are candidates: clustering has no ground truth to be right about.</p>
+      </div>
+    </div>
+    {% for segment in item.value.segments %}
+    <div class="segment-card">
+      <div class="segment-head">
+        <h3>Segment {{ segment.segment }}</h3>
+        <span class="note mono">{{ segment.size }} rows · {{ '%.1f' % (segment.share * 100) }}%{% if segment.mean_silhouette is not none %} · silhouette {{ segment.mean_silhouette | format_value }}{% endif %}</span>
+      </div>
+      {% if segment.distinguishing_features %}
+      <p class="segment-line">
+        {% for feature in segment.distinguishing_features %}<span class="chip-flat"><strong>{{ feature.feature }}</strong> {{ feature.direction }} ({{ '%+.2f' % feature.z }}σ, {{ feature.segment_mean | format_value }} vs {{ feature.overall_mean | format_value }})</span>{% endfor %}
+      </p>
+      {% else %}
+      <p class="segment-line"><em>Nothing distinguishes this group: every feature sits within half a standard deviation of the overall average.</em></p>
+      {% endif %}
+      {# Only over-represented categories earn a chip. A category sitting at its
+         own baseline share says nothing, and repeating it on every card would
+         bury the ones that do. #}
+      {% set notable = segment.categories | selectattr('over_represented') | list %}
+      {% if notable %}
+      <p class="segment-line">
+        {% for cat in notable %}<span class="chip-flat chip-flat-strong">{{ cat.column }}: {{ cat.top_value }} {{ '%.0f' % (cat.share * 100) }}%{% if cat.lift %} ({{ '%.1f' % cat.lift }}x overall){% endif %}</span>{% endfor %}
+      </p>
+      {% endif %}
+      {% if segment.representatives %}
+      <details class="finding-detail">
+        <summary>Representative rows</summary>
+        <div class="tbl-wrap" style="margin-top:10px">
+          <table>
+            <thead><tr><th>Row</th>{% for name in item.value.segments[0].representatives[0]['values'].keys() %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+            <tbody>
+              {% for row in segment.representatives %}
+              <tr><td class="mono">{{ row.row_index }}</td>{% for value in row['values'].values() %}<td class="mono">{{ value | format_value }}</td>{% endfor %}</tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="chart-note">The real records nearest this group's centre, not an average that may resemble nobody.</p>
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% for embedding in result.evidence if embedding.kind == 'clustering_embedding' %}
+    <h3 style="margin-top:30px">Where each group sits</h3>
+    <p class="chart-note">A two-dimensional projection carrying {{ '%.0f' % (embedding.value.captured_variance * 100) }}% of the variance. One panel per group rather than one colour per group, so nothing depends on telling similar hues apart. A projection is a visual aid, never evidence that groups exist.</p>
+    <div class="chart-grid">
+      {% for segment in item.value.segments %}
+      <div class="chart-card">{{ embedding.value | cluster_facet_svg(segment.segment) }}</div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  {% for item in result.evidence if item.kind == 'clustering_k_sweep' %}
+  <section class="wide"{% if loop.first %} id="section-search"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('search') }}</div>
+      <div class="sec-title">
+        <h2>How many groups</h2>
+        <p>Silhouette measures how tidy a partition is — noise cut into k pieces scores on it too. Stability is the adjusted Rand index between two independently clustered subsamples, and it is the only line here that can fail.</p>
+      </div>
+    </div>
+    {{ item.value | k_sweep_svg }}
+    <div class="chart-legend">
+      <span><span class="swatch" style="background:#2a78d6"></span> silhouette (separation)</span>
+      <span><span class="swatch" style="background:#eb6834"></span> stability (reproduces on resampled rows)</span>
+      {% if item.value.candidate_k %}<span><span class="swatch" style="background:var(--accent)"></span> candidate k = {{ item.value.candidate_k }}</span>{% endif %}
+    </div>
+    {% if not item.value.candidate_k %}
+    <p class="chart-note">No k cleared both bars — separation of at least {{ item.value.weak_silhouette_below }} and stability of at least {{ item.value.unstable_below }}. That is a result, not a gap in the analysis.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  {% if result.goal == 'clustering' and sections.number('clusterability') %}
+  <section class="page" id="section-clusterability">
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('clusterability') }}</div>
+      <div class="sec-title">
+        <h2>Is it clusterable</h2>
+        <p>Asked before any clustering was fitted, because afterwards the output looks equally convincing either way.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Check</th><th>Value</th><th>Reading</th></tr></thead>
+        <tbody>
+          {% for item in result.evidence if item.kind == 'clustering_tendency' %}
+          <tr>
+            <td>Cluster tendency (Hopkins)</td>
+            <td class="mono">{{ item.value.hopkins_mean | format_value }} ({{ item.value.hopkins_min | format_value }}–{{ item.value.hopkins_max | format_value }} over {{ item.value.repeats }} samples)</td>
+            <td>{% if item.value.verdict == 'no_tendency' %}About 0.5 — indistinguishable from uniform noise{% elif item.value.verdict == 'clustered' %}Well above 0.5 — points bunch together{% else %}Slightly above 0.5 — weak tendency{% endif %}</td>
+          </tr>
+          {% endfor %}
+          {% for item in result.evidence if item.kind == 'clustering_geometry' %}
+          <tr>
+            <td>Distance contrast</td>
+            <td class="mono">{{ item.value.relative_contrast | format_value }}</td>
+            <td>{% if item.value.distances_concentrated %}Concentrated — every point sits about as far from every other{% else %}Distances still discriminate between near and far{% endif %}</td>
+          </tr>
+          <tr>
+            <td>Effective dimensions</td>
+            <td class="mono">{{ item.value.intrinsic_dimensionality | format_value }} of {{ item.value.feature_count }}</td>
+            <td>Principal components holding 90% of the variance</td>
+          </tr>
+          {% endfor %}
+          {% for item in result.evidence if item.kind == 'clustering_sensitivity' %}
+          <tr>
+            <td>Agreement without standardizing</td>
+            <td class="mono">{{ item.value.scaling_agreement | format_value }}</td>
+            <td>{% if item.value.scaling_changes_answer %}Scaling changes which rows group together{% else %}The grouping survives the scaling choice{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% for item in result.evidence if item.kind == 'clustering_sensitivity' and item.value.feature_drops %}
+    <h3 style="margin-top:26px">What happens if a feature is dropped</h3>
+    <p class="chart-note">Agreement with the reference partition after removing each feature. A grouping that survives every removal is a summary of the whole feature set; one that does not is a restatement of the feature that broke it.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Removed feature</th><th>Agreement (ARI)</th><th></th></tr></thead>
+        <tbody>
+          {% for drop in item.value.feature_drops %}
+          <tr><td class="mono">{{ drop.feature }}</td><td class="mono">{{ drop.agreement_without_it | format_value }}</td><td>{% if drop.dominant %}The grouping is largely this feature{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if result.goal == 'clustering' %}
+  {% for artifact in result.artifacts %}
+    {% if artifact.kind == 'metric_table' %}
+    <section class="page" id="section-metrics-{{ loop.index0 }}">
+      <div class="sec-head">
+        <div class="sec-idx">{{ sections.number('metrics-' ~ loop.index0) }}</div>
+        <div class="sec-title"><h2>{{ artifact.title }}</h2>{% if artifact.metadata.description %}<p>{{ artifact.metadata.description }}</p>{% endif %}</div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>{% for column in artifact.data.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in artifact.data.rows %}
+            <tr>{% for column in artifact.data.columns %}<td>{{ row[column.key] | format_value }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
 
   <!-- ============ TIME SERIES ============ -->
   {% for item in result.evidence if item.kind == 'time_series_chart' and item.value.points %}

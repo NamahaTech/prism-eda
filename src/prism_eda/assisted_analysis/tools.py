@@ -228,6 +228,22 @@ def _analyze_time_series(
     )
 
 
+def _assess_clustering(
+    dataset: Dataset, privacy: PrivacyPolicy, args: dict[str, Any]
+) -> ToolOutput:
+    features = args.get("features")
+    result = dataset.clustering(
+        features=list(features) if features else None,
+        table=args.get("table"),
+    )
+    return ToolOutput(
+        summary=_recipe_summary(result),
+        evidence=result.evidence,
+        findings=result.findings,
+        artifacts=result.artifacts,
+    )
+
+
 _TABLE_ARG = {"type": "string", "description": "Table name to analyze."}
 
 _TOOLS: tuple[Tool, ...] = (
@@ -381,6 +397,30 @@ _TOOLS: tuple[Tool, ...] = (
             },
         ),
         _analyze_time_series,
+    ),
+    Tool(
+        ToolSpec(
+            name="assess_clustering",
+            description="Assess whether a table has cluster structure at all, "
+            "and describe candidate segments when it does: scale and redundancy "
+            "problems, distance concentration, cluster tendency, how many groups "
+            "reproduce on resampled rows, and what distinguishes each. Returns "
+            "'no stable structure' as a real answer. Citable.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "features": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional explicit feature columns. When "
+                        "omitted, usable numeric columns are chosen "
+                        "automatically.",
+                    },
+                    "table": _TABLE_ARG,
+                },
+            },
+        ),
+        _assess_clustering,
     ),
 )
 

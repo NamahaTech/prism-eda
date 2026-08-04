@@ -3,6 +3,7 @@
 from prism_eda.api import (
     anomaly_detection,
     classification,
+    clustering,
     compare_datasets,
     discover_schema,
     load,
@@ -35,6 +36,7 @@ __all__ = [
     "ImageDataset",
     "anomaly_detection",
     "classification",
+    "clustering",
     "compare_datasets",
     "discover_schema",
     "load",

@@ -104,6 +104,7 @@ dataset.analyze(...)
 dataset.classification(...)
 dataset.regression(...)
 dataset.time_series(...)
+dataset.clustering(...)
 dataset.anomaly_detection(...)
 dataset.discover_schema(...)
 ```
@@ -199,7 +200,7 @@ image_result = pe.profile_images(
 ```
 
 `discover_schema`, `anomaly_detection`, `classification`, `regression`,
-`time_series`, and `profile_images` are implemented.
+`time_series`, `clustering`, and `profile_images` are implemented.
 Schema discovery returns candidate keys and relationships, not declared
 constraints. Anomaly detection returns statistical review candidates, not
 confirmed anomaly labels; `expected_contamination` is an optional review-sizing
@@ -216,6 +217,10 @@ stationarity, change-point, outlier, intermittency, history, and validation-plan
 evidence for one value column. Hygiene claims are computed on the raw rows;
 structural claims are computed on a regularized reconstruction and disclosed as
 such. It returns no forecast.
+Clustering returns feature-admission, geometry, tendency, search, stability,
+sensitivity, and — only when tendency and stability both hold — candidate segment
+evidence. `no_meaningful_structure` is a first-class result rather than a
+failure, and no output claims a best k or exposes cluster assignments.
 Image profiling returns metadata,
 quality, duplicate, leakage, loader-trap, and per-label evidence; near-duplicate
 and quality flags are candidates for review, not confirmed removal instructions.
@@ -231,6 +236,7 @@ result = pe.anomaly_detection(df, mode="standard")
 result = pe.classification(df, target="churned")
 result = pe.regression(df, target="monthly_revenue")
 result = pe.time_series(df, value="orders", entity_id="store", horizon=28)
+result = pe.clustering(df, features=["spend", "visits"])
 result = pe.discover_schema("data/", recursive=True)
 result = pe.profile_images("images/train/")
 ```
@@ -471,6 +477,11 @@ src/prism_eda/
     timeseries_index.py     # frequency, gaps, duplicates, panel coverage
     timeseries_structure.py # STL, ACF/PACF, ADF+KPSS agreement
     timeseries_events.py    # change points, outliers, intermittency
+    _clustering.py          # feature admission, matrix build, stable rounding
+    clustering.py           # orchestration: the structure gate, verdict
+    clustering_readiness.py # scale, redundancy, geometry, Hopkins tendency
+    clustering_search.py    # k-sweep, resampling stability, sensitivity
+    clustering_segments.py  # segment profiles, medoids, PCA projection
   transformations/
     models.py
   reporting/
