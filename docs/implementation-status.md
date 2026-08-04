@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-07-13 (image dataset profiling)
+Last updated: 2026-08-04 (regression readiness, time series, clustering)
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -99,6 +99,91 @@ removed, or materially re-scoped.
 - Context-aware group/time split guidance from `entity_id` and `timestamp`
 - Class-balance and feature-signal report artifacts
 
+### Regression
+
+- `regression()` / `Dataset.regression()` public API for one numeric target
+- Target summary, shape label, and `log1p`/`sqrt`/Yeo-Johnson candidates whose
+  skew reduction is **measured on the data**, with abstention when none helps
+- Value-spike scan for censoring, floors, defaults, and zero inflation in an
+  otherwise continuous target; round-number heaping scan
+- Feature association measured three ways (Pearson, Spearman, binned eta-squared)
+  so a curved relationship is not reported as no relationship
+- Redundant-pair detection with VIF and design condition number reported as
+  measurements, never thresholded against a universal VIF cutoff
+- Deterministic leakage screen: affine copies of the target, near-perfect
+  univariate fit, and shared **name tokens** (never raw substrings)
+- Leakage-screened cross-validated Ridge and Huber probes against a median
+  baseline; the robust-versus-conventional gap on the typical row distinguishes
+  weak features from a few distorting rows
+- Residual shape with a KS *distance* and no p-value; binned residual spread with
+  Breusch-Pagan; conditional bias per fitted decile
+- Scale-normalized, peer-relative subgroup error concentration
+- OLS leverage and Cook's distance, with a ranked review-row table carrying
+  per-row reasons and robust feature deviations
+- Weak-support scan for genuine holes in the target range and feature gaps
+- Context-aware group/time split guidance from `entity_id` and `timestamp`
+- Report sections (rows to review, residuals, target shape) plus new
+  residual-scatter and diverging conditional-bias charts
+- `assess_regression` registered in the assisted-analysis tool registry
+
+### Time series
+
+- `time_series()` / `Dataset.time_series()` public API taking `value`, optional
+  `timestamp` (inferred when unambiguous), `entity_id`, and `horizon`
+- Frequency inference from the modal gap, tolerant of gaps and duplicates where
+  `pd.infer_freq` returns `None`; calendar frequencies matched by range
+- Hygiene checks computed on the **raw** rows, structural analysis on a
+  regularized reconstruction disclosed as a `SamplingRecord` plus a warning
+- Entity-aware duplicate-timestamp detection, with conflicting values counted
+- Unrecorded periods and blank periods reported separately, as contiguous blocks
+- Irregular-spacing scan against the dominant interval
+- Per-entity panel coverage, absolute seasonal-history floor, relative imbalance,
+  and **panel composition changes** so a total whose membership changes is not
+  read as a change in demand
+- STL decomposition with variance-share trend and seasonal strength, plus the
+  day-of-week seasonal profile
+- ACF/PACF with confidence band and candidate seasonal periods from local peaks
+- ADF **and** KPSS with the four-way agreement/disagreement classification
+  reported rather than resolved to one verdict
+- Level and variance change points via Theil-Sen-detrended binary segmentation,
+  gated on the step exceeding the series' own noise
+- Temporal outliers on the STL remainder against an interquartile fence, with
+  interpolated periods and change-point neighbourhoods excluded, and the list
+  suppressed when the flag rate indicates changing spread rather than anomalies
+- Syntetos-Boylan intermittent-demand classification, only when zeros are present
+- History-versus-horizon adequacy and an expanding-window backtest plan
+- Leakage-safe lagged cross-correlation, marking which lags are usable at
+  forecast time
+- Report sections (the series, trend and seasonality, memory and stationarity,
+  coverage) with new series-line, ACF-stem, and seasonal-profile charts
+- `analyze_time_series` registered in the assisted-analysis tool registry
+
+### Clustering
+
+- `clustering()` / `Dataset.clustering()` public API with optional `features`
+- Feature admission with a stated reason for every exclusion (identifier,
+  constant, all-missing, datetime, high-cardinality, feature cap)
+- Numeric-only distance; categorical columns profile the groups instead, and the
+  report says so rather than one-hot encoding them into a Euclidean space
+- Scale-ratio, redundancy, exact- and near-duplicate scans
+- PCA intrinsic dimensionality and a percentile-based distance-contrast measure
+  that detects concentration without being destroyed by one near-duplicate pair
+- Repeated Hopkins cluster tendency with mean, range, and an explicit band
+- k-sweep with silhouette, Calinski-Harabasz, Davies-Bouldin, and inertia, plus
+  **resampling stability** (adjusted Rand index between two independently
+  clustered overlapping subsamples) as the check that can fail
+- A candidate k only where separation and stability agree; no "best k" claim
+- Sensitivity to standardizing and to one-feature-out dominance
+- Segment profiles gated behind tendency *and* stability: sizes, distinguishing
+  features in standard deviations, category mix with lift, medoid rows, and
+  per-segment silhouette
+- Redundant twins deduplicated within a segment description; a categorical that
+  differentiates no segment reported as its own finding
+- `NO_MEANINGFUL_STRUCTURE` as a first-class outcome with no segments or
+  embedding produced
+- Faceted PCA projection (one panel per group) and a k-sweep chart
+- Geometry-based algorithm guidance; `assess_clustering` in the AI tool registry
+
 ### Image dataset profile
 
 - `ImageDataset`, `load_images()`, and `profile_images()` public API
@@ -188,6 +273,30 @@ removed, or materially re-scoped.
 - Opt-in fairness coverage
 - Train/test comparison when both are supplied
 
+### Time-series improvements
+
+- Per-entity structural analysis for panels, capped, alongside the aggregate
+- Multiple seasonal periods at once (weekly *and* yearly on daily data)
+- Holiday and calendar-effect regressors as candidate explanations for outliers
+- Sub-daily timezone and DST handling beyond reporting the index timezone
+
+### Clustering improvements
+
+- Density methods (DBSCAN/HDBSCAN) run rather than only suggested, so points can
+  be left unassigned instead of forced into the nearest centroid
+- Gower distance or k-prototypes for genuinely mixed-type data
+- Hierarchical linkage with a dendrogram, so groups can be read as a merge order
+  rather than one partition
+- Per-segment stability, so a report can say which individual groups reproduce
+
+### Regression improvements
+
+- Quantile-regression probe for targets where the conditional median is the
+  quantity of interest
+- Interaction screening, so a group-specific slope is distinguished from a
+  group-specific intercept
+- Partial-dependence style summaries for the strongest non-linear features
+
 ### Image dataset improvements
 
 - Optional deep visual embeddings for stronger near-duplicate and semantic
@@ -201,7 +310,6 @@ removed, or materially re-scoped.
 
 ## Later
 
-- Regression, time-series, and clustering recipes
 - Chunked CSV execution and a general execution planner
 - Functional dependencies and denormalization analysis
 - Plotly interactive artifact implementations

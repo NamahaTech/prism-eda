@@ -10,9 +10,12 @@ import pandas as pd
 
 from prism_eda.analysis.anomaly import anomaly_detection_dataset
 from prism_eda.analysis.classification import classification_dataset
+from prism_eda.analysis.clustering import clustering_dataset
 from prism_eda.analysis.compare import compare_datasets_recipe
 from prism_eda.analysis.profile import profile_dataset
+from prism_eda.analysis.regression import regression_dataset
 from prism_eda.analysis.schema_discovery import discover_schema_dataset
+from prism_eda.analysis.timeseries import time_series_dataset
 from prism_eda.catalog.loaders import DataSource, load_tables
 from prism_eda.catalog.models import DatasetCatalog, SourceInfo
 from prism_eda.catalog.profiling import build_catalog
@@ -185,10 +188,75 @@ class Dataset:
                 max_categories=max_categories,
                 callbacks=tuple(callbacks),
             )
+        if normalized_goal in {"regression", "regress"}:
+            table = options.pop("table", None)
+            target = options.pop("target", None) or analysis_context.target
+            max_categories = options.pop("max_categories", 50)
+            if options:
+                unknown = ", ".join(sorted(options))
+                raise TypeError(f"Unexpected analysis options: {unknown}")
+            try:
+                catalog = self.catalog(refresh=True)
+            except Exception as error:
+                raise AnalysisError(f"Catalog generation failed: {error}") from error
+            return regression_dataset(
+                self._tables,
+                catalog,
+                context=analysis_context,
+                config=analysis_config,
+                target=target,
+                table=table,
+                max_categories=max_categories,
+                callbacks=tuple(callbacks),
+            )
+        if normalized_goal in {"time_series", "timeseries", "forecasting"}:
+            table = options.pop("table", None)
+            value = options.pop("value", None)
+            timestamp = options.pop("timestamp", None)
+            entity_id = options.pop("entity_id", None)
+            horizon = options.pop("horizon", None)
+            if options:
+                unknown = ", ".join(sorted(options))
+                raise TypeError(f"Unexpected analysis options: {unknown}")
+            try:
+                catalog = self.catalog(refresh=True)
+            except Exception as error:
+                raise AnalysisError(f"Catalog generation failed: {error}") from error
+            return time_series_dataset(
+                self._tables,
+                catalog,
+                context=analysis_context,
+                config=analysis_config,
+                value=value,
+                timestamp=timestamp,
+                entity_id=entity_id,
+                horizon=horizon,
+                table=table,
+                callbacks=tuple(callbacks),
+            )
+        if normalized_goal in {"clustering", "cluster", "segmentation"}:
+            table = options.pop("table", None)
+            features = options.pop("features", None)
+            if options:
+                unknown = ", ".join(sorted(options))
+                raise TypeError(f"Unexpected analysis options: {unknown}")
+            try:
+                catalog = self.catalog(refresh=True)
+            except Exception as error:
+                raise AnalysisError(f"Catalog generation failed: {error}") from error
+            return clustering_dataset(
+                self._tables,
+                catalog,
+                context=analysis_context,
+                config=analysis_config,
+                features=features,
+                table=table,
+                callbacks=tuple(callbacks),
+            )
         raise NotImplementedError(
             f"Goal {goal!r} is not implemented yet. Prism EDA 0.1 currently "
-            "supports 'profile', 'schema_discovery', 'anomaly_detection', and "
-            "'classification'."
+            "supports 'profile', 'schema_discovery', 'anomaly_detection', "
+            "'classification', 'regression', 'time_series', and 'clustering'."
         )
 
     def profile(
@@ -316,6 +384,104 @@ class Dataset:
             table=table,
             target=target,
             max_categories=max_categories,
+        )
+
+    def regression(
+        self,
+        target: str | None = None,
+        *,
+        context: AnalysisContext | Mapping[str, Any] | None = None,
+        config: AnalysisConfig | None = None,
+        callbacks: Sequence[EventCallback] = (),
+        mode: AnalysisMode | str = AnalysisMode.STANDARD,
+        sampling: str = "auto",
+        random_seed: int = 42,
+        allow_insufficient_evidence: bool = False,
+        table: str | None = None,
+        max_categories: int = 50,
+    ) -> AnalysisResult:
+        """Run deterministic regression diagnostics for a numeric target column."""
+        if config is None:
+            config = AnalysisConfig(
+                mode=mode,
+                sampling=sampling,  # type: ignore[arg-type]
+                random_seed=random_seed,
+                allow_insufficient_evidence=allow_insufficient_evidence,
+            )
+        return self.analyze(
+            "regression",
+            context=context,
+            config=config,
+            callbacks=callbacks,
+            table=table,
+            target=target,
+            max_categories=max_categories,
+        )
+
+    def time_series(
+        self,
+        value: str | None = None,
+        *,
+        timestamp: str | None = None,
+        entity_id: str | None = None,
+        horizon: int | None = None,
+        context: AnalysisContext | Mapping[str, Any] | None = None,
+        config: AnalysisConfig | None = None,
+        callbacks: Sequence[EventCallback] = (),
+        mode: AnalysisMode | str = AnalysisMode.STANDARD,
+        sampling: str = "auto",
+        random_seed: int = 42,
+        allow_insufficient_evidence: bool = False,
+        table: str | None = None,
+    ) -> AnalysisResult:
+        """Run deterministic time-series diagnostics for one value column."""
+        if config is None:
+            config = AnalysisConfig(
+                mode=mode,
+                sampling=sampling,  # type: ignore[arg-type]
+                random_seed=random_seed,
+                allow_insufficient_evidence=allow_insufficient_evidence,
+            )
+        return self.analyze(
+            "time_series",
+            context=context,
+            config=config,
+            callbacks=callbacks,
+            table=table,
+            value=value,
+            timestamp=timestamp,
+            entity_id=entity_id,
+            horizon=horizon,
+        )
+
+    def clustering(
+        self,
+        features: Sequence[str] | None = None,
+        *,
+        context: AnalysisContext | Mapping[str, Any] | None = None,
+        config: AnalysisConfig | None = None,
+        callbacks: Sequence[EventCallback] = (),
+        mode: AnalysisMode | str = AnalysisMode.STANDARD,
+        sampling: str = "auto",
+        random_seed: int = 42,
+        allow_insufficient_evidence: bool = False,
+        table: str | None = None,
+    ) -> AnalysisResult:
+        """Run deterministic clustering readiness and segment diagnostics."""
+        if config is None:
+            config = AnalysisConfig(
+                mode=mode,
+                sampling=sampling,  # type: ignore[arg-type]
+                random_seed=random_seed,
+                allow_insufficient_evidence=allow_insufficient_evidence,
+            )
+        return self.analyze(
+            "clustering",
+            context=context,
+            config=config,
+            callbacks=callbacks,
+            table=table,
+            features=features,
         )
 
     def compare(

@@ -187,6 +187,63 @@ def _assess_classification(
     )
 
 
+def _assess_regression(
+    dataset: Dataset, privacy: PrivacyPolicy, args: dict[str, Any]
+) -> ToolOutput:
+    target = args.get("target")
+    if not target:
+        raise ValueError("assess_regression requires a 'target' argument.")
+    result = dataset.regression(
+        target=str(target),
+        table=args.get("table"),
+        max_categories=int(args.get("max_categories", 50)),
+    )
+    return ToolOutput(
+        summary=_recipe_summary(result),
+        evidence=result.evidence,
+        findings=result.findings,
+        artifacts=result.artifacts,
+    )
+
+
+def _analyze_time_series(
+    dataset: Dataset, privacy: PrivacyPolicy, args: dict[str, Any]
+) -> ToolOutput:
+    value = args.get("value")
+    if not value:
+        raise ValueError("analyze_time_series requires a 'value' argument.")
+    horizon = args.get("horizon")
+    result = dataset.time_series(
+        value=str(value),
+        timestamp=args.get("timestamp"),
+        entity_id=args.get("entity_id"),
+        horizon=int(horizon) if horizon is not None else None,
+        table=args.get("table"),
+    )
+    return ToolOutput(
+        summary=_recipe_summary(result),
+        evidence=result.evidence,
+        findings=result.findings,
+        artifacts=result.artifacts,
+    )
+
+
+def _assess_clustering(
+    dataset: Dataset, privacy: PrivacyPolicy, args: dict[str, Any]
+) -> ToolOutput:
+    features = args.get("features")
+    result = dataset.clustering(
+        features=list(features) if features else None,
+        table=args.get("table"),
+    )
+    return ToolOutput(
+        summary=_recipe_summary(result),
+        evidence=result.evidence,
+        findings=result.findings,
+        artifacts=result.artifacts,
+    )
+
+
 _TABLE_ARG = {"type": "string", "description": "Table name to analyze."}
 
 _TOOLS: tuple[Tool, ...] = (
@@ -278,6 +335,92 @@ _TOOLS: tuple[Tool, ...] = (
             },
         ),
         _assess_classification,
+    ),
+    Tool(
+        ToolSpec(
+            name="assess_regression",
+            description="Assess whether a table is ready to fit a regression for a "
+            "numeric target: leakage, censoring, redundancy, probe fit, residual "
+            "bias, and influential rows. Use this instead of assess_classification "
+            "when the target is a continuous quantity. Citable.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "The numeric target column to assess.",
+                    },
+                    "table": _TABLE_ARG,
+                    "max_categories": {
+                        "type": "integer",
+                        "description": "Cap on distinct categories per feature "
+                        "(default 50).",
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
+        _assess_regression,
+    ),
+    Tool(
+        ToolSpec(
+            name="analyze_time_series",
+            description="Analyze a numeric column over time: frequency, gaps, "
+            "duplicate timestamps, trend, seasonality, stationarity, change "
+            "points, and whether there is enough history to forecast. Use this "
+            "when the question involves a time axis. Citable.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "string",
+                        "description": "The numeric column measured over time.",
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "description": "The time column. Inferred when the table "
+                        "has exactly one datetime column.",
+                    },
+                    "entity_id": {
+                        "type": "string",
+                        "description": "Optional column identifying separate "
+                        "series in a panel.",
+                    },
+                    "horizon": {
+                        "type": "integer",
+                        "description": "Optional forecast horizon in periods, "
+                        "used to judge whether the history is long enough.",
+                    },
+                    "table": _TABLE_ARG,
+                },
+                "required": ["value"],
+            },
+        ),
+        _analyze_time_series,
+    ),
+    Tool(
+        ToolSpec(
+            name="assess_clustering",
+            description="Assess whether a table has cluster structure at all, "
+            "and describe candidate segments when it does: scale and redundancy "
+            "problems, distance concentration, cluster tendency, how many groups "
+            "reproduce on resampled rows, and what distinguishes each. Returns "
+            "'no stable structure' as a real answer. Citable.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "features": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional explicit feature columns. When "
+                        "omitted, usable numeric columns are chosen "
+                        "automatically.",
+                    },
+                    "table": _TABLE_ARG,
+                },
+            },
+        ),
+        _assess_clustering,
     ),
 )
 

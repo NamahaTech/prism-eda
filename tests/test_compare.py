@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 
 from prism_eda import compare_datasets
 from prism_eda.comparison_results import ComparisonResult
@@ -8,8 +7,12 @@ from prism_eda.results import AnalysisStatus
 
 def test_compare_datasets_basic():
     """Test that two datasets can be compared and produce dual evidence."""
-    base_df = pd.DataFrame({"col_a": [1, 2, 3, 4, 5], "col_b": ["x", "x", "y", "z", "z"]})
-    comp_df = pd.DataFrame({"col_a": [2, 3, 4, 5, 6], "col_b": ["x", "y", "y", "z", "z"]})
+    base_df = pd.DataFrame(
+        {"col_a": [1, 2, 3, 4, 5], "col_b": ["x", "x", "y", "z", "z"]}
+    )
+    comp_df = pd.DataFrame(
+        {"col_a": [2, 3, 4, 5, 6], "col_b": ["x", "y", "y", "z", "z"]}
+    )
 
     result = compare_datasets(
         {"table1": base_df},

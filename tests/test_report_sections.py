@@ -13,11 +13,32 @@ import pandas as pd
 import pytest
 
 import prism_eda as pe
-from examples.sample_data import load_sample, sample_images
+from examples.sample_data import (
+    customer_segments,
+    daily_orders,
+    load_sample,
+    sample_images,
+    subscriptions,
+)
 
 NAV_LINK = re.compile(r'<a href="#(section-[\w-]+)">([^<]*)</a>')
 SECTION_ID = re.compile(r'<section[^>]*id="(section-[\w-]+)"')
 SECTION_INDEX = re.compile(r'<div class="sec-idx"[^>]*>(.*?)</div>')
+
+#: Every goal that renders through the shared template. Kept beside the builder
+#: below and asserted against it, because a goal missing from this list is a
+#: recipe whose report nobody is checking — which is exactly how a duplicated
+#: section block once reached the page unnoticed.
+GOALS = (
+    "profile",
+    "schema_discovery",
+    "anomaly_detection",
+    "classification",
+    "regression",
+    "time_series",
+    "image_profile",
+    "clustering",
+)
 
 
 @pytest.fixture(scope="module")
@@ -39,7 +60,16 @@ def _reports(dataset: pe.Dataset, tmp_path_factory) -> dict[str, str]:
         "classification": dataset.classification(
             "churned", table="customers"
         ).render_html(),
+        "regression": pe.load({"subscriptions": subscriptions()})
+        .regression("monthly_revenue")
+        .render_html(),
+        "time_series": pe.load({"daily_orders": daily_orders()})
+        .time_series("orders", entity_id="store", horizon=28)
+        .render_html(),
         "image_profile": pe.profile_images(folder).render_html(),
+        "clustering": pe.load({"members": customer_segments()})
+        .clustering()
+        .render_html(),
     }
 
 
@@ -48,16 +78,12 @@ def reports(dataset, tmp_path_factory) -> dict[str, str]:
     return _reports(dataset, tmp_path_factory)
 
 
-@pytest.mark.parametrize(
-    "goal",
-    [
-        "profile",
-        "schema_discovery",
-        "anomaly_detection",
-        "classification",
-        "image_profile",
-    ],
-)
+def test_every_goal_is_covered(reports) -> None:
+    """The parametrized list and the report builder must not drift apart."""
+    assert set(reports) == set(GOALS)
+
+
+@pytest.mark.parametrize("goal", GOALS)
 def test_every_nav_link_reaches_a_section_and_back(reports, goal) -> None:
     html = reports[goal]
     nav = [anchor for anchor, _ in NAV_LINK.findall(html)]
@@ -69,16 +95,28 @@ def test_every_nav_link_reaches_a_section_and_back(reports, goal) -> None:
     assert len(nav) == len(set(nav)), "duplicate anchors in the navigation"
 
 
-@pytest.mark.parametrize(
-    "goal",
-    [
-        "profile",
-        "schema_discovery",
-        "anomaly_detection",
-        "classification",
-        "image_profile",
-    ],
-)
+@pytest.mark.parametrize("goal", GOALS)
+def test_no_section_is_rendered_twice(reports, goal) -> None:
+    """A goal listed in one place and not the other renders its block twice.
+
+    Duplicate ids make every anchor ambiguous and silently break the nav, while
+    both copies still look correct in isolation.
+    """
+    rendered = SECTION_ID.findall(reports[goal])
+    duplicates = sorted({item for item in rendered if rendered.count(item) > 1})
+    assert not duplicates, duplicates
+
+
+@pytest.mark.parametrize("goal", GOALS)
+def test_sections_render_in_navigation_order(reports, goal) -> None:
+    """Numbering comes from the section list, so the page must follow it."""
+    html = reports[goal]
+    nav = [anchor for anchor, _ in NAV_LINK.findall(html)]
+    rendered = SECTION_ID.findall(html)
+    assert rendered == nav
+
+
+@pytest.mark.parametrize("goal", GOALS)
 def test_every_section_header_is_numbered(reports, goal) -> None:
     """A blank number means the section list did not know about the section."""
     numbers = [

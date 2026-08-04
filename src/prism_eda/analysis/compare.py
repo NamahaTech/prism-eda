@@ -10,7 +10,7 @@ import pandas as pd
 from prism_eda.analysis._numeric import HIST_BINS
 from prism_eda.catalog.models import DatasetCatalog
 from prism_eda.comparison_results import ComparisonResult
-from prism_eda.config import AnalysisConfig, AnalysisContext
+from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.events import Event, EventCallback, EventKind, emit
 from prism_eda.evidence.models import Evidence, EvidenceScope
 from prism_eda.results import AnalysisStatus, AnalysisWarning
@@ -134,9 +134,7 @@ def compare_datasets_recipe(
     """Orchestrate dataset comparison."""
     emit(
         callbacks,
-        Event(
-            EventKind.RUN_STARTED, "Dataset comparison started.", stage="compare"
-        ),
+        Event(EventKind.RUN_STARTED, "Dataset comparison started.", stage="compare"),
     )
 
     evidence: list[Evidence] = []
@@ -237,7 +235,10 @@ def compare_datasets_recipe(
         evidence=tuple(evidence),
         warnings=tuple(warnings),
         metadata={
-            "mode": config.mode.value,
+            # AnalysisConfig.__post_init__ normalizes this, but the declared
+            # type stays AnalysisMode | str, so re-wrap the way every other
+            # recipe does rather than assuming the narrowed type.
+            "mode": AnalysisMode(config.mode).value,
             "base_label": base_label,
             "compare_label": compare_label,
         },

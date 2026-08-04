@@ -16,10 +16,10 @@ later plan and explain analysis, but it does not invent numeric truth.
 - Import package: `prism_eda`
 - Supported Python: 3.11+
 - Implemented recipes: baseline profile, schema discovery, anomaly detection,
-  classification, image dataset profile
+  classification, regression, time series, clustering, image dataset profile
 - Optional AI-assisted investigation via the `ai-gemini` extra
   (`prism_eda.assisted_analysis`): an LLM plans over the deterministic tools only
-- Planned next recipes: regression, time-series, clustering
+- All eight prism-rays on the README roadmap now ship
 
 See [implementation status](docs/implementation-status.md) for the exact ledger.
 
@@ -66,6 +66,22 @@ python -m build
   shape is each column?), `associations.py` (how do columns relate, and what is
   missing together?), with `profile.py` orchestrating. `_limits.py` holds the
   per-detail caps; `_numeric.py` holds binning/modality shared with `anomaly.py`.
+  Regression is split the same way: `regression_target.py` (what shape is the
+  thing being predicted?), `regression_signal.py` (what carries signal, and what
+  is leaking or merely duplicated?), `regression_probe.py` (what happens when a
+  model is actually fitted?), with `regression.py` orchestrating and
+  `_regression.py` holding the shared sampling, table resolution, and feature
+  selection every stage must agree on. Time series follows the same split:
+  `timeseries_index.py` (is the time axis trustworthy?),
+  `timeseries_structure.py` (what shape does the series have?),
+  `timeseries_events.py` (what happened along the way?), with `timeseries.py`
+  orchestrating and `_timeseries.py` holding frequency inference and the
+  raw-versus-regularized distinction described below. Clustering likewise:
+  `clustering_readiness.py` (is this even clusterable?),
+  `clustering_search.py` (what structure is there, and does it reproduce?),
+  `clustering_segments.py` (what are the groups?), with `clustering.py`
+  orchestrating the gate described below and `_clustering.py` holding feature
+  admission and the matrix build.
 - `evidence/`: provider-neutral evidence and finding contracts.
 - `artifacts.py`: structured report artifacts such as schema graphs.
 - `reporting/`: the shared self-contained renderer. `sections.py` owns which
@@ -102,6 +118,71 @@ Do not postpone documentation into a future cleanup task.
 - Run visual QA in a browser for report layout changes, including a mobile width.
 - Build the wheel and confirm packaged templates/assets are included.
 
+## A detector that never stays quiet is not a detector
+
+Several standard diagnostics report *something* on every dataset. Any new check
+must be tested against clean, well-specified data and produce nothing. Three
+guards in the regression recipe exist only for this reason, and the reasoning
+generalizes:
+
+- Cook's `4/n` is a screening convention that flags a few percent of rows in any
+  fit. Review rows therefore require decisive influence, not merely clearing it.
+- Equal-width bins always leave thin bins in a bell curve's tails, so a
+  weak-support gap requires real mass on *both* sides.
+- Absolute error scales with target magnitude, and a grouping column that
+  predicts the target shrinks within-group spread. Subgroup error is therefore
+  scaled by each group's own spread *and* compared against sibling levels rather
+  than the overall rate.
+
+Name-matching heuristics need the same care: a substring test makes a target
+called `y` "leak" into `x1_copy`, so name evidence comes from whole tokens of at
+least three characters.
+
+The time-series recipe needed four guards for the same reason:
+
+- Binary segmentation chops a smooth trend into a staircase of "level shifts",
+  so change points are found on a **Theil–Sen** detrended series (least squares
+  is dragged by the very steps and spikes being looked for) and a shift must
+  move the level by more than the series' own noise.
+- A MAD-scaled z on a robust STL remainder is inflated by a factor that varies
+  with the fit, so outliers use an interquartile fence instead.
+- Interpolated periods and the neighbourhood of a change point are excluded from
+  outlier scoring; both manufacture spikes that are pure artifact.
+- Above a 2% flag rate the series has a changing spread rather than outliers, so
+  the list is suppressed and the rate reported.
+
+## Clustering gates its own most persuasive output
+
+A segment profile — sizes, distinguishing features, example rows, a scatter of
+coloured blobs — looks exactly as convincing computed from uniform noise as from
+real groups, and k-means will never refuse. So `clustering.py` produces one only
+when two independent checks agree: the data shows cluster tendency against
+uniform points in its own bounding box, **and** a partition reproduces on
+resampled subsamples. Otherwise the run ends in `NO_MEANINGFUL_STRUCTURE` with
+no segments and no embedding. Do not relax that gate to make a report look
+fuller; the empty result is the feature.
+
+Two related rules. Categorical columns never enter the distance — one-hot
+Euclidean asserts every pair of categories is equally far apart — and are used to
+describe the groups afterwards instead. And no output claims a best k;
+`candidate_k` is labelled a candidate everywhere it appears.
+
+Clustering metrics are rounded to 12 significant digits before being banked
+(`_clustering.stable`). scikit-learn's k-means reduces in parallel, so identical
+labels can yield an inertia differing in the last bit, which would otherwise
+produce a new evidence ID on every run.
+
+## Two representations of a time series, and they are not interchangeable
+
+The raw rows are what the data contains — duplicated timestamps, absent periods,
+uneven spacing. The regular grid is a reconstruction. **Every hygiene claim runs
+on the raw rows**, because those are exact statements about defects and a
+duplicate that has already been collapsed cannot be counted. Decomposition,
+autocorrelation, and stationarity can only run on the grid, so they are computed
+on the reconstruction and every result derived from it is disclosed as such via
+a `SamplingRecord` plus an on-page warning. Do not quietly move a hygiene check
+onto the grid.
+
 ## Important limitations
 
 - Pandas is the only in-memory backend.
@@ -128,6 +209,32 @@ Do not postpone documentation into a future cleanup task.
 - Image evidence is not exposed to the assisted-analysis tool registry, and
   thumbnails live in artifacts rather than evidence. Keep it that way: raw
   pixels must never reach a model provider.
+- Regression probes are Ridge and Huber only. A weak probe means a *linear*
+  model finds little, not that the target is unlearnable.
+- Regression leverage and Cook's distance come from an OLS fit on the screened
+  design, capped at 30 features, and inherit its assumptions.
+- Regression censoring is inferred from repeated values, so a genuinely popular
+  price point is indistinguishable from a cap without domain confirmation.
+- Regression review rows carry actual/predicted values and per-row feature
+  values. Those live in evidence for the local report only; the assisted-analysis
+  layer sends the model just the recipe summary and finding text, never rows.
+- Time-series frequency is the dominant *observed* spacing, not a declared
+  schedule; a series that changes cadence is forced onto one grid.
+- Panel structural analysis runs on the aggregate only. Per-entity decomposition
+  is not implemented; coverage is reported per entity instead.
+- Duplicate timestamps are averaged when the grid is built. That is right for a
+  rate and arguably wrong for a count, which is why the duplicate finding asks
+  for resolution at source rather than choosing silently.
+- ADF and KPSS both lose power on short series, so a `stationary` verdict on a
+  few dozen observations is weak evidence, not reassurance.
+- Clustering searches with k-means only, so elongated, nested, or
+  density-varying structure scores poorly and is still real. Other algorithms
+  are suggested, never run.
+- Clustering distance is numeric-only; categorical columns describe groups but
+  never form them.
+- The clustering embedding is a PCA projection offered as a visual aid, drawn as
+  small multiples because past three groups no categorical palette keeps every
+  pair distinguishable under colour-vision deficiency.
 
 ## Key documents
 

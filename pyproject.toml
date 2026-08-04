@@ -51,6 +51,11 @@ dependencies = [
     # scipy in, but the profile depends on it directly, so it is declared here
     # rather than relied on transitively.
     "scipy>=1.11.0",
+    # Regression residual diagnostics (Breusch-Pagan) and, from the time-series
+    # recipe on, STL decomposition and the ADF/KPSS stationarity pair. These are
+    # standard estimators with well-documented assumptions; reimplementing them
+    # in-house would mean shipping approximations we would then have to caveat.
+    "statsmodels>=0.14.0",
 ]
 
 [project.urls]
@@ -138,6 +143,7 @@ module = [
     "pandas.*",
     "scipy.*",
     "sklearn.*",
+    "statsmodels.*",
     "langgraph.*",
     "google.*",
 ]

@@ -3,6 +3,7 @@
 from prism_eda.api import (
     anomaly_detection,
     classification,
+    clustering,
     compare_datasets,
     discover_schema,
     load,
@@ -10,6 +11,8 @@ from prism_eda.api import (
     minimal_eda,
     profile,
     profile_images,
+    regression,
+    time_series,
 )
 from prism_eda.artifacts import Artifact
 from prism_eda.comparison_results import ComparisonResult
@@ -33,6 +36,7 @@ __all__ = [
     "ImageDataset",
     "anomaly_detection",
     "classification",
+    "clustering",
     "compare_datasets",
     "discover_schema",
     "load",
@@ -40,6 +44,8 @@ __all__ = [
     "minimal_eda",
     "profile",
     "profile_images",
+    "regression",
+    "time_series",
 ]
 
 __version__ = "0.1.0"

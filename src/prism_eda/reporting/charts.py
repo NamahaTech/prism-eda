@@ -279,6 +279,596 @@ def scatter_svg(scatter: dict[str, Any], compact: bool = False) -> Markup:
     return Markup("".join(parts))
 
 
+def residual_scatter_svg(residuals: dict[str, Any]) -> Markup:
+    """Residuals against fitted values, with the zero rule and a spread band.
+
+    The plot that decides whether a regression fit is trustworthy. Two things
+    are drawn behind the points because stating them in prose does not let a
+    reader check them: the zero rule, which a well-behaved cloud straddles
+    evenly, and the per-bin spread band, which fans out when the error grows
+    with the prediction. A reader who sees the band widen has understood
+    heteroscedasticity without the word.
+    """
+    points = residuals.get("points", [])
+    if not points:
+        return Markup("")
+    width, height = 680.0, 310.0
+    # The top padding leaves a clear band for the off-scale note, so it never
+    # lands on top of the very markers it is describing.
+    pad_l, pad_r, pad_t, pad_b = 52.0, 16.0, 28.0, 38.0
+    xs = [float(point["x"]) for point in points]
+    ys = [float(point["y"]) for point in points]
+    bins = residuals.get("bins", []) or []
+
+    x_lo, x_hi = min(xs), max(xs)
+    # The vertical scale must include the band, or the band clips at the edges.
+    band_values = [
+        value
+        for item in bins
+        for value in (
+            item["mean_residual"] + item["std_residual"],
+            item["mean_residual"] - item["std_residual"],
+        )
+    ]
+    # A residual plot is exactly the chart most likely to contain a handful of
+    # enormous residuals — that is what it is for. Scaling to them compresses
+    # every other point into an unreadable strip, which loses the pattern the
+    # chart exists to show. So the axis is set from a robust range and the
+    # extremes are pinned to the edge rather than dropped: the shape stays
+    # readable, the outliers stay visible, and the count of pinned points is
+    # stated on the chart so nothing is quietly hidden.
+    ordered = sorted(ys)
+    q1 = ordered[int(len(ordered) * 0.25)]
+    q3 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.75))]
+    iqr = q3 - q1
+    if iqr > 0:
+        y_lo = max(min(ys), q1 - 3.0 * iqr)
+        y_hi = min(max(ys), q3 + 3.0 * iqr)
+    else:
+        y_lo, y_hi = min(ys), max(ys)
+    y_lo = min([y_lo, 0.0, *band_values])
+    y_hi = max([y_hi, 0.0, *band_values])
+    x_pad = (x_hi - x_lo) * 0.05 or 1.0
+    y_pad = (y_hi - y_lo) * 0.08 or 1.0
+    x_lo, x_hi = x_lo - x_pad, x_hi + x_pad
+    y_lo, y_hi = y_lo - y_pad, y_hi + y_pad
+    off_scale = sum(1 for value in ys if value < y_lo or value > y_hi)
+
+    def px(value: float) -> float:
+        return _scale(value, x_lo, x_hi, pad_l, width - pad_r)
+
+    def py(value: float) -> float:
+        return _scale(min(max(value, y_lo), y_hi), y_lo, y_hi, height - pad_b, pad_t)
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Residuals against fitted values">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{height - pad_b}" '
+        f'x2="{width - pad_r}" y2="{height - pad_b}"></line>',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t}" '
+        f'x2="{pad_l}" y2="{height - pad_b}"></line>',
+    ]
+
+    if len(bins) >= 2:
+        upper = " ".join(
+            f"{px((item['low'] + item['high']) / 2):.1f},"
+            f"{py(item['mean_residual'] + item['std_residual']):.1f}"
+            for item in bins
+        )
+        lower = " ".join(
+            f"{px((item['low'] + item['high']) / 2):.1f},"
+            f"{py(item['mean_residual'] - item['std_residual']):.1f}"
+            for item in reversed(bins)
+        )
+        parts.append(
+            f'<polygon class="chart-band" points="{upper} {lower}"></polygon>'
+            f'<polyline class="chart-band-edge" points="{upper}"></polyline>'
+        )
+
+    parts.append(
+        f'<line class="chart-zero" x1="{pad_l}" y1="{py(0.0):.1f}" '
+        f'x2="{width - pad_r}" y2="{py(0.0):.1f}"></line>'
+    )
+
+    normal = [point for point in points if not point.get("flagged")]
+    flagged = [point for point in points if point.get("flagged")]
+    label_points = len(normal) <= SCATTER_TOOLTIP_MAX_POINTS
+
+    def clipped(value: float) -> bool:
+        return value < y_lo or value > y_hi
+
+    for point in normal:
+        value = float(point["y"])
+        css = "chart-dot chart-dot-clipped" if clipped(value) else "chart-dot"
+        marker = (
+            f'<circle class="{css}" cx="{px(float(point["x"])):.1f}" '
+            f'cy="{py(value):.1f}" r="3.4"'
+        )
+        if label_points or clipped(value):
+            suffix = " — beyond the axis range" if clipped(value) else ""
+            title = (
+                f"predicted {_format_number(point['x'])}, "
+                f"residual {_format_number(value)}{suffix}"
+            )
+            parts.append(f"{marker}><title>{escape(title)}</title></circle>")
+        else:
+            parts.append(f"{marker}></circle>")
+    for point in flagged:
+        value = float(point["y"])
+        suffix = " — beyond the axis range" if clipped(value) else ""
+        title = (
+            f"predicted {_format_number(point['x'])}, "
+            f"residual {_format_number(value)} — under review{suffix}"
+        )
+        css = "chart-dot chart-dot-flagged"
+        if clipped(value):
+            css += " chart-dot-clipped"
+        parts.append(
+            f'<circle class="{css}" cx="{px(float(point["x"])):.1f}" '
+            f'cy="{py(value):.1f}" r="5"><title>{escape(title)}</title></circle>'
+        )
+
+    mid_x = (pad_l + width - pad_r) / 2
+    mid_y = (pad_t + height - pad_b) / 2
+    parts.append(
+        f'<text class="chart-label" x="{mid_x:.0f}" y="{height - 8}" '
+        f'text-anchor="middle">predicted value</text>'
+        f'<text class="chart-label" x="14" y="{mid_y:.0f}" text-anchor="middle" '
+        f'transform="rotate(-90 14 {mid_y:.0f})">residual</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{py(0.0) + 3.5:.1f}" '
+        f'text-anchor="end">0</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{pad_t + 4:.1f}" '
+        f'text-anchor="end">{escape(_format_number(y_hi))}</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{height - pad_b:.1f}" '
+        f'text-anchor="end">{escape(_format_number(y_lo))}</text>'
+    )
+    if off_scale:
+        noun = "point" if off_scale == 1 else "points"
+        parts.append(
+            f'<text class="chart-label chart-note-mark" x="{width - pad_r}" '
+            f'y="12" text-anchor="end">{off_scale} {noun} beyond this range, '
+            f"pinned to the edge</text>"
+        )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def conditional_bias_svg(bias: dict[str, Any]) -> Markup:
+    """Mean residual per fitted bin, diverging from the zero rule.
+
+    A fit can have an unbiased average and still be wrong everywhere: too low at
+    the bottom of the range and too high at the top, averaging to nothing. This
+    chart is the one that catches it. Bars run above or below the zero rule, so
+    the sign is carried by direction as well as hue and never depends on colour
+    alone.
+    """
+    bins = bias.get("bins", [])
+    spread = float(bias.get("overall_std_residual", 0.0) or 0.0)
+    if not bins:
+        return Markup("")
+
+    width = 680.0
+    pad_l, pad_r, pad_t, pad_b = 52.0, 16.0, 14.0, 40.0
+    height = 210.0
+    plot_h = height - pad_t - pad_b
+    means = [float(item["mean_residual"]) for item in bins]
+    extent = max(abs(min(means)), abs(max(means)), spread * 0.5) or 1.0
+    zero_y = pad_t + plot_h / 2
+
+    def py(value: float) -> float:
+        return zero_y - (value / extent) * (plot_h / 2)
+
+    slot = (width - pad_l - pad_r) / len(bins)
+    # A 2px surface gap between adjacent fills, per the shared mark spec.
+    bar_w = max(3.0, slot - 2.0)
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Mean residual by fitted range">'
+    ]
+    # A +/- 1 standard-deviation reference makes the bars readable as an effect
+    # size rather than raw units.
+    if spread > 0:
+        for reference in (spread, -spread):
+            if abs(reference) > extent:
+                continue
+            parts.append(
+                f'<line class="chart-axis" x1="{pad_l}" y1="{py(reference):.1f}" '
+                f'x2="{width - pad_r}" y2="{py(reference):.1f}" '
+                f'stroke-dasharray="3 3"></line>'
+            )
+
+    for index, item in enumerate(bins):
+        mean = float(item["mean_residual"])
+        left = pad_l + index * slot + (slot - bar_w) / 2
+        top = min(py(mean), zero_y)
+        bar_h = max(1.5, abs(py(mean) - zero_y))
+        css = "chart-bar-pos" if mean >= 0 else "chart-bar-neg"
+        direction = "under-predicts" if mean >= 0 else "over-predicts"
+        title = (
+            f"{_format_number(item['low'])} to {_format_number(item['high'])}: "
+            f"{direction} by {_format_number(abs(mean))} on average "
+            f"({item['count']} rows)"
+        )
+        parts.append(
+            f"<g><title>{escape(title)}</title>"
+            f'<rect class="{css}" x="{left:.1f}" y="{top:.1f}" '
+            f'width="{bar_w:.1f}" height="{bar_h:.1f}" rx="2"></rect></g>'
+        )
+
+    parts.append(
+        f'<line class="chart-zero" x1="{pad_l}" y1="{zero_y:.1f}" '
+        f'x2="{width - pad_r}" y2="{zero_y:.1f}"></line>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{zero_y + 3.5:.1f}" '
+        f'text-anchor="end">0</text>'
+    )
+    if spread > 0 and spread <= extent:
+        parts.append(
+            f'<text class="chart-label" x="{pad_l - 6}" y="{py(spread) + 3.5:.1f}" '
+            f'text-anchor="end">+1σ</text>'
+            f'<text class="chart-label" x="{pad_l - 6}" y="{py(-spread) + 3.5:.1f}" '
+            f'text-anchor="end">−1σ</text>'
+        )
+    parts.append(
+        f'<text class="chart-label" x="{pad_l}" y="{height - 20}" '
+        f'text-anchor="start">{escape(_format_number(bins[0]["low"]))}</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 20}" '
+        f'text-anchor="end">{escape(_format_number(bins[-1]["high"]))}</text>'
+        f'<text class="chart-label" x="{(pad_l + width - pad_r) / 2:.0f}" '
+        f'y="{height - 5}" text-anchor="middle">predicted value</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def _series_extent(*series: list[dict[str, Any]]) -> tuple[float, float]:
+    values = [
+        float(point["y"])
+        for points in series
+        for point in points
+        if point.get("y") is not None
+    ]
+    if not values:
+        return 0.0, 1.0
+    low, high = min(values), max(values)
+    if low == high:
+        return low - 1.0, high + 1.0
+    pad = (high - low) * 0.08
+    return low - pad, high + pad
+
+
+def _polyline(
+    points: list[dict[str, Any]],
+    px: Any,
+    py: Any,
+    total: int,
+) -> list[str]:
+    """Line segments that break at gaps rather than drawing through them.
+
+    A single polyline across a missing period draws a straight line over the
+    outage, which is the one thing the chart must not imply happened.
+    """
+    runs: list[list[str]] = [[]]
+    for index, point in enumerate(points):
+        if point.get("y") is None:
+            if runs[-1]:
+                runs.append([])
+            continue
+        runs[-1].append(f"{px(index, total):.1f},{py(float(point['y'])):.1f}")
+    return [" ".join(run) for run in runs if len(run) > 1]
+
+
+def series_line_svg(data: dict[str, Any]) -> Markup:
+    """The series over time, with gaps left open and change points marked."""
+    points = data.get("points", [])
+    if not points:
+        return Markup("")
+    trend = data.get("trend_points", []) or []
+    changes = set(data.get("change_points", []) or [])
+
+    width, height = 680.0, 240.0
+    pad_l, pad_r, pad_t, pad_b = 52.0, 16.0, 16.0, 34.0
+    total = len(points)
+    y_lo, y_hi = _series_extent(points, trend)
+
+    def px(index: int, count: int) -> float:
+        if count <= 1:
+            return pad_l
+        return pad_l + (index / (count - 1)) * (width - pad_l - pad_r)
+
+    def py(value: float) -> float:
+        return _scale(value, y_lo, y_hi, height - pad_b, pad_t)
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="{escape(str(data.get("value", "series")))} over time">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{height - pad_b}" '
+        f'x2="{width - pad_r}" y2="{height - pad_b}"></line>',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t}" '
+        f'x2="{pad_l}" y2="{height - pad_b}"></line>',
+    ]
+
+    # Change points first, so the series draws over the rules rather than under.
+    stamps = [point["t"] for point in points]
+    for stamp in changes:
+        if stamp not in stamps:
+            continue
+        x = px(stamps.index(stamp), total)
+        parts.append(
+            f'<line class="chart-changepoint" x1="{x:.1f}" y1="{pad_t}" '
+            f'x2="{x:.1f}" y2="{height - pad_b}"><title>level shift: '
+            f"{escape(str(stamp)[:10])}</title></line>"
+        )
+
+    for run in _polyline(points, px, py, total):
+        parts.append(f'<polyline class="chart-line" points="{run}"></polyline>')
+    for run in _polyline(trend, px, py, len(trend)):
+        parts.append(f'<polyline class="chart-line-trend" points="{run}"></polyline>')
+
+    first = str(points[0]["t"])[:10]
+    last = str(points[-1]["t"])[:10]
+    parts.append(
+        f'<text class="chart-label" x="{pad_l}" y="{height - 12}" '
+        f'text-anchor="start">{escape(first)}</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 12}" '
+        f'text-anchor="end">{escape(last)}</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{pad_t + 4}" '
+        f'text-anchor="end">{escape(_format_number(y_hi))}</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{height - pad_b}" '
+        f'text-anchor="end">{escape(_format_number(y_lo))}</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def acf_stems_svg(data: dict[str, Any]) -> Markup:
+    """Autocorrelation by lag, with the band inside which a lag means nothing."""
+    lags = data.get("lags", [])
+    if not lags:
+        return Markup("")
+    band = float(data.get("confidence_band", 0.0))
+    width, height = 680.0, 190.0
+    pad_l, pad_r, pad_t, pad_b = 44.0, 16.0, 14.0, 30.0
+    plot_h = height - pad_t - pad_b
+    zero_y = pad_t + plot_h / 2
+    extent = max([abs(float(item["acf"])) for item in lags] + [band, 0.2])
+
+    def py(value: float) -> float:
+        return zero_y - (value / extent) * (plot_h / 2)
+
+    slot = (width - pad_l - pad_r) / max(1, len(lags))
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Autocorrelation by lag">',
+        f'<rect class="chart-band" x="{pad_l}" y="{py(band):.1f}" '
+        f'width="{width - pad_l - pad_r:.1f}" '
+        f'height="{max(1.0, py(-band) - py(band)):.1f}"></rect>',
+    ]
+    for index, item in enumerate(lags):
+        value = float(item["acf"])
+        x = pad_l + index * slot + slot / 2
+        css = "chart-stem" if item.get("significant") else "chart-stem-quiet"
+        parts.append(
+            f"<g><title>lag {item['lag']}: {value:+.3f}</title>"
+            f'<line class="{css}" x1="{x:.1f}" y1="{zero_y:.1f}" '
+            f'x2="{x:.1f}" y2="{py(value):.1f}"></line>'
+            f'<circle class="{css}-dot" cx="{x:.1f}" cy="{py(value):.1f}" '
+            f'r="2.2"></circle></g>'
+        )
+    parts.append(
+        f'<line class="chart-zero" x1="{pad_l}" y1="{zero_y:.1f}" '
+        f'x2="{width - pad_r}" y2="{zero_y:.1f}"></line>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{zero_y + 3.5:.1f}" '
+        f'text-anchor="end">0</text>'
+        f'<text class="chart-label" x="{pad_l}" y="{height - 10}" '
+        f'text-anchor="start">lag 1</text>'
+        f'<text class="chart-label" x="{width - pad_r}" y="{height - 10}" '
+        f'text-anchor="end">lag {lags[-1]["lag"]}</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+#: Weekday names for a 7-period seasonal profile, which is what daily data has.
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def seasonal_profile_svg(data: dict[str, Any]) -> Markup:
+    """The seasonal effect of each position in the cycle, diverging from zero."""
+    profile = data.get("seasonal_profile", [])
+    if not profile:
+        return Markup("")
+    width = 680.0
+    pad_l, pad_r, pad_t, pad_b = 44.0, 16.0, 12.0, 28.0
+    height = 160.0
+    plot_h = height - pad_t - pad_b
+    zero_y = pad_t + plot_h / 2
+    effects = [float(item["effect"]) for item in profile]
+    extent = max(abs(min(effects)), abs(max(effects))) or 1.0
+
+    def py(value: float) -> float:
+        return zero_y - (value / extent) * (plot_h / 2)
+
+    slot = (width - pad_l - pad_r) / len(profile)
+    bar_w = max(3.0, slot - 6.0)
+    weekly = len(profile) == 7
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Seasonal effect by position in the cycle">'
+    ]
+    for index, item in enumerate(profile):
+        effect = float(item["effect"])
+        left = pad_l + index * slot + (slot - bar_w) / 2
+        top = min(py(effect), zero_y)
+        bar_h = max(1.5, abs(py(effect) - zero_y))
+        css = "chart-bar-pos" if effect >= 0 else "chart-bar-neg"
+        label = (
+            _WEEKDAYS[int(item["position"]) % 7] if weekly else str(item["position"])
+        )
+        parts.append(
+            f"<g><title>{escape(label)}: {effect:+.4g}</title>"
+            f'<rect class="{css}" x="{left:.1f}" y="{top:.1f}" '
+            f'width="{bar_w:.1f}" height="{bar_h:.1f}" rx="2"></rect>'
+            f'<text class="chart-label" x="{left + bar_w / 2:.1f}" '
+            f'y="{height - 10}" text-anchor="middle">{escape(label)}</text></g>'
+        )
+    parts.append(
+        f'<line class="chart-zero" x1="{pad_l}" y1="{zero_y:.1f}" '
+        f'x2="{width - pad_r}" y2="{zero_y:.1f}"></line>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{zero_y + 3.5:.1f}" '
+        f'text-anchor="end">0</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def cluster_facet_svg(embedding: dict[str, Any], segment: int) -> Markup:
+    """One small multiple: a single segment picked out against all the rest.
+
+    A cluster scatter is normally drawn with one hue per group, and for anything
+    past three groups that is a colour problem with no solution — eight hues
+    cannot be told apart by a colour-blind reader when every pair has to be
+    distinguishable from every other, and no re-ordering fixes it because every
+    pair is on screen at once. Faceting sidesteps the question entirely: each
+    panel needs one hue and a grey, every panel is unambiguous, and the reader
+    compares positions instead of matching colours to a legend.
+    """
+    points = embedding.get("points", [])
+    if not points:
+        return Markup("")
+    width, height = 260.0, 190.0
+    pad = 10.0
+    xs = [float(point["x"]) for point in points]
+    ys = [float(point["y"]) for point in points]
+    x_lo, x_hi = min(xs), max(xs)
+    y_lo, y_hi = min(ys), max(ys)
+    x_pad = (x_hi - x_lo) * 0.06 or 1.0
+    y_pad = (y_hi - y_lo) * 0.06 or 1.0
+    x_lo, x_hi = x_lo - x_pad, x_hi + x_pad
+    y_lo, y_hi = y_lo - y_pad, y_hi + y_pad
+
+    def px(value: float) -> float:
+        return _scale(value, x_lo, x_hi, pad, width - pad)
+
+    def py(value: float) -> float:
+        return _scale(value, y_lo, y_hi, height - pad, pad)
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="auto" role="img" class="chart" '
+        f'aria-label="Segment {segment} against the rest">'
+    ]
+    # Everything else first, so the highlighted group draws on top of it.
+    for point in points:
+        if int(point["segment"]) == segment:
+            continue
+        parts.append(
+            f'<circle class="facet-dot-other" cx="{px(float(point["x"])):.1f}" '
+            f'cy="{py(float(point["y"])):.1f}" r="1.8"></circle>'
+        )
+    member = 0
+    for point in points:
+        if int(point["segment"]) != segment:
+            continue
+        member += 1
+        parts.append(
+            f'<circle class="facet-dot" cx="{px(float(point["x"])):.1f}" '
+            f'cy="{py(float(point["y"])):.1f}" r="2.6"></circle>'
+        )
+    parts.append(
+        f'<text class="chart-label" x="{pad}" y="{height - 2}" '
+        f'text-anchor="start">segment {segment} · {member} shown</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
+def k_sweep_svg(sweep: dict[str, Any]) -> Markup:
+    """Silhouette and stability against k, with the candidate marked.
+
+    Two series deliberately drawn together, because the comparison is the point:
+    a k that scores well on silhouette while its stability collapses is exactly
+    the trap the chart exists to expose.
+    """
+    results = sweep.get("results", [])
+    if not results:
+        return Markup("")
+    width, height = 680.0, 230.0
+    pad_l, pad_r, pad_t, pad_b = 44.0, 16.0, 18.0, 46.0
+    plot_h = height - pad_t - pad_b
+    candidate = sweep.get("candidate_k")
+
+    ks = [int(row["k"]) for row in results]
+    slot = (width - pad_l - pad_r) / max(1, len(ks) - 1) if len(ks) > 1 else 0.0
+
+    def px(index: int) -> float:
+        return pad_l + index * slot if len(ks) > 1 else (width / 2)
+
+    def py(value: float) -> float:
+        # Both series are bounded in [0, 1], so one axis serves them honestly.
+        return pad_t + plot_h - max(0.0, min(1.0, value)) * plot_h
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Silhouette and stability by cluster count">',
+        f'<line class="chart-axis" x1="{pad_l}" y1="{pad_t + plot_h}" '
+        f'x2="{width - pad_r}" y2="{pad_t + plot_h}"></line>',
+    ]
+    if candidate is not None and candidate in ks:
+        x = px(ks.index(int(candidate)))
+        parts.append(
+            f'<line class="chart-candidate" x1="{x:.1f}" y1="{pad_t}" '
+            f'x2="{x:.1f}" y2="{pad_t + plot_h:.1f}"><title>candidate k='
+            f"{candidate}</title></line>"
+        )
+
+    for key, css in (("silhouette", "sweep-a"), ("stability_mean", "sweep-b")):
+        run: list[str] = []
+        for index, row in enumerate(results):
+            value = row.get(key)
+            if value is None:
+                continue
+            run.append(f"{px(index):.1f},{py(float(value)):.1f}")
+        if len(run) > 1:
+            parts.append(
+                f'<polyline class="chart-line-{css}" points="{" ".join(run)}">'
+                f"</polyline>"
+            )
+        for index, row in enumerate(results):
+            value = row.get(key)
+            if value is None:
+                continue
+            label = "silhouette" if key == "silhouette" else "stability"
+            parts.append(
+                f'<circle class="chart-dot-{css}" cx="{px(index):.1f}" '
+                f'cy="{py(float(value)):.1f}" r="3"><title>k={row["k"]} '
+                f"{label} {float(value):.3f}</title></circle>"
+            )
+
+    for index, k in enumerate(ks):
+        parts.append(
+            f'<text class="chart-label" x="{px(index):.1f}" '
+            f'y="{pad_t + plot_h + 15:.1f}" text-anchor="middle">{k}</text>'
+        )
+    parts.append(
+        f'<text class="chart-label" x="{pad_l - 6}" y="{py(1.0) + 4:.1f}" '
+        f'text-anchor="end">1.0</text>'
+        f'<text class="chart-label" x="{pad_l - 6}" y="{py(0.0) + 4:.1f}" '
+        f'text-anchor="end">0.0</text>'
+        f'<text class="chart-label" x="{(pad_l + width - pad_r) / 2:.0f}" '
+        f'y="{height - 26}" text-anchor="middle">cluster count (k)</text>'
+    )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
 def _truncate(text: str, limit: int = 13) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
