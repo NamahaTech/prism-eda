@@ -16,7 +16,7 @@
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/pyversions/prism-eda?color=6f52ed" alt="Python 3.11+"></a>
   <a href="https://github.com/NamahaTech/prism-eda/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-1f9d55" alt="MIT license"></a>
   <a href="https://github.com/NamahaTech/prism-eda"><img src="https://img.shields.io/badge/docs-guide-0b7285" alt="Documentation"></a>
-  <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/dm/prism-eda?label=downloads" alt="PyPI downloads"></a>
+ <a href="https://pepy.tech/projects/prism-eda"><img src="https://api.pepy.tech/badge/prism-eda" alt="Downloads"></a>
 </p>
 
 ## What is Prism EDA?
