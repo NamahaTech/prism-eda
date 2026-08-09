@@ -20,7 +20,7 @@ print(pe.__version__)
 ```
 
 ```text
-0.1.0
+1.0.0
 ```
 
 ## Optional extras

@@ -34,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the version guard below needs tags, not just HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -45,20 +47,39 @@ jobs:
         run: python -m twine check --strict dist/*
       - name: Verify the tag matches the package version
         # A release tagged v0.1.1 that ships 0.1.0 is unfixable after upload:
-        # PyPI never allows a version number to be reused.
-        if: github.event_name == 'release'
+        # PyPI never allows a version number to be reused. This guard must cover
+        # every path that reaches PyPI, not just the release event -- a
+        # workflow_dispatch to pypi skipping it is how an unbumped 0.1.0 once
+        # got all the way to the upload step.
+        if: github.event_name == 'release' || inputs.target == 'pypi'
         run: |
           python - <<'PY'
-          import os, pathlib, re, sys
-          tag = os.environ["TAG"].lstrip("v")
+          import os, pathlib, re, subprocess, sys
           source = pathlib.Path("src/prism_eda/__init__.py").read_text()
           version = re.search(r'__version__ = "([^"]+)"', source).group(1)
-          if tag != version:
-              sys.exit(f"tag {tag!r} does not match __version__ {version!r}")
+          tag = os.environ.get("TAG", "")
+          if tag:
+              # Release event: the tag being released must name this version.
+              if tag.lstrip("v") != version:
+                  sys.exit(f"tag {tag!r} does not match __version__ {version!r}")
+          else:
+              # Manual dispatch: no tag in the ref, so require that this exact
+              # commit is tagged v<version>. Catches "forgot to bump" directly.
+              expected = f"v{version}"
+              tags = subprocess.run(
+                  ["git", "tag", "--points-at", "HEAD"],
+                  capture_output=True, text=True, check=True,
+              ).stdout.split()
+              if expected not in tags:
+                  sys.exit(
+                      f"__version__ is {version!r} but HEAD is not tagged {expected!r} "
+                      f"(tags here: {tags or 'none'}). Bump the version and tag the "
+                      f"release commit before publishing to PyPI."
+                  )
           print(f"tag and version agree: {version}")
           PY
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event_name == 'release' && github.ref_name || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: distributions

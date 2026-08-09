@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project intends to follow semantic versioning once its public API
 stabilizes.
 
-## [Unreleased]
+## [1.0.0] - 2026-08-09
 
 ### Added
 
