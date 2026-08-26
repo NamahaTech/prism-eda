@@ -72,7 +72,7 @@ JavaScript, or an AI provider.
 - Build deterministic dataset/table fingerprints and column catalogs.
 - Profile shape, memory use, physical and semantic types, missingness,
   cardinality, duplicates, constants, robust numeric summaries, and top values.
-- Separate **issues** (data quality defects — placeholder values, mixed date
+- Separate **issues** (data quality defects like placeholder values, mixed date
   formats, numbers stored as text, duplicate columns) from **alerts** (true but
   not broken — correlated columns, all-unique columns, time coverage), so the
   defect list stays short enough to read.
@@ -104,7 +104,7 @@ JavaScript, or an AI provider.
   time-ordered backtest plan.
 - Assess regression targets for leakage, censoring at a cap, redundancy,
   residual bias and uneven error spread, influential rows, and thinly supported
-  ranges — running a robust probe alongside a conventional one, because their
+  ranges : running a robust probe alongside a conventional one, because their
   disagreement tells you whether the features are weak or a few rows are
   distorting the fit.
 - Profile image datasets for decode failures, dimensions, formats, EXIF,
@@ -120,7 +120,7 @@ JavaScript, or an AI provider.
 - Portable self-contained HTML reports, complete JSON, and in-memory `dict`
   exports.
 - Static report fallbacks and embedded interactive schema diagrams.
-- Framework-neutral lifecycle/progress callbacks.
+- Framework independent lifecycle/progress callbacks.
 - Deterministic sampling, configurable compute depth, stable random seeds, type
   checking, linting, packaging, and a broad regression test suite.
 
@@ -292,7 +292,7 @@ the one that helps.
 
 Two probes run, not one. Ridge minimizes squared error and is dragged by
 outliers; Huber is not. When the robust probe fits the typical row much better,
-the data is predictable and a handful of rows is distorting the fit — a
+the data is predictable and a handful of rows is distorting the fit : a
 different problem from weak features, and one the ranked review rows fix. See
 [the regression guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md).
 
@@ -319,7 +319,7 @@ outage ran nine consecutive days, not that 1.2% of rows are missing.
 Duplicate detection is entity-aware, because in a panel every date legitimately
 appears once per entity. And totalling an unbalanced panel produces a level
 shift the day a new entity opens, so Prism counts the contributing series over
-time and says when that number changes — otherwise you would read a composition
+time and says when that number changes, otherwise you would read a composition
 artifact as a jump in demand.
 
 Trend, seasonality, and non-stationarity are **alerts**, never defects. ADF and
