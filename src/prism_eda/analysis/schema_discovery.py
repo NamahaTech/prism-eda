@@ -14,11 +14,13 @@ from prism_eda.catalog.models import DatasetCatalog
 from prism_eda.catalog.relationships import (
     KeyCandidate,
     RelationshipCandidate,
+    SharedGrain,
     discover_schema_candidates,
 )
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.events import Event, EventCallback, EventKind, emit
 from prism_eda.evidence.models import (
+    OBSERVATION,
     Evidence,
     EvidenceScope,
     Finding,
@@ -224,9 +226,84 @@ def _relationship_evidence(candidate: RelationshipCandidate) -> Evidence:
     )
 
 
+def _grain_evidence(grain: SharedGrain) -> Evidence:
+    columns = " + ".join(grain.columns)
+    return Evidence.create(
+        kind="conformed_key",
+        scope=EvidenceScope(table=grain.unique_tables[0], columns=grain.columns),
+        value={
+            "columns": grain.columns,
+            "unique_tables": grain.unique_tables,
+            "repeating_tables": grain.repeating_tables,
+            "unique_table_count": len(grain.unique_tables),
+            "repeating_table_count": len(grain.repeating_tables),
+            "table_count": grain.table_count,
+        },
+        method="conformed_grain_search_v1",
+        description=f"Shared grain {columns} across {grain.table_count} tables.",
+        confidence=min(1.0, 0.6 + 0.05 * len(grain.unique_tables)),
+        assumptions=(
+            "Columns that identify rows identically in many tables indicate a "
+            "shared grain, not a parent-child relationship between them.",
+            "Matching column names and value uniqueness do not prove the tables "
+            "describe the same population; check coverage before joining.",
+        ),
+        metadata={"candidate_type": "conformed_key"},
+    )
+
+
+def _grain_findings(
+    grains: tuple[SharedGrain, ...], evidence: tuple[Evidence, ...]
+) -> list[Finding]:
+    """State the join once per grain instead of once per table pair.
+
+    A reader wants to know what to join on and what it costs them. The split
+    between tables already unique at the grain and tables that repeat within it
+    is exactly that: the first group joins directly, the second needs an
+    aggregate or an extra key column first.
+    """
+    by_columns = {
+        tuple(item.value["columns"]): item
+        for item in evidence
+        if item.kind == "conformed_key"
+    }
+    findings: list[Finding] = []
+    for grain in grains:
+        item = by_columns[grain.columns]
+        columns = " + ".join(grain.columns)
+        unique_count = len(grain.unique_tables)
+        repeating_count = len(grain.repeating_tables)
+        summary = (
+            f"{unique_count} table(s) are uniquely identified by {columns} and can "
+            f"be joined on it directly."
+        )
+        if repeating_count:
+            summary += (
+                f" {repeating_count} further table(s) carry the same columns but "
+                "repeat within them, so they need an aggregate or an extra key "
+                "column before they will join one-to-one."
+            )
+        findings.append(
+            Finding.create(
+                title=f"{grain.table_count} tables share the grain {columns}",
+                summary=summary,
+                severity="info",
+                confidence=item.confidence,
+                evidence_ids=(item.id,),
+                category=OBSERVATION,
+                recommendation=(
+                    f"Join these tables on {columns}. Confirm the tables describe "
+                    "the same population and check coverage before relying on it."
+                ),
+            )
+        )
+    return findings
+
+
 def _findings(
     relationships: tuple[RelationshipCandidate, ...],
     evidence: tuple[Evidence, ...],
+    grains: tuple[SharedGrain, ...] = (),
 ) -> tuple[Finding, ...]:
     relationship_evidence = {
         (
@@ -238,7 +315,7 @@ def _findings(
         for item in evidence
         if item.kind == "candidate_relationship"
     }
-    findings: list[Finding] = []
+    findings: list[Finding] = _grain_findings(grains, evidence)
     for relationship in relationships:
         item = relationship_evidence[
             (
@@ -293,12 +370,31 @@ def _schema_verdict(
     catalog: DatasetCatalog,
     relationships: tuple[RelationshipCandidate, ...],
     analysis: dict[str, dict[str, Any]],
+    grains: tuple[SharedGrain, ...] = (),
 ) -> str | None:
     """One plain-language headline that leads with the schema's structure.
 
     Signal over noise: name the hub tables everything hangs off, rather than
     make the analyst infer them from a flat list of dozens of relationships.
     """
+    if grains:
+        # The grain is the headline whenever one exists: it is the single fact
+        # that tells an analyst how to put these tables together, and it stays
+        # true no matter how many pairwise links sit underneath it.
+        grain = grains[0]
+        columns = " + ".join(grain.columns)
+        lead = (
+            f"{grain.table_count} of {catalog.table_count} tables share the grain "
+            f"{columns} — join on it rather than pairwise."
+        )
+        if grain.repeating_tables:
+            lead += (
+                f" {len(grain.unique_tables)} are unique at that grain; "
+                f"{len(grain.repeating_tables)} repeat within it."
+            )
+        if relationships:
+            lead += f" {len(relationships)} further candidate relationship(s) remain."
+        return lead
     if not relationships:
         return None
     hubs = sorted(
@@ -364,6 +460,7 @@ def _pagerank(
 def _graph_analysis(
     catalog: DatasetCatalog,
     relationships: tuple[RelationshipCandidate, ...],
+    grains: tuple[SharedGrain, ...] = (),
 ) -> dict[str, dict[str, Any]]:
     """Classify each table's role in the candidate FK graph and rank importance.
 
@@ -382,6 +479,19 @@ def _graph_analysis(
             referenced_by[parent].add(child)
             references[child].add(parent)
 
+    # Grain membership is a role in its own right. Without it every table in a
+    # conformed-grain dataset reads as "standalone" — which is precisely
+    # backwards, because they are the most tightly related tables in the set.
+    grain_role: dict[str, str] = {}
+    grain_columns: dict[str, tuple[str, ...]] = {}
+    for grain in grains:
+        for name in grain.unique_tables:
+            grain_role.setdefault(name, "co-grain")
+            grain_columns.setdefault(name, grain.columns)
+        for name in grain.repeating_tables:
+            grain_role.setdefault(name, "co-grain")
+            grain_columns.setdefault(name, grain.columns)
+
     rank = _pagerank(table_names, references)
     max_rank = max(rank.values(), default=0.0) or 1.0
     hub_threshold = max(3, math.ceil(len(table_names) * 0.4))
@@ -391,7 +501,7 @@ def _graph_analysis(
         in_degree = len(referenced_by[name])
         out_degree = len(references[name])
         if in_degree == 0 and out_degree == 0:
-            role = "standalone"
+            role = grain_role.get(name, "standalone")
         elif in_degree >= hub_threshold:
             # Referenced by many tables is the defining hub signature, even if it
             # also references a peer (e.g. two mutually-keyed dimension tables).
@@ -413,6 +523,7 @@ def _graph_analysis(
             "references": out_degree,
             "is_hub": role == "hub",
             "importance": rank.get(name, 0.0) / max_rank,
+            "grain_columns": grain_columns.get(name, ()),
         }
     return analysis
 
@@ -423,6 +534,7 @@ def _graph_artifact(
     relationships: tuple[RelationshipCandidate, ...],
     evidence: tuple[Evidence, ...],
     analysis: dict[str, dict[str, Any]],
+    grains: tuple[SharedGrain, ...] = (),
 ) -> Artifact:
     key_by_table: dict[str, list[KeyCandidate]] = {}
     for key in keys:
@@ -444,6 +556,27 @@ def _graph_artifact(
             }
             for key in key_by_table.get(table.name, [])
         ]
+        existing_key_columns = {key.columns for key in key_by_table.get(table.name, [])}
+        # A table can sit on a shared grain without the naming heuristics having
+        # proposed that grain as its own key. Showing the grain row anyway is
+        # what keeps the diagram honest: every participant looks like one.
+        for grain in grains:
+            if grain.columns in existing_key_columns:
+                continue
+            if table.name in grain.unique_tables:
+                detail = "unique at grain"
+            elif table.name in grain.repeating_tables:
+                detail = "repeats within grain"
+            else:
+                continue
+            key_role_rows.append(
+                {
+                    "kind": "GRAIN",
+                    "label": _truncate(" + ".join(grain.columns), 30),
+                    "full_label": " + ".join(grain.columns),
+                    "detail": detail,
+                }
+            )
         key_role_rows.extend(
             {
                 "kind": "FK",
@@ -700,6 +833,14 @@ def _graph_artifact(
             "layout": "layered_er_v2",
             "nodes": [node_data[name] for name in table_names],
             "edges": edges,
+            "grains": [
+                {
+                    "columns": list(grain.columns),
+                    "unique_tables": list(grain.unique_tables),
+                    "repeating_tables": list(grain.repeating_tables),
+                }
+                for grain in grains
+            ],
         },
         evidence_ids=tuple(relationship_ids),
         metadata={"candidate_graph": True, "layout_version": 2},
@@ -748,10 +889,11 @@ def discover_schema_dataset(
         random_seed=config.random_seed,
     )
     key_evidence = tuple(_key_evidence(candidate) for candidate in discovery.keys)
+    grain_evidence = tuple(_grain_evidence(grain) for grain in discovery.grains)
     relationship_evidence = tuple(
         _relationship_evidence(candidate) for candidate in discovery.relationships
     )
-    evidence = key_evidence + relationship_evidence
+    evidence = key_evidence + grain_evidence + relationship_evidence
     for item in evidence:
         emit(
             callbacks,
@@ -777,7 +919,7 @@ def discover_schema_dataset(
         )
     if insufficient and not config.allow_insufficient_evidence:
         status = AnalysisStatus.INSUFFICIENT_EVIDENCE
-    elif not discovery.relationships:
+    elif not discovery.relationships and not discovery.grains:
         status = AnalysisStatus.NO_MEANINGFUL_STRUCTURE
     elif warnings:
         status = AnalysisStatus.COMPLETED_WITH_WARNINGS
@@ -789,10 +931,23 @@ def discover_schema_dataset(
             f"Found {len(discovery.keys)} candidate key(s), but there is insufficient "
             "multi-table evidence for relationship discovery."
         )
-    elif not discovery.relationships:
+    elif not discovery.relationships and not discovery.grains:
         summary = (
             f"Found {len(discovery.keys)} candidate key(s), but no relationships met "
             "the configured evidence thresholds."
+        )
+    elif discovery.grains:
+        grain = discovery.grains[0]
+        columns = " + ".join(grain.columns)
+        summary = (
+            f"{grain.table_count} of {catalog.table_count} tables share the grain "
+            f"{columns}"
+        )
+        if len(discovery.grains) > 1:
+            summary += f" (and {len(discovery.grains) - 1} narrower shared grain(s))"
+        summary += (
+            f". Found {len(discovery.keys)} candidate key(s) and "
+            f"{len(discovery.relationships)} further candidate relationship(s)."
         )
     else:
         summary = (
@@ -801,16 +956,21 @@ def discover_schema_dataset(
             f"{catalog.table_count} tables."
         )
 
-    analysis = _graph_analysis(catalog, discovery.relationships)
+    analysis = _graph_analysis(catalog, discovery.relationships, discovery.grains)
     artifact = _graph_artifact(
-        catalog, discovery.keys, discovery.relationships, evidence, analysis
+        catalog,
+        discovery.keys,
+        discovery.relationships,
+        evidence,
+        analysis,
+        discovery.grains,
     )
     result = AnalysisResult(
         goal="schema_discovery",
         status=status,
         summary=summary,
         catalog=catalog,
-        findings=_findings(discovery.relationships, evidence),
+        findings=_findings(discovery.relationships, evidence, discovery.grains),
         evidence=evidence,
         artifacts=(artifact,),
         assumptions=context.assumptions,
@@ -827,7 +987,10 @@ def discover_schema_dataset(
             ),
             "candidate_keys": len(discovery.keys),
             "candidate_relationships": len(discovery.relationships),
-            "verdict": _schema_verdict(catalog, discovery.relationships, analysis),
+            "shared_grains": len(discovery.grains),
+            "verdict": _schema_verdict(
+                catalog, discovery.relationships, analysis, discovery.grains
+            ),
             "table_roles": {name: info["role"] for name, info in analysis.items()},
         },
     )

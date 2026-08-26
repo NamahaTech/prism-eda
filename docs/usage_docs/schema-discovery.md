@@ -56,10 +56,63 @@ because a relationship candidate is informational, not a problem to fix.
   cardinality.
 - **Orphans and unreferenced parents** — child rows whose key has no parent, and
   parent rows never referenced.
+- **Shared grains** — column combinations that identify rows the same way across
+  many tables (see below).
 - **Confidence and sampling disclosure** for every candidate.
+
+Candidate keys qualify either by identifier naming (`customer_id`, `order_code`)
+or as a **composite natural key** whose components are all dimension-like
+partitions — which is what finds `Location + Period` or `country + year + sex` in
+datasets that never adopted an `_id` convention. Floating-point columns and
+integer columns named like measures are never treated as dimensions, so a unique
+`amount` or `rate` column is not proposed as a key.
 
 To keep candidates trustworthy, one-to-one candidates require key-name agreement,
 which suppresses coincidental ID-range overlaps between unrelated tables.
+
+## Shared grains
+
+Not every multi-table dataset is a star schema. Public statistical releases are
+usually dozens of **peer** tables measuring different things at the same
+coordinate — every table keyed by `(Location, Period)`, none of them the parent
+of any other.
+
+When the same column combination is a candidate key in three or more tables,
+Prism reports it once as a shared grain instead of the directional links a
+pairwise view would produce:
+
+```python
+from examples.sample_data import health_indicators
+
+result = pe.load(health_indicators()).discover_schema()
+print(result.summary)
+
+grains = [item for item in result.evidence if item.kind == "conformed_key"]
+for grain in grains:
+    print(" + ".join(grain.value["columns"]))
+    print("  join directly:", grain.value["unique_table_count"], "tables")
+    print("  need aggregating:", grain.value["repeating_table_count"], "tables")
+```
+
+```text
+4 of 4 tables share the grain Location + Period. Found 3 candidate key(s) and 0 further candidate relationship(s).
+Location + Period
+  join directly: 3 tables
+  need aggregating: 1 tables
+```
+
+`health_indicators()` has no `_id` column anywhere — the shape is invisible to a
+key search that only recognises identifier naming. `mortality_by_sex` carries the
+same two columns but breaks each pair down by sex, which is why it lands in the
+"need aggregating" group rather than the joinable one.
+
+The split is the actionable part: tables unique at the grain join directly, while
+tables that repeat within it need an aggregate or an extra key column first.
+
+Relationships between two tables on a shared grain are suppressed, because
+neither owns the other. Genuine star schemas are unaffected — a dimension's key
+is unique in the dimension and duplicated in every fact, so it never reaches the
+three-table bar.
 
 ## Tuning the thresholds
 
@@ -88,7 +141,8 @@ result = dataset.discover_schema(
 ## The ER diagram artifact
 
 Schema discovery produces a `schema_graph` **artifact** — a self-contained entity
-diagram with PK/FK roles, routed relationships, confidence badges, and one/many
+diagram with PK/FK/GRAIN roles, routed relationships, confidence badges, and
+one/many
 cardinality marks. In the HTML report it renders as an **interactive diagram**
 (powered by an embedded, vendored Cytoscape.js — still fully offline): drag
 table cards to rearrange, scroll to zoom, click a table to focus its
@@ -117,10 +171,10 @@ result.to_html("schema-report.html")
 
 ## When no relationship is meaningful
 
-If no relationship clears the thresholds, Prism says so rather than inventing one.
-You'll get a `no_meaningful_structure` status (candidate keys may still be
-reported) — for example, two unrelated tables whose only shared trait is an
-integer ID range won't be linked.
+If no relationship *and* no shared grain clears the thresholds, Prism says so
+rather than inventing one. You'll get a `no_meaningful_structure` status
+(candidate keys may still be reported) — for example, two unrelated tables whose
+only shared trait is an integer ID range won't be linked.
 
 ## Known limitation
 

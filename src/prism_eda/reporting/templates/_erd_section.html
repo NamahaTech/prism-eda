@@ -19,9 +19,11 @@
     .schema-key-badge { stroke-width: 1; }
     .schema-key-badge.pk { fill: #dff4ed; stroke: #b9e3d5; }
     .schema-key-badge.fk { fill: #e8f0f6; stroke: #cbdce8; }
+    .schema-key-badge.grain { fill: #ece5f6; stroke: #d5c7e8; }
     .schema-key-badge-text { font-size: 9px; font-weight: 850; text-anchor: middle; }
     .schema-key-badge-text.pk { fill: #07624b; }
     .schema-key-badge-text.fk { fill: #345b74; }
+    .schema-key-badge-text.grain { fill: #4a3570; font-size: 7.5px; }
     .schema-empty-state { fill: #7a8984; font-size: 10.5px; }
     .schema-more { fill: #0d5f4a; font-size: 10.5px; font-weight: 700; }
 {% endset %}
@@ -48,8 +50,8 @@
                   <g>
                     <title>{{ row.kind }} · {{ row.full_label }} · {{ row.detail }}</title>
                     {% if not loop.first %}<line class="schema-row-rule" x1="16" y1="{{ 104 + loop.index0 * 34 }}" x2="{{ node.width - 16 }}" y2="{{ 104 + loop.index0 * 34 }}"></line>{% endif %}
-                    <rect class="schema-key-badge {{ row.kind | lower }}" x="17" y="{{ 113 + loop.index0 * 34 }}" width="28" height="18" rx="5"></rect>
-                    <text class="schema-key-badge-text {{ row.kind | lower }}" x="31" y="{{ 125.5 + loop.index0 * 34 }}">{{ row.kind }}</text>
+                    <rect class="schema-key-badge {{ row.kind | lower }}" x="17" y="{{ 113 + loop.index0 * 34 }}" width="{% if row.kind == 'GRAIN' %}36{% else %}28{% endif %}" height="18" rx="5"></rect>
+                    <text class="schema-key-badge-text {{ row.kind | lower }}" x="{% if row.kind == 'GRAIN' %}35{% else %}31{% endif %}" y="{{ 125.5 + loop.index0 * 34 }}">{{ row.kind }}</text>
                     <text class="schema-row-label" x="54" y="{{ 125 + loop.index0 * 34 }}">{{ row.label }}</text>
                     <text class="schema-row-detail" x="{{ node.width - 17 }}" y="{{ 125 + loop.index0 * 34 }}" text-anchor="end">{{ row.detail }}</text>
                   </g>
@@ -85,6 +87,7 @@
                 <span><b class="role-swatch dimension"></b> dimension</span>
                 <span><b class="role-swatch fact"></b> fact</span>
                 <span><b class="role-swatch junction"></b> junction</span>
+                <span><b class="role-swatch co-grain"></b> co-grain</span>
               </span>
               <span class="lg-group">
                 <span class="lg-title">Confidence</span>

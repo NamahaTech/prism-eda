@@ -296,3 +296,204 @@ def test_vendored_cytoscape_asset_is_packaged() -> None:
     from prism_eda.reporting.renderer import _load_cytoscape_js
 
     assert "</script" not in _load_cytoscape_js()
+
+
+@pytest.fixture
+def conformed_tables() -> dict[str, pd.DataFrame]:
+    """A WHO-style release: peer indicator tables at one `(Location, Period)` grain.
+
+    Deliberately includes the three shapes that a key search built only for
+    `_id` conventions gets wrong: a natural composite key, a unique float
+    measure, and a small lookup whose only text column happens to be unique.
+    """
+    locations = ["AFG", "BRA", "CAN", "DNK", "EGY", "FJI"]
+    periods = [2015, 2016, 2017, 2018, 2019]
+    pairs = [(location, period) for location in locations for period in periods]
+
+    def indicator(offset: float) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "Location": [location for location, _ in pairs],
+                "Period": [period for _, period in pairs],
+                "Indicator": ["measure"] * len(pairs),
+                # Distinct floats: unique, but a measurement, never a key.
+                "reading": [offset + index for index in range(len(pairs))],
+            }
+        )
+
+    by_sex = [
+        (location, period, sex)
+        for location in locations
+        for period in periods
+        for sex in ("female", "male", "both")
+    ]
+    return {
+        "life_expectancy": indicator(60.0),
+        "medical_doctors": indicator(2.5),
+        "tuberculosis": indicator(11.0),
+        # Same columns, finer grain: repeats within `(Location, Period)`.
+        "mortality_by_sex": pd.DataFrame(
+            {
+                "Location": [location for location, _, _ in by_sex],
+                "Period": [period for _, period, _ in by_sex],
+                "Dim1": [sex for _, _, sex in by_sex],
+                "reading": [float(index) for index in range(len(by_sex))],
+            }
+        ),
+        # Unique on `(Location, Period)` but too small for the naming
+        # heuristics to have proposed that key on its own.
+        "single_year_snapshot": pd.DataFrame(
+            {
+                "Location": locations,
+                "Period": [2019] * len(locations),
+                "reading": [1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
+            }
+        ),
+        # One year wide, so `(Location, Dim1)` is trivially unique here.
+        "single_year_by_sex": pd.DataFrame(
+            {
+                "Location": [location for location in locations for _ in range(3)],
+                "Period": [2019] * (len(locations) * 3),
+                "Dim1": ["female", "male", "both"] * len(locations),
+                "reading": [float(index) for index in range(len(locations) * 3)],
+            }
+        ),
+        # Weakly named columns that are unique only because the table is tiny.
+        "location_notes": pd.DataFrame(
+            {
+                "Location": locations,
+                "note": ["a", "b", "c", "d", "e", "f"],
+            }
+        ),
+    }
+
+
+def _grain_values(result: pe.AnalysisResult) -> list[dict]:
+    return [item.value for item in result.evidence if item.kind == "conformed_key"]
+
+
+def test_composite_natural_key_is_discovered(conformed_tables) -> None:
+    """Natural keys are the common case; requiring `_id` naming misses them."""
+    result = pe.discover_schema(conformed_tables, mode="standard")
+
+    key_scopes = {
+        (item.scope.table, item.scope.columns)
+        for item in result.evidence
+        if item.kind == "candidate_key"
+    }
+    for table in ("life_expectancy", "medical_doctors", "tuberculosis"):
+        assert (table, ("Location", "Period")) in key_scopes
+
+
+def test_unique_float_measure_is_never_a_key(conformed_tables) -> None:
+    result = pe.discover_schema(conformed_tables, mode="standard")
+
+    for item in result.evidence:
+        if item.kind == "candidate_key":
+            assert "reading" not in item.scope.columns
+
+
+def test_accidental_single_column_key_does_not_become_a_hub(
+    conformed_tables,
+) -> None:
+    """A tiny lookup is unique on its only text column; that is not a key."""
+    result = pe.discover_schema(conformed_tables, mode="standard")
+
+    key_scopes = {
+        (item.scope.table, item.scope.columns)
+        for item in result.evidence
+        if item.kind == "candidate_key"
+    }
+    assert ("location_notes", ("Location",)) not in key_scopes
+    assert not [
+        value
+        for value in _relationship_values(result)
+        if value["parent_table"] == "location_notes"
+    ]
+
+
+def test_shared_grain_is_reported_once_instead_of_pairwise(
+    conformed_tables,
+) -> None:
+    result = pe.discover_schema(conformed_tables, mode="standard")
+
+    grains = _grain_values(result)
+    assert len(grains) == 1
+    grain = grains[0]
+    assert tuple(grain["columns"]) == ("Location", "Period")
+    assert set(grain["unique_tables"]) == {
+        "life_expectancy",
+        "medical_doctors",
+        "tuberculosis",
+        "single_year_snapshot",
+    }
+    assert set(grain["repeating_tables"]) == {
+        "mortality_by_sex",
+        "single_year_by_sex",
+    }
+    # The peers would each pass an inclusion test against the others; reporting
+    # them as foreign keys would invent a hierarchy that does not exist.
+    assert not [
+        value
+        for value in _relationship_values(result)
+        if tuple(value["parent_columns"]) == ("Location", "Period")
+    ]
+
+
+def test_grain_membership_is_measured_not_inherited(conformed_tables) -> None:
+    """A corroborated grain admits tables the naming heuristics never proposed."""
+    result = pe.discover_schema(conformed_tables, mode="standard")
+
+    key_scopes = {
+        (item.scope.table, item.scope.columns)
+        for item in result.evidence
+        if item.kind == "candidate_key"
+    }
+    assert ("single_year_snapshot", ("Location", "Period")) not in key_scopes
+    assert "single_year_snapshot" in _grain_values(result)[0]["unique_tables"]
+
+
+def test_single_slice_of_a_grain_is_not_a_parent(conformed_tables) -> None:
+    """One year wide makes `(Location, Dim1)` unique, not authoritative."""
+    result = pe.discover_schema(conformed_tables, mode="standard")
+
+    assert not [
+        value
+        for value in _relationship_values(result)
+        if value["parent_table"] == "single_year_by_sex"
+    ]
+
+
+def test_conformed_grain_reports_meaningful_structure(conformed_tables) -> None:
+    """A shared grain is structure; the report must not claim it found none."""
+    result = pe.discover_schema(conformed_tables, mode="standard")
+
+    assert result.status != pe.AnalysisStatus.NO_MEANINGFUL_STRUCTURE
+    assert "Location + Period" in result.metadata["verdict"]
+    assert result.metadata["shared_grains"] == 1
+
+
+def test_star_schema_is_not_reinterpreted_as_a_grain(related_tables) -> None:
+    """A dimension key is unique in one table only, so it never reads as a grain."""
+    result = pe.discover_schema(related_tables, mode="standard")
+
+    assert _grain_values(result) == []
+    assert result.metadata["shared_grains"] == 0
+    assert _relationship_values(result)
+
+
+def test_usage_doc_health_indicator_example_stays_accurate() -> None:
+    """The schema discovery guide quotes this output; keep it true."""
+    from examples.sample_data import health_indicators
+
+    result = pe.discover_schema(health_indicators())
+
+    assert result.summary == (
+        "4 of 4 tables share the grain Location + Period. Found 3 candidate "
+        "key(s) and 0 further candidate relationship(s)."
+    )
+    grains = _grain_values(result)
+    assert len(grains) == 1
+    assert tuple(grains[0]["columns"]) == ("Location", "Period")
+    assert grains[0]["unique_table_count"] == 3
+    assert grains[0]["repeating_table_count"] == 1

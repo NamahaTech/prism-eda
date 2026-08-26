@@ -441,6 +441,7 @@
     .erd-popover .pop-kind { font-family: var(--mono); font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; }
     .erd-popover .pop-kind.pk { color: #07624b; background: #dff4ed; }
     .erd-popover .pop-kind.fk { color: #345b74; background: #e8f0f6; }
+    .erd-popover .pop-kind.grain { color: #4a3570; background: #ece5f6; }
     .erd-popover .pop-label { font-weight: 600; overflow-wrap: anywhere; }
     .erd-popover .pop-detail { margin-left: auto; color: var(--ink-3); white-space: nowrap; }
     /* diagram element states (JS-driven) */
@@ -468,6 +469,7 @@
     .role-swatch.hub { background: #0d5f4a; } .role-swatch.dimension { background: #6aa393; }
     .role-swatch.fact { background: #c4b9a1; } .role-swatch.junction { background: #b3792a; }
     .role-swatch.bridge { background: #4272a3; } .role-swatch.standalone { background: #cdd8d3; }
+    .role-swatch.co-grain { background: #7a5ea8; }
     .conf-swatch { width: 26px; border-top-style: dashed; border-top-width: 2px; }
     .conf-swatch.high { border-color: #4c7d70; } .conf-swatch.medium { border-color: #94b0a6; opacity:.7; } .conf-swatch.low { border-color: #b9c7c1; opacity:.55; }
     /* relationship filter controls */
@@ -479,6 +481,16 @@
     .conf-badge.high { color: #0a5f49; background: #dff4ed; } .conf-badge.medium { color: #7a4d12; background: var(--med-bg); } .conf-badge.low { color: var(--ink-2); background: var(--fill); }
     .role-tag { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 1px 7px; border-radius: 5px; color: #fff; }
     .role-tag.hub { background: #0d5f4a; } .role-tag.dimension { background: #6aa393; } .role-tag.fact { background: #8a7f68; } .role-tag.junction { background: #b3792a; } .role-tag.bridge { background: #4272a3; } .role-tag.standalone { background: #a7b0ab; }
+    .role-tag.co-grain { background: #7a5ea8; }
+    .grain-card { border: 1px solid var(--rule); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; background: var(--surface, transparent); }
+    .grain-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .grain-cols { font-size: 15px; font-weight: 700; }
+    .grain-count { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #fff; background: #7a5ea8; border-radius: 5px; padding: 2px 8px; }
+    .grain-group { margin-top: 12px; }
+    .grain-label { font-size: 12px; font-weight: 650; color: var(--ink-2); margin-bottom: 7px; }
+    .grain-n { display: inline-block; font-size: 11px; font-weight: 700; background: var(--rule); color: var(--ink-2); border-radius: 4px; padding: 1px 6px; margin-left: 4px; }
+    .grain-tables { display: flex; flex-wrap: wrap; gap: 6px; }
+    .grain-tables .chip-tbl.muted { opacity: .62; }
     .schema-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
     .schema-summary .chip-tbl { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; }
     .tbl-wrap.tall { max-height: 70vh; overflow: auto; }
@@ -670,6 +682,34 @@
       {% endif %}
     {% endfor %}
 
+    {% set grains = result.evidence | selectattr('kind', 'equalto', 'conformed_key') | list %}
+    {% if grains %}
+    <section class="page" id="section-grains">
+      <div class="sec-head">
+        <div class="sec-idx">{{ sections.number('grains') }}</div>
+        <div class="sec-title"><h2>Shared grains</h2><p>Columns that identify rows the same way across many tables. These tables are peers, not parents and children — join them on the grain rather than pair by pair.</p></div>
+      </div>
+      {% for item in grains %}
+      <div class="grain-card">
+        <div class="grain-head">
+          <code class="grain-cols">{{ item.value.columns | join(' + ') }}</code>
+          <span class="grain-count">{{ item.value.table_count }} table{% if item.value.table_count != 1 %}s{% endif %}</span>
+        </div>
+        <div class="grain-group">
+          <div class="grain-label">Unique at this grain — join directly <span class="grain-n">{{ item.value.unique_table_count }}</span></div>
+          <div class="grain-tables">{% for name in item.value.unique_tables %}<span class="chip-tbl">{{ name }}</span>{% endfor %}</div>
+        </div>
+        {% if item.value.repeating_tables %}
+        <div class="grain-group">
+          <div class="grain-label">Repeats within this grain — aggregate or add a key column first <span class="grain-n">{{ item.value.repeating_table_count }}</span></div>
+          <div class="grain-tables">{% for name in item.value.repeating_tables %}<span class="chip-tbl muted">{{ name }}</span>{% endfor %}</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
     <section class="page" id="section-keys">
       <div class="sec-head">
         <div class="sec-idx">{{ sections.number('keys') }}</div>
@@ -690,6 +730,7 @@
     </section>
 
     {% set relationships = result.evidence | selectattr('kind', 'equalto', 'candidate_relationship') | sort(attribute='confidence', reverse=true) | list %}
+    {% if relationships %}
     <section class="page" id="section-relationships">
       <div class="sec-head">
         <div class="sec-idx">{{ sections.number('relationships') }}</div>
@@ -719,6 +760,7 @@
         </table>
       </div>
     </section>
+    {% endif %}
   {% endif %}
 
   {# Image profiles defer their tables until after the findings and the contact

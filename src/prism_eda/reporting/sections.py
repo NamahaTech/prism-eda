@@ -103,8 +103,13 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
     if goal == "schema_discovery":
         if any(artifact.kind == "schema_graph" for artifact in result.artifacts):
             entries.append(("erd", "Diagram"))
+        # The grain, when there is one, is how the tables actually go together;
+        # it belongs ahead of the per-table key list, not buried after it.
+        if _has_evidence(result, "conformed_key"):
+            entries.append(("grains", "Shared grains"))
         entries.append(("keys", "Keys"))
-        entries.append(("relationships", "Relationships"))
+        if any(item.kind == "candidate_relationship" for item in result.evidence):
+            entries.append(("relationships", "Relationships"))
 
     # Image, anomaly, and regression reports defer their reference tables until
     # after the findings; every other goal leads with them. For regression the

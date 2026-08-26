@@ -22,6 +22,9 @@ analysis recipes have something meaningful (but not noisy) to surface:
 * ``customer_segments`` is the clustering fixture: four latent groups plus an
   identifier, a constant column, a 1,653x spread in feature scale, a perfectly
   redundant pair, duplicate rows, and missingness.
+* ``health_indicators`` is the shared-grain fixture: four peer indicator tables
+  keyed by ``Location + Period`` with no identifier column anywhere, one of them
+  at a finer grain.
 
 The last four are deliberately **not** part of :func:`load_sample`. The snippets
 in ``docs/usage_docs/`` quote captured output, and adding a table to the shared
@@ -141,6 +144,61 @@ def orders() -> pd.DataFrame:
 def load_sample() -> dict[str, pd.DataFrame]:
     """Return both tables as a ``{name: DataFrame}`` mapping ready for ``pe.load``."""
     return {"customers": customers(), "orders": orders()}
+
+
+#: Countries in the health-indicator sample.
+INDICATOR_LOCATIONS = ("Argentina", "Bhutan", "Chad", "Denmark", "Ecuador", "Fiji")
+
+#: Years covered by the health-indicator sample.
+INDICATOR_PERIODS = (2015, 2016, 2017, 2018, 2019)
+
+
+def health_indicators() -> dict[str, pd.DataFrame]:
+    """Return the shared-grain fixture used by the schema discovery guide.
+
+    Modelled on how public statistics are actually published: one file per
+    indicator, every file keyed by ``Location + Period``, and no file the parent
+    of any other. ``life_expectancy``, ``medical_doctors`` and ``tuberculosis``
+    are unique at that grain; ``mortality_by_sex`` carries the same two columns
+    but repeats within them, so it needs aggregating before it will join
+    one-to-one. There is no ``_id`` column anywhere, which is the point — this
+    shape is invisible to a key search that only recognises identifier naming.
+    """
+    pairs = [
+        (location, period)
+        for location in INDICATOR_LOCATIONS
+        for period in INDICATOR_PERIODS
+    ]
+
+    def indicator(name: str, base: float, step: float) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "Location": [location for location, _ in pairs],
+                "Period": [period for _, period in pairs],
+                "Indicator": [name] * len(pairs),
+                "value": [round(base + step * index, 2) for index in range(len(pairs))],
+            }
+        )
+
+    by_sex = [
+        (location, period, sex)
+        for location in INDICATOR_LOCATIONS
+        for period in INDICATOR_PERIODS
+        for sex in ("female", "male", "both")
+    ]
+    return {
+        "life_expectancy": indicator("Life expectancy at birth", 61.0, 0.37),
+        "medical_doctors": indicator("Medical doctors per 10,000", 2.4, 0.11),
+        "tuberculosis": indicator("Tuberculosis incidence", 12.0, 0.53),
+        "mortality_by_sex": pd.DataFrame(
+            {
+                "Location": [location for location, _, _ in by_sex],
+                "Period": [period for _, period, _ in by_sex],
+                "Dim1": [sex for _, _, sex in by_sex],
+                "value": [round(4.0 + 0.19 * index, 2) for index in range(len(by_sex))],
+            }
+        ),
+    }
 
 
 #: Number of subscription accounts in the regression sample.
