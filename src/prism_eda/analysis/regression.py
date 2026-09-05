@@ -34,6 +34,13 @@ from prism_eda.analysis._regression import (
     resolve_table,
     sample_frame,
 )
+from prism_eda.analysis.feature_importance import (
+    EVIDENCE_KIND as IMPORTANCE_EVIDENCE_KIND,
+)
+from prism_eda.analysis.feature_importance import (
+    importance_evidence,
+    importance_findings_and_steps,
+)
 from prism_eda.analysis.regression_probe import (
     error_concentration_evidence,
     influence_evidence,
@@ -224,6 +231,14 @@ def _findings_and_steps(
     for item in evidence:
         value = item.value
         table = item.scope.table or ""
+
+        if item.kind == IMPORTANCE_EVIDENCE_KIND:
+            # Shared with the classification recipe: the three findings and the
+            # drop list read identically whichever task produced the ranking.
+            importance_findings, importance_steps = importance_findings_and_steps(item)
+            findings.extend(importance_findings)
+            steps.extend(importance_steps)
+            continue
 
         if item.kind == "regression_target_summary":
             rate = value["missing_rate"]
@@ -1099,6 +1114,24 @@ def regression_dataset(
                 )
                 if scatter is not None:
                     evidence.append(scatter)
+            # Runs on the same screened feature set the probe trained on, so
+            # the columns a tree ranks are provably the columns the linear
+            # probe saw. Returns nothing when the forest cannot beat a dummy
+            # baseline; the warning it records says so.
+            importance = importance_evidence(
+                frame,
+                table_catalog,
+                resolved_target,
+                target_series,
+                task="regression",
+                config=config,
+                numeric_features=numeric_features,
+                categorical_features=categorical_features,
+                warnings=warnings,
+                sampling=sampling,
+            )
+            if importance is not None:
+                evidence.append(importance)
             support = weak_support_evidence(
                 frame,
                 table_catalog,

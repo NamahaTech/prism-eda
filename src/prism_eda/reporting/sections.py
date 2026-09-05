@@ -64,6 +64,15 @@ class SectionIndex:
         return section.label if section else ""
 
 
+#: The importance section is one section with one template block, but a
+#: classification target is a label and calling it "the target" reads as jargon
+#: to the person looking at a churn flag. The heading follows the recipe.
+_DRIVERS_LABEL = {
+    "regression": "What drives the target",
+    "classification": "What drives the label",
+}
+
+
 def _has_evidence(result: AnalysisResult, kind: str) -> bool:
     return any(item.kind == kind for item in result.evidence)
 
@@ -142,6 +151,8 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
             for item in result.evidence
         ):
             entries.append(("rows", "Rows to review"))
+        if _has_evidence(result, "feature_importance"):
+            entries.append(("drivers", _DRIVERS_LABEL[goal]))
         if _has_evidence(result, "regression_residual_scatter") or _has_evidence(
             result, "regression_conditional_bias"
         ):
@@ -181,6 +192,12 @@ def report_sections(result: AnalysisResult) -> SectionIndex:
         if result.metadata.get("image_count"):
             entries.append(("image-shape", "Shape and exposure"))
         entries.extend(_metric_tables(result, skip_linked=True))
+
+    # Classification keeps its reference tables up front, so the drivers section
+    # follows the findings rather than preceding them; the regression branch
+    # above places its own copy in that recipe's reading order.
+    if goal == "classification" and _has_evidence(result, "feature_importance"):
+        entries.append(("drivers", _DRIVERS_LABEL[goal]))
 
     columns = [
         (f"columns-{index}", table.name)

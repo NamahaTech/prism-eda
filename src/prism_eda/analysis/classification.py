@@ -19,6 +19,13 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from prism_eda.analysis.feature_importance import (
+    EVIDENCE_KIND as IMPORTANCE_EVIDENCE_KIND,
+)
+from prism_eda.analysis.feature_importance import (
+    importance_evidence,
+    importance_findings_and_steps,
+)
 from prism_eda.artifacts import Artifact
 from prism_eda.catalog.models import DatasetCatalog, TableCatalog
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
@@ -368,20 +375,19 @@ def _classification_probe_evidence(
     target: str,
     *,
     config: AnalysisConfig,
-    max_categories: int,
-    prior_evidence: list[Evidence],
+    numeric: list[str],
+    categorical: list[str],
+    excluded: list[str],
 ) -> list[Evidence]:
+    """Cross-validated logistic probe over an already-screened feature set.
+
+    The groups arrive from the caller rather than being selected here, so the
+    tree-based importance stage and this probe demonstrably see the same
+    columns: one screen, one exclusion list, two models.
+    """
     usable = frame[frame[target].notna()].copy()
     y = usable[target]
     folds = _probe_folds(y, config.mode)
-    leakage_features = _leakage_feature_names(prior_evidence)
-    numeric, categorical, excluded = _probe_feature_groups(
-        usable,
-        table,
-        target,
-        max_categories=max_categories,
-        leakage_features=leakage_features,
-    )
     if folds is None or not (numeric or categorical):
         return []
 
@@ -952,6 +958,14 @@ def _findings_and_steps(
     }
     for item in evidence:
         value = item.value
+        if item.kind == IMPORTANCE_EVIDENCE_KIND:
+            # Shared with the regression recipe: the three findings and the drop
+            # list read identically whichever task produced the ranking.
+            importance_findings, importance_steps = importance_findings_and_steps(item)
+            findings.extend(importance_findings)
+            steps.extend(importance_steps)
+            continue
+
         if item.kind == "classification_target_summary":
             if value["class_count"] < 2 or value["missing_rate"] > 0:
                 findings.append(
@@ -1524,16 +1538,43 @@ def classification_dataset(
                     target_summary=target_summary,
                 )
             )
+            # One screen, shared by the linear probe and the tree-based
+            # importance stage below, so neither can silently train on a column
+            # the other excluded.
+            numeric_features, categorical_features, excluded_features = (
+                _probe_feature_groups(
+                    frame,
+                    table_catalog,
+                    resolved_target,
+                    max_categories=max_categories,
+                    leakage_features=_leakage_feature_names(evidence),
+                )
+            )
             evidence.extend(
                 _classification_probe_evidence(
                     frame,
                     table_catalog,
                     resolved_target,
                     config=config,
-                    max_categories=max_categories,
-                    prior_evidence=evidence,
+                    numeric=numeric_features,
+                    categorical=categorical_features,
+                    excluded=excluded_features,
                 )
             )
+            importance = importance_evidence(
+                frame,
+                table_catalog,
+                resolved_target,
+                frame[resolved_target],
+                task="classification",
+                config=config,
+                numeric_features=numeric_features,
+                categorical_features=categorical_features,
+                warnings=warnings,
+                sampling=sampling,
+            )
+            if importance is not None:
+                evidence.append(importance)
             neighborhood = _neighborhood_disagreement_evidence(
                 frame,
                 table_catalog,

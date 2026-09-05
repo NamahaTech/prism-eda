@@ -75,6 +75,7 @@ This is the whole product thesis in one report. Read it top to bottom:
 | **Identifier-like features** | Columns that label rows rather than explain the target |
 | **High-cardinality risk** | Categorical/text features with too many distinct values |
 | **Leakage-screened probe** | Cross-validated separability of a logistic probe with fold-local preprocessing |
+| **Feature importance** | A random forest ranked by held-out permutation *and* impurity, against a measured sentinel noise floor |
 | **Local class overlap** | Rows whose nearest eligible-feature neighbors commonly have a different label |
 | **Hard examples** | Cross-validated probe errors retained for review |
 | **Split guidance** | Group/time-aware validation advice when `entity_id` or `timestamp` is supplied in the context |
@@ -103,10 +104,79 @@ result = dataset.classification(
 You can also supply the target via [`AnalysisContext`](context-and-config.md)
 instead of the positional argument.
 
+## What drives the label
+
+Alongside the logistic probe, Prism fits a **random forest** on the same
+screened features and ranks them two ways: held-out permutation importance, and
+the forest's own in-sample impurity importance. The mechanics are identical to
+the regression recipe's, and the [regression guide](regression.md#what-drives-the-target)
+walks through them in full — impurity's cardinality bias, the sentinel noise
+floor, and the correlated-pair guard on the drop list all apply here unchanged.
+
+The sample `customers` table is a good demonstration of what the stage does
+*not* do:
+
+```python
+result = pe.load(load_sample()).classification("churned", table="customers")
+print([e.kind for e in result.evidence if e.kind == "feature_importance"])
+print([w.code for w in result.warnings])
+```
+
+```text
+[]
+['feature_importance_no_signal']
+```
+
+Eighty rows leave a twenty-row hold-out, and on it the forest does not beat
+predicting the majority class. So there is no ranking, no section in the report,
+and a warning saying why. A ranking read off a model that cannot predict is an
+ordering of noise, and printing one would be worse than printing nothing.
+
+On a table where the forest *can* predict, the ranking appears:
+
+```python
+from examples.sample_data import feature_signal
+
+frame = feature_signal()
+frame = frame.assign(renewed=frame["renewal_value"] > frame["renewal_value"].median())
+frame = frame.drop(columns=["renewal_value"])
+
+result = pe.load({"renewals": frame}).classification("renewed")
+importance = next(e for e in result.evidence if e.kind == "feature_importance")
+
+print(f"forest={importance.value['model_score']:.3f}  "
+      f"logistic={importance.value['linear_score']:.3f}  "
+      f"majority={importance.value['baseline_score']:.3f}")
+for row in importance.value["features"]:
+    mark = "  (below noise floor)" if row["below_noise_floor"] else ""
+    print(f"  {row['feature']:<15} permutation={row['permutation_importance']:>8.4f}"
+          f"  impurity #{row['impurity_rank']}{mark}")
+```
+
+```text
+forest=0.973  logistic=0.573  majority=0.500
+  tenure_months   permutation=  0.4187  impurity #1
+  plan            permutation=  0.1556  impurity #2
+  ticket_ref      permutation=  0.0000  impurity #3  (below noise floor)
+  sensor_drift    permutation=  0.0000  impurity #4  (below noise floor)
+  seats_billed    permutation=  0.0000  impurity #5  (below noise floor)
+  seats           permutation=  0.0000  impurity #6  (below noise floor)
+  inbound_calls   permutation=  0.0000  impurity #7  (below noise floor)
+  survey_score    permutation=  0.0000  impurity #8  (below noise floor)
+```
+
+Everything is measured as **balanced accuracy**, matching the probe's headline
+metric, and against a majority-class baseline rather than zero — balanced
+accuracy floors at `1/classes`, not at nothing. The forest reaches 0.97 where
+the logistic probe reaches 0.57 on the same split, which is the
+`A tree finds signal the linear probe missed` alert: this label is decided by a
+threshold and an interaction, so a linear model will under-read it.
+
 ## Artifacts and the transformation plan
 
 Classification produces two `metric_table` artifacts — **Class balance** and
-**Feature-target diagnostic signals** — rendered in the HTML report. Local
+**Feature-target diagnostic signals** — rendered in the HTML report, plus the
+**What drives the label** section when the forest earns one. Local
 overlap uses leakage-screened eligible features, median imputation/scaling for
 numeric features, one-hot encoding for categorical features, and a deterministic
 5- or 9-neighbor comparison (quick vs. standard/deep). A row is retained when at

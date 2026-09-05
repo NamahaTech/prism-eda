@@ -873,6 +873,107 @@ def _truncate(text: str, limit: int = 13) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def _importance_text(value: float) -> str:
+    """Enough digits to rank by, without pretending to more precision."""
+    if value == 0:
+        return "0"
+    if abs(value) >= 0.001:
+        return f"{value:.3f}"
+    return f"{value:.1e}"
+
+
+def importance_bars_svg(importance: dict[str, Any]) -> Markup:
+    """Two bars per feature: permutation held out, impurity in sample.
+
+    Drawing only the permutation bar would answer "which columns matter" and
+    hide *why* a wide column ever looked like it mattered. Drawing both puts the
+    disagreement on the page: a long thin bar under a stub thick one is a column
+    the fit leaned on and the held-out rows did not confirm.
+
+    The two measures are in different units — permutation is in the model's own
+    metric, impurity is a share of one — so each is scaled to its own maximum.
+    What the pair compares is shape and rank, never magnitude, and the legend in
+    the template says so. The dashed rule is the noise floor, and it belongs to
+    the permutation bars: a column whose thick bar stops short of it did not beat
+    the manufactured noise the same forest was given.
+    """
+    rows: list[dict[str, Any]] = importance.get("features", [])
+    if not rows:
+        return Markup("")
+    visible = rows[: int(importance.get("chart_feature_count") or len(rows))]
+    floor = float(importance.get("noise_floor") or 0.0)
+
+    width = 680.0
+    row_h = 27.0
+    label_w = 150.0
+    gutter = 74.0
+    track_w = width - label_w - gutter
+    head = 16.0
+    height = len(visible) * row_h + head + 6.0
+
+    perm_values = [
+        max(0.0, float(row["permutation_importance"] or 0.0)) for row in visible
+    ]
+    mdi_values = [max(0.0, float(row["impurity_importance"] or 0.0)) for row in visible]
+    perm_max = max(perm_values + [floor]) or 1.0
+    mdi_max = max(mdi_values) or 1.0
+
+    parts: list[str] = [
+        f'<svg viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" class="chart" '
+        f'aria-label="Feature importance, permutation and impurity">'
+    ]
+
+    # A baseline the bars start from, so a 2px stub still reads as a bar sitting
+    # at zero rather than as a stray mark.
+    parts.append(
+        f'<line class="chart-axis" x1="{label_w:.1f}" y1="{head:.1f}" '
+        f'x2="{label_w:.1f}" y2="{height - 4:.1f}"></line>'
+    )
+    floor_x = label_w + (floor / perm_max) * track_w if perm_max > 0 else label_w
+    if floor > 0:
+        parts.append(
+            f'<line class="chart-floor" x1="{floor_x:.1f}" y1="{head:.1f}" '
+            f'x2="{floor_x:.1f}" y2="{height - 4:.1f}"></line>'
+            f'<text class="chart-floor-label" x="{floor_x + 4:.1f}" '
+            f'y="{head - 5:.1f}">noise floor</text>'
+        )
+
+    for index, row in enumerate(visible):
+        y = head + index * row_h
+        name = str(row["feature"])
+        perm = float(row["permutation_importance"] or 0.0)
+        mdi = float(row["impurity_importance"] or 0.0)
+        quiet = bool(row["below_noise_floor"])
+        perm_w = max(2.0, (max(0.0, perm) / perm_max) * track_w)
+        mdi_w = max(2.0, (max(0.0, mdi) / mdi_max) * track_w)
+        perm_css = "chart-bar-quiet" if quiet else "chart-bar"
+        label_css = "chart-label-quiet" if quiet else "chart-label"
+        note = ""
+        if row.get("cardinality_biased"):
+            note = f" — ranks #{row['impurity_rank']} in sample"
+        elif row.get("has_redundant_partner") and quiet:
+            note = " — has a near-identical partner"
+        title = (
+            f"{name}: permutation {_importance_text(perm)} "
+            f"(held out), impurity {_importance_text(mdi)} "
+            f"(in sample, rank #{row['impurity_rank']}){note}"
+        )
+        parts.append(
+            f"<g><title>{escape(title)}</title>"
+            f'<text class="{label_css}" x="0" y="{y + 13:.1f}">'
+            f"{escape(_truncate(name, 20))}</text>"
+            f'<rect class="{perm_css}" x="{label_w}" y="{y + 4:.1f}" '
+            f'width="{perm_w:.1f}" height="9" rx="2.5"></rect>'
+            f'<rect class="chart-bar-mdi" x="{label_w}" y="{y + 14:.1f}" '
+            f'width="{mdi_w:.1f}" height="4" rx="2"></rect>'
+            f'<text class="chart-label" x="{width - 4:.0f}" y="{y + 13:.1f}" '
+            f'text-anchor="end">{escape(_importance_text(perm))}</text></g>'
+        )
+    parts.append("</svg>")
+    return Markup("".join(parts))
+
+
 def why_bars_svg(contributors: list[dict[str, Any]]) -> Markup:
     """Fixed-lane σ bars: [label] [rail + bar] [σ value in its own gutter].
 

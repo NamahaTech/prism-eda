@@ -6,6 +6,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project intends to follow semantic versioning once its public API
 stabilizes.
 
+## [Unreleased]
+
+### Added
+
+- **Tree-based feature importance** in `regression()` and `classification()`.
+  A random forest is fitted on the same leakage-screened feature set the
+  recipe's linear probe uses, and its features are ranked two ways: held-out
+  **permutation** importance and the forest's own **impurity** importance, with
+  impurity summed from one-hot dummies back onto the source column so both name
+  columns the user actually has. Impurity alone is inflated for high-cardinality
+  columns and would rank a random reference code above a real driver;
+  permutation alone would hide why that happens. Their disagreement is reported.
+- **The noise floor is measured, not chosen.** Three sentinel columns —
+  gaussian, uniform, and a shuffled copy of the widest real feature — ride along
+  in the same fit, and the floor is the best score any of them reached *plus its
+  own run-to-run spread*. A feature clears it only when its own worst repeat
+  still beats that. Sentinels appear in the report's figures table so the reader
+  can see the floor was measured.
+- **No ranking at all from a model with no skill.** When the forest fails to
+  beat a dummy baseline on held-out rows, no importance evidence is produced,
+  the report has no section, and a `feature_importance_no_signal` warning says
+  why. An ordering of noise is worse than nothing.
+- **Three findings**, each guarded to stay silent on clean data: a column
+  ranking high in sample and losing to noise out of it; a forest materially
+  out-scoring the linear probe on the same split (an *alert* — curved data is
+  true, not broken); and one column recovering nearly all of the full model's
+  score, measured by refitting on that column alone rather than inferred from a
+  share of importance.
+- **A drop list in the transformation plan** for columns that lost to noise,
+  which **excludes any column with a near-interchangeable partner** — permutation
+  splits credit between such a pair, so dropping both would lose real signal.
+  Review steps accompany the biased and dominant columns. Nothing is applied.
+- **New report section, *What drives the target***, with paired permutation and
+  impurity bars, the sentinel floor drawn on the same axis as the permutation
+  bars, and every figure behind the chart in an expandable table. Placed after
+  the review rows in the regression report and after the findings in the
+  classification report.
+- **`feature_signal()` sample table**, outside `load_sample()` so no existing
+  captured documentation output changes. Its target is a non-monotonic step in
+  tenure times a plan multiplier, so a straight line reaches R² 0.12 where a
+  forest reaches 0.99; it also carries two high-cardinality decoys, a redundant
+  pair, and two honestly weak columns.
+
+### Changed
+
+- `classification.py` now selects its probe feature groups in the orchestrator
+  and passes them into `_classification_probe_evidence`, so the logistic probe
+  and the importance stage demonstrably share one screen and one exclusion list.
+
 ## [1.0.0] - 2026-08-09
 
 ### Added

@@ -76,7 +76,11 @@ python -m build
   `timeseries_structure.py` (what shape does the series have?),
   `timeseries_events.py` (what happened along the way?), with `timeseries.py`
   orchestrating and `_timeseries.py` holding frequency inference and the
-  raw-versus-regularized distinction described below. Clustering likewise:
+  raw-versus-regularized distinction described below.
+  `feature_importance.py` is shared by the regression *and* classification
+  recipes: it never selects features, it takes the groups the calling recipe
+  already screened, so the columns a tree ranks are provably the columns that
+  recipe's linear probe trained on. Clustering likewise:
   `clustering_readiness.py` (is this even clusterable?),
   `clustering_search.py` (what structure is there, and does it reproduce?),
   `clustering_segments.py` (what are the groups?), with `clustering.py`
@@ -151,6 +155,39 @@ The time-series recipe needed four guards for the same reason:
 - Above a 2% flag rate the series has a changing spread rather than outliers, so
   the list is suppressed and the rate reported.
 
+## Feature importance measures its own noise floor
+
+A tree ranks whatever it is handed, so an importance chart is another output
+that looks equally convincing computed from noise. Two gates stand in front of
+it, and neither is a threshold someone picked:
+
+- The forest must beat a dummy baseline on held-out rows before *any* importance
+  is reported. Below that there is no section and a warning says why. A ranking
+  read off a model that cannot predict is an ordering of noise.
+- "Beat noise" is calibrated by three sentinel columns — gaussian, uniform, and
+  a shuffled copy of the widest real feature — handed to the same fit. The floor
+  is the best any of them reached **plus its own run-to-run spread**, and a
+  feature clears it only when its own worst repeat still beats that. The spread
+  belongs on both sides: a bare mean of three draws is itself noisy, and without
+  it a random three-level categorical cleared the floor about as often as not.
+
+Two measures, not one, and for a reason. Impurity importance is inflated for
+high-cardinality columns; permutation on held-out rows is not. Reporting only
+impurity ranks a random reference code above a real driver. What the two cannot
+do is separate a decoy from a real driver masked by a stronger feature — both
+land at a similar multiple of the sentinels' impurity — so that finding reports
+the *measurement* (high in sample, beaten by noise out of it) and names masking
+as a possible cause rather than asserting cardinality.
+
+Three related rules. Share of importance is not a soft-leak detector: on the
+clean `y = 2*x1 + 3*x2` frame the coefficients alone give x1 four times x2's
+importance, and a share-based rule fired on it — the suite's clean-data test
+caught that. The claim is measured instead, by refitting the forest on the top
+feature alone and asking whether it recovers nearly all of the full model. And
+permutation splits credit between correlated columns, so a column with a
+near-interchangeable partner never reaches the drop list. Importance is rounded
+before banking (`_stable`) for the same reason the clustering metrics are.
+
 ## Clustering gates its own most persuasive output
 
 A segment profile — sizes, distinguishing features, example rows, a scatter of
@@ -211,6 +248,19 @@ onto the grid.
   pixels must never reach a model provider.
 - Regression probes are Ridge and Huber only. A weak probe means a *linear*
   model finds little, not that the target is unlearnable.
+- Feature importance uses a random forest and one deterministic hold-out split,
+  not cross-validation, because permutation cost scales with rows, features, and
+  repeats together. It describes that forest on those rows.
+- The forest is required by the choice to report impurity alongside permutation:
+  `HistGradientBoosting` exposes no `feature_importances_`. Do not swap it
+  without dropping that half of the finding.
+- The impurity-bias finding only fires when the real signal is weak enough for a
+  wide column to reach the top of the impurity ranking. On a strong model
+  impurity concentrates on the real drivers and the finding stays quiet, which
+  is correct.
+- Permutation splits credit between correlated features, so two interchangeable
+  columns both score near zero. The drop list excludes them; nothing else
+  compensates for it.
 - Regression leverage and Cook's distance come from an OLS fit on the screened
   design, capped at 30 features, and inherit its assumptions.
 - Regression censoring is inferred from repeated values, so a genuinely popular

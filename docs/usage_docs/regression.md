@@ -138,6 +138,128 @@ features will not fix it; the review rows will.
 > property of your dataset — it is what one estimator left over on one split.
 > The report says so on the page.
 
+## What drives the target
+
+Alongside the linear probes, Prism fits a **random forest** on the same screened
+features and ranks them two ways. The ranking is what you take into a feature
+engineering pass.
+
+The regression fixture is linear by construction, so this example uses
+`feature_signal()` — a table whose target is a non-monotonic step in tenure,
+multiplied by plan:
+
+```python
+import prism_eda as pe
+from examples.sample_data import feature_signal
+
+result = pe.load({"feature_signal": feature_signal()}).regression("renewal_value")
+importance = next(e for e in result.evidence if e.kind == "feature_importance")
+
+print(f"forest R²={importance.value['model_score']:.3f}  "
+      f"ridge R²={importance.value['linear_score']:.3f}  "
+      f"floor={importance.value['noise_floor']:.2e}")
+for row in importance.value["features"]:
+    mark = "  (below noise floor)" if row["below_noise_floor"] else ""
+    print(f"  {row['feature']:<15} permutation={row['permutation_importance']:>9.4f}  "
+          f"impurity #{row['impurity_rank']}{mark}")
+```
+
+```text
+forest R²=0.988  ridge R²=0.115  floor=2.19e-04
+  tenure_months   permutation=   1.6919  impurity #1
+  plan            permutation=   0.6315  impurity #2
+  inbound_calls   permutation=   0.0001  impurity #6  (below noise floor)
+  seats           permutation=   0.0001  impurity #7  (below noise floor)
+  survey_score    permutation=   0.0000  impurity #8  (below noise floor)
+  ticket_ref      permutation=  -0.0000  impurity #4  (below noise floor)
+  seats_billed    permutation=  -0.0001  impurity #5  (below noise floor)
+  sensor_drift    permutation=  -0.0001  impurity #3  (below noise floor)
+```
+
+### Why two measures
+
+**Impurity importance** (MDI) is free — it falls out of the fitted forest — and
+it is systematically inflated for columns with many distinct values, because
+many distinct values mean many split points to get lucky on. Notice
+`sensor_drift` and `ticket_ref` above: pure noise by construction, yet they
+outrank every honest weak column on impurity.
+
+**Permutation importance** shuffles one column on held-out rows and measures
+what the model loses. It has no cardinality bias, and it is the number to read.
+
+Reporting only impurity would rank a random reference code above a real driver.
+Reporting only permutation would hide *why* that happens. When a column ranks
+near the top by impurity and still loses to noise when permuted, Prism reports
+it — stating the measurement, not asserting a cause, because a decoy and a real
+driver masked by a stronger one look identical here.
+
+### The noise floor is measured, not assumed
+
+Every feature gets a nonzero importance from a tree, so "which of these beat
+noise" needs an answer from the data rather than a threshold someone picked.
+Prism hands the same forest three manufactured columns alongside the real ones:
+
+```python
+for sentinel in importance.value["sentinels"]:
+    print(f"  {sentinel['kind']:<16} {sentinel['permutation_importance']:>12.2e}"
+          f"  ± {sentinel['permutation_std']:.2e}"
+          f"  {sentinel['source'] or ''}")
+```
+
+```text
+  gaussian_noise      -6.08e-05  ± 1.25e-04
+  uniform_noise        1.07e-04  ± 1.12e-04
+  shuffled_copy       -3.01e-04  ± 1.10e-04  sensor_drift
+```
+
+The third is the one that matters: a shuffled copy of the widest real column, so
+it carries a real column's spread and number of distinct values and none of its
+information. The floor is the best any sentinel reached **plus its own
+run-to-run spread**, and a feature clears it only when its own worst repeat
+still beats that. Both sides use the spread because a bare mean of three draws
+is itself a noisy number — without that, a random three-level categorical clears
+the floor about as often as not.
+
+### When the tree beats the line
+
+```python
+finding = next(f for f in result.findings
+               if f.title == "A tree finds signal the linear probe missed")
+print(finding.summary)
+print("→", finding.recommendation)
+```
+
+```text
+A random forest reaches R² 0.99 on held-out rows where the ridge probe reaches 0.12, on the same split and the same features. The relationship with the target is curved, threshold-like, or driven by interactions.
+→ Before reaching for a linear model, engineer tenure_months, plan: buckets, splines, or explicit interaction terms. Or use a model that fits curves natively.
+```
+
+The comparator is refit on the *same* hold-out split rather than reusing the
+cross-validated probe, so the two numbers are measured the same way on the same
+rows. This is an **alert**, not an issue: curved data is true, not broken.
+
+### It feeds the plan, not just the page
+
+Columns that lost to noise become a drop list — a recommendation for the next
+iteration, never an automatic change:
+
+```python
+for step in result.transformation_plan.steps:
+    if step.operation == "drop_uninformative_features":
+        print(step.columns)
+        print(step.rationale)
+```
+
+```text
+('inbound_calls', 'survey_score', 'ticket_ref', 'sensor_drift')
+Each scored no better on held-out rows than a manufactured noise column given to the same model, against a forest that reaches R² 0.99. seats, seats_billed also scored below the floor but are excluded: each has a near-interchangeable partner, and permutation splits credit between such a pair, so dropping both would lose real signal.
+```
+
+That exclusion is the important part. `seats` and `seats_billed` are
+near-identical, so permuting either leaves the other for the model to read and
+both score near zero — while the information they share is genuinely useful.
+A column with a redundant partner never reaches the drop list.
+
 ## Rows to review
 
 ```python
@@ -239,6 +361,7 @@ A finding is raised only when the scaled ratio clears 1.5.
 | Redundancy | Interchangeable pairs, plus VIF and the design condition number |
 | Leakage | Affine copies of the target, near-perfect univariate fit, shared name tokens |
 | Probes | Cross-validated Ridge and Huber against a median baseline |
+| Importance | A random forest ranked by held-out permutation *and* impurity, against a measured sentinel noise floor |
 | Residuals | Shape, a normality *distance* (never a p-value), spread across the fitted range |
 | Bias | Mean residual per fitted decile — over/under-prediction the average hides |
 | Influence | Leverage, Cook's distance, and a ranked review list |
@@ -269,10 +392,12 @@ result.to_html("regression-readiness.html")
 ```
 
 A single offline file. Sections, in the order the report argues them: findings,
-alerts, **rows to review**, **residuals** (residual-vs-fitted with a spread
-band, average error by predicted range, and the residual distribution),
-**target shape** (as recorded, beside the best transform), then the reference
-tables — probe scores, feature signal, and VIF.
+alerts, **rows to review**, **what drives the target** (paired permutation and
+impurity bars with the sentinel floor marked, plus every figure behind them),
+**residuals** (residual-vs-fitted with a spread band, average error by predicted
+range, and the residual distribution), **target shape** (as recorded, beside the
+best transform), then the reference tables — probe scores, feature signal, and
+VIF.
 
 In the residual plot, a handful of enormous residuals is exactly what the chart
 exists to show, so the axis is set from a robust range and the extremes are
@@ -292,6 +417,18 @@ everything else into an unreadable strip — or being dropped.
   looks identical to a cap — confirm against how the column is recorded.
 - Rows with a missing target are excluded from the probes and counted as an
   issue, never imputed.
+- Feature importance is reported only when the forest beats a dummy baseline on
+  held-out rows. When it does not, there is no section and a warning says why:
+  a ranking read off a model that cannot predict is an ordering of noise.
+- Importance describes *that forest on those rows*. A different model class can
+  rank the same columns differently, and permutation splits credit between two
+  columns that carry the same information.
+- The impurity-bias finding needs the real signal to be weak enough for a wide
+  column to reach the top of the impurity ranking. On a strong model impurity
+  concentrates on the real drivers and the finding correctly stays quiet.
+- The stage has its own row cap — 25k/50k/100k by mode — and its own
+  `SamplingRecord` when it bites, because permutation cost scales with rows,
+  features, *and* repeats.
 
 ## See also
 

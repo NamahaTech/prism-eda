@@ -107,6 +107,13 @@ JavaScript, or an AI provider.
   ranges : running a robust probe alongside a conventional one, because their
   disagreement tells you whether the features are weak or a few rows are
   distorting the fit.
+- Rank the features behind a regression or classification target with a tree,
+  measured two ways — held-out permutation *and* the forest's own impurity —
+  because impurity alone would put a wide random code above a real driver, and
+  their disagreement is itself the finding. The bar for "beats noise" is
+  measured, not chosen: manufactured noise columns ride along in the same fit
+  and set the floor. When the forest cannot beat a dummy baseline there is no
+  ranking at all.
 - Profile image datasets for decode failures, dimensions, formats, EXIF,
   duplicates, near-duplicates, split leakage, label conflicts, quality flags,
   loader traps, outliers, and label-level imbalance.

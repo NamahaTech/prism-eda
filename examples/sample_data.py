@@ -25,8 +25,11 @@ analysis recipes have something meaningful (but not noisy) to surface:
 * ``health_indicators`` is the shared-grain fixture: four peer indicator tables
   keyed by ``Location + Period`` with no identifier column anywhere, one of them
   at a finer grain.
+* ``feature_signal`` is the feature-importance fixture: a target that is a step
+  function times a plan multiplier (so a tree beats a linear probe), two
+  high-cardinality decoys, a redundant pair, and two honestly weak columns.
 
-The last four are deliberately **not** part of :func:`load_sample`. The snippets
+The last five are deliberately **not** part of :func:`load_sample`. The snippets
 in ``docs/usage_docs/`` quote captured output, and adding a table to the shared
 mapping would change the row, column, and table counts every existing example
 prints. Load them on their own instead::
@@ -422,6 +425,105 @@ def daily_orders_single() -> pd.DataFrame:
 #: ``name -> (annual_spend, visits_per_month, tenure_days, share)``. These are
 #: the centres the data is generated around; nothing in the table records which
 #: segment a row came from, which is the point.
+#: Rows in the feature-importance sample.
+N_SIGNALS = 900
+
+
+def feature_signal() -> pd.DataFrame:
+    """Return the seeded ``feature_signal`` table used by the importance guide.
+
+    ``subscriptions`` is linear-plus-noise by construction, which is exactly
+    what a linear probe handles well — so it can never demonstrate a tree
+    finding something the probe missed. This table is built for the opposite
+    case, and for the two ways an importance ranking misleads.
+
+    The target ``renewal_value`` is a **non-monotonic step in tenure multiplied
+    by plan**: renewals climb through the first three years and fall away after
+    them. A monotonic step would not do — a straight line tracks one of those
+    well enough to reach R² 0.84, and the interesting gap disappears. Rising
+    then falling, a line has almost nothing to fit, while a forest recovers
+    nearly all of it: that gap is what the tree-versus-linear finding reports.
+
+    Around that signal sit three traps:
+
+    * ``ticket_ref`` is a random 40-level code and ``sensor_drift`` a
+      continuous random draw. Both are pure noise, yet both outrank every honest
+      weak column on *impurity*, because many distinct values mean many split
+      points to get lucky on. A held-out permutation measurement puts both below
+      the noise floor. They do not climb far enough to trip the impurity-bias
+      finding, and should not: that needs a model whose real signal is weak
+      enough for decoys to reach the top of the impurity ranking, which is the
+      opposite of what this table is built to show. Forty levels, not sixty:
+      past the recipe's ``max_categories`` a categorical is dropped before any
+      model sees it, and a decoy that never reaches the ranking shows nothing.
+    * ``seats`` and ``seats_billed`` are near-identical. Permuting either
+      leaves the other for the model to read, so both score near zero while the
+      information they share is real — which is why the drop list must never
+      contain a column that has a redundant partner.
+    * ``survey_score`` and ``inbound_calls`` are honest, weak, unrelated noise
+      with ordinary cardinality: the columns a drop list should actually name.
+
+    Nothing here is a leak. The 98%-explained-variance screen stays quiet, and
+    should: the point of this fixture is what happens *after* leakage screening.
+
+    Columns:
+        account_id: Unique account key (an identifier, excluded from features).
+        tenure_months: Account age, 1..60. Drives the target through a step.
+        plan: ``"basic"`` or ``"pro"``. Multiplies the step's height.
+        seats: Purchased seats.
+        seats_billed: Near-copy of ``seats``.
+        ticket_ref: Random 40-level code — a high-cardinality decoy.
+        sensor_drift: Continuous random draw — a wide numeric decoy.
+        survey_score: Weak noise, 1..5.
+        inbound_calls: Weak noise, Poisson.
+        renewal_value: The target — ``step(tenure_months) * plan_multiplier``.
+    """
+    rng = np.random.default_rng(SEED)
+    n = N_SIGNALS
+
+    tenure_months = rng.integers(1, 61, size=n)
+    plan = rng.choice(["basic", "pro"], size=n, p=[0.62, 0.38])
+    seats = np.exp(rng.normal(2.6, 0.7, size=n)).round().clip(1, None).astype(int)
+    seats_billed = (
+        (seats + rng.normal(0.0, 0.4, size=n)).round().clip(1, None).astype(int)
+    )
+
+    # The decoys. Neither touches the target; both are wide enough to collect
+    # impurity that a permutation measurement then takes back.
+    ticket_ref = np.array([f"TK-{value:04d}" for value in rng.integers(0, 40, size=n)])
+    sensor_drift = rng.normal(0.0, 250.0, size=n)
+
+    # Honest weak noise, at ordinary cardinality — the drop-list candidates.
+    survey_score = rng.integers(1, 6, size=n)
+    inbound_calls = rng.poisson(3.0, size=n)
+
+    # Up, then down. Renewals build through the first three years and fall away
+    # afterwards, so the best straight line through tenure is nearly flat — and
+    # a tree splits the two regimes apart without being told they exist.
+    step = np.select(
+        [tenure_months <= 12, tenure_months <= 36],
+        [110.0, 540.0],
+        default=210.0,
+    )
+    multiplier = np.where(plan == "pro", 1.85, 1.0)
+    renewal_value = step * multiplier + rng.normal(0.0, 28.0, size=n)
+
+    return pd.DataFrame(
+        {
+            "account_id": np.arange(90_000, 90_000 + n),
+            "tenure_months": tenure_months,
+            "plan": plan,
+            "seats": seats,
+            "seats_billed": seats_billed,
+            "ticket_ref": ticket_ref,
+            "sensor_drift": sensor_drift,
+            "survey_score": survey_score,
+            "inbound_calls": inbound_calls,
+            "renewal_value": renewal_value.round(2),
+        }
+    )
+
+
 SEGMENT_CENTRES = {
     "budget": (420.0, 1.5, 240.0, 0.34),
     "regular": (1_850.0, 6.0, 1_150.0, 0.30),

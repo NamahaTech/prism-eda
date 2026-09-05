@@ -225,6 +225,12 @@
     .chart-axis { stroke: var(--line); stroke-width: 1; }
     .chart-bar { fill: var(--taupe); }
     .chart-bar-flagged { fill: var(--high); }
+    .chart-bar-quiet { fill: var(--line); }
+    .chart-bar-mdi { fill: var(--ink-3); opacity: .45; }
+    .chart-label-quiet { fill: var(--ink-3); font-size: 10.5px; font-family: var(--mono); opacity: .7; }
+    .chart-floor { stroke: var(--ink-3); stroke-width: 1.2; stroke-dasharray: 4 3; }
+    .chart-floor-label { fill: var(--ink-3); font-size: 10px; font-family: var(--mono); }
+    .sentinel-row td { color: var(--ink-3); background: var(--surface); }
     .chart-box { fill: rgba(51,112,122,.13); stroke: var(--accent); stroke-width: 1; }
     .chart-whisker { stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
     .chart-median { stroke: var(--accent-ink); stroke-width: 2; }
@@ -922,6 +928,72 @@
       </table>
     </div>
     <p class="chart-note">Residual σ for this fit is {{ item.value.residual_std | format_value }}. Cook's distance is screened at the 4/n convention — a rule of thumb for “worth opening”, not a test of significance.</p>
+  </section>
+  {% endfor %}
+
+  <!-- ============ WHAT DRIVES THE TARGET ============ -->
+  {% for item in result.evidence if item.kind == 'feature_importance' %}
+  <section class="wide"{% if loop.first %} id="section-drivers"{% endif %}>
+    <div class="sec-head">
+      <div class="sec-idx">{{ sections.number('drivers') }}</div>
+      <div class="sec-title">
+        <h2>{{ sections.label('drivers') }}</h2>
+        <p>A random forest of {{ item.value.tree_count }} trees, fitted on {{ item.value.train_row_count }} rows and measured on {{ item.value.holdout_row_count }} it never saw. It reaches {% if item.value.metric == 'r2' %}R&sup2;{% else %}balanced accuracy{% endif %} {{ item.value.model_score | format_value }} against {{ item.value.baseline_score | format_value }} for a {{ item.value.baseline_model | replace('_', ' ') }}{% if item.value.linear_score is not none %}, and {{ item.value.linear_score | format_value }} for the {{ item.value.linear_model | replace('_', ' ') }} probe on the same split{% endif %}. Nothing below is reported unless that model predicts.</p>
+      </div>
+    </div>
+
+    {{ item.value | importance_bars_svg }}
+
+    <div class="chart-legend">
+      <span><svg width="22" height="10" aria-hidden="true"><rect class="chart-bar" width="22" height="10" rx="3"></rect></svg> permutation, on held-out rows</span>
+      <span><svg width="22" height="10" aria-hidden="true"><rect class="chart-bar-mdi" y="3" width="22" height="5" rx="2.5"></rect></svg> impurity, in sample</span>
+      <span><svg width="22" height="10" aria-hidden="true"><rect class="chart-bar-quiet" width="22" height="10" rx="3"></rect></svg> did not beat noise</span>
+      {% if item.value.noise_floor > 0 %}
+      <span><svg width="22" height="10" aria-hidden="true"><line class="chart-floor" x1="11" y1="0" x2="11" y2="10"></line></svg> noise floor</span>
+      {% endif %}
+    </div>
+
+    <p class="chart-note">The two bars are in different units and each is scaled to its own maximum, so compare their <em>shape</em>, never their length against each other. A long thin bar under a short thick one is a column this fit leaned on that the held-out rows did not confirm.</p>
+
+    <p class="chart-note">The floor is measured, not assumed: {{ item.value.sentinels | length }} manufactured noise columns were handed to the same forest alongside the real features{% for sentinel in item.value.sentinels %}{% if sentinel.source %} — one of them a shuffled copy of <b>{{ sentinel.source }}</b>, so the floor carries a real column's spread and number of distinct values and none of its information{% endif %}{% endfor %}. The floor is the best score any of them reached plus its own run-to-run spread, {{ item.value.noise_floor | format_value }} &mdash; and a real column clears it only when its own worst repeat still beats that.{% if item.value.below_noise_floor_count %} {{ item.value.below_noise_floor_count }} of {{ item.value.feature_count }} feature{% if item.value.feature_count != 1 %}s{% endif %} did not clear it.{% endif %}</p>
+
+    {% if item.value.feature_count > item.value.chart_feature_count %}
+    <details class="finding-detail">
+      <summary>All {{ item.value.feature_count }} features</summary>
+    {% else %}
+    <details class="finding-detail" open>
+      <summary>Every figure behind the chart</summary>
+    {% endif %}
+      <div class="tbl-wrap" style="margin-top: 14px">
+        <table>
+          <thead><tr><th>Feature</th><th>Permutation</th><th>&plusmn;</th><th>Impurity</th><th>Impurity rank</th><th>Verdict</th></tr></thead>
+          <tbody>
+            {% for row in item.value.features %}
+            <tr>
+              <td>{{ row.feature }}</td>
+              <td>{{ row.permutation_importance | format_value }}</td>
+              <td>{{ row.permutation_std | format_value }}</td>
+              <td>{{ row.impurity_importance | format_value }}</td>
+              <td>#{{ row.impurity_rank }}</td>
+              <td>{% if row.cardinality_biased %}High in sample, beaten by noise out of it{% elif row.below_noise_floor and row.has_redundant_partner %}Below the floor, but shares its information with another column{% elif row.below_noise_floor %}Did not beat noise{% else %}Carries signal{% endif %}</td>
+            </tr>
+            {% endfor %}
+            {% for sentinel in item.value.sentinels %}
+            <tr class="sentinel-row">
+              <td><em>{{ sentinel.kind | replace('_', ' ') }}{% if sentinel.source %} of {{ sentinel.source }}{% endif %}</em></td>
+              <td>{{ sentinel.permutation_importance | format_value }}</td>
+              <td>&mdash;</td>
+              <td>{{ sentinel.impurity_importance | format_value }}</td>
+              <td>&mdash;</td>
+              <td><em>sentinel &mdash; manufactured noise</em></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <p class="chart-note">Importance describes this forest on these rows, not the dataset. A different model class can rank these columns differently, and two columns that carry the same information split the credit between them &mdash; which is why neither of such a pair is ever recommended for removal.</p>
   </section>
   {% endfor %}
 

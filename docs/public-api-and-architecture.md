@@ -472,6 +472,8 @@ src/prism_eda/
     regression_target.py    # target shape, censoring spikes, transformations
     regression_signal.py    # association, redundancy/VIF, leakage screen
     regression_probe.py     # probes, residuals, influence, review rows
+    feature_importance.py   # forest importance for regression + classification:
+                            # permutation vs impurity, sentinel noise floor
     _timeseries.py          # frequency inference, raw vs regularized series
     timeseries.py           # orchestration: horizon, validation plan, verdict
     timeseries_index.py     # frequency, gaps, duplicates, panel coverage

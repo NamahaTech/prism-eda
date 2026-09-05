@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-08-04 (regression readiness, time series, clustering)
+Last updated: 2026-09-05 (tree-based feature importance)
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -93,6 +93,8 @@ removed, or materially re-scoped.
   high-cardinality risk; high-cardinality risk limited to categorical/text
 - Leakage-screened logistic-regression diagnostic probe with fold-local
   preprocessing and cross-validated separability metrics
+- Tree-based feature importance over the same screened feature set (see
+  **Feature importance** below)
 - Cross-validated hard-example candidates from probe errors
 - Leakage-screened nearest-neighbor class-overlap candidates, with deterministic
   local label-disagreement review rows
@@ -115,6 +117,8 @@ removed, or materially re-scoped.
 - Leakage-screened cross-validated Ridge and Huber probes against a median
   baseline; the robust-versus-conventional gap on the typical row distinguishes
   weak features from a few distorting rows
+- Tree-based feature importance over the same screened feature set (see
+  **Feature importance** below)
 - Residual shape with a KS *distance* and no p-value; binned residual spread with
   Breusch-Pagan; conditional bias per fitted decile
 - Scale-normalized, peer-relative subgroup error concentration
@@ -125,6 +129,35 @@ removed, or materially re-scoped.
 - Report sections (rows to review, residuals, target shape) plus new
   residual-scatter and diverging conditional-bias charts
 - `assess_regression` registered in the assisted-analysis tool registry
+
+### Feature importance
+
+Shared by the regression and classification recipes (`analysis/feature_importance.py`),
+running on the feature groups those recipes already screened for leaks,
+identifiers, and over-wide categoricals.
+
+- Random forest fitted on a deterministic 75/25 hold-out of the screened
+  features, with the recipe's own linear probe refit on the identical split so
+  the two scores are comparable
+- Importance measured twice: held-out permutation (no cardinality bias) and the
+  forest's own impurity, with impurity summed from one-hot dummies back onto the
+  source column so both name columns the user actually has
+- Sentinel-calibrated noise floor: three manufactured noise columns — gaussian,
+  uniform, and a shuffled copy of the widest real feature — ride along in the
+  same fit, and the floor is the best any reached *plus its own spread*
+- Skill gate: no importance is reported at all when the forest fails to beat a
+  dummy baseline, recorded as a `feature_importance_no_signal` warning
+- Findings: impurity/permutation disagreement, a forest materially out-scoring
+  the linear probe (an alert — curved data is true, not broken), and a single
+  column recovering nearly all of the full model's score, measured by refitting
+  on that column alone
+- Transformation plan: a drop list for below-floor columns that **excludes any
+  column with a near-interchangeable partner**, since permutation splits credit
+  between such a pair, plus review steps for the biased and dominant columns
+- Own row caps (25k/50k/100k by mode) and permutation repeats (3/5/10), with a
+  `SamplingRecord` when the cap bites
+- Report section *What drives the target* with paired permutation/impurity bars,
+  the floor marked, and every figure behind the chart in an expandable table
 
 ### Time series
 
@@ -296,6 +329,8 @@ removed, or materially re-scoped.
 - Interaction screening, so a group-specific slope is distinguished from a
   group-specific intercept
 - Partial-dependence style summaries for the strongest non-linear features
+- Grouped permutation importance, so a set of correlated columns is scored
+  together rather than splitting credit and each looking useless
 
 ### Image dataset improvements
 
