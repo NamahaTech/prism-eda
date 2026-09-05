@@ -19,6 +19,11 @@
  <a href="https://pepy.tech/projects/prism-eda"><img src="https://api.pepy.tech/badge/prism-eda" alt="Downloads"></a>
 </p>
 
+---
+<h3> Documentation : https://prism-eda.namahatech.com/ </h3>
+<h3> View on Pypi : https://pypi.org/project/prism-eda/ </h3>
+
+---------
 ## What is Prism EDA?
 
 Prism-eda is a modular python library built for EDA (exploratory data analysis) across tabular and image datasets. Using Prism-eda, a dataset can be profiled, explored as a
