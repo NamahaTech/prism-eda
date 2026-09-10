@@ -28,6 +28,8 @@ from prism_eda.config import (
 )
 from prism_eda.events import EventCallback
 from prism_eda.exceptions import AnalysisError
+from prism_eda.features.featureset import FeatureSet
+from prism_eda.features.results import FeatureRun
 from prism_eda.results import AnalysisResult
 
 
@@ -483,6 +485,38 @@ class Dataset:
             table=table,
             features=features,
         )
+
+    def features(
+        self,
+        feature_set: FeatureSet,
+        *,
+        table: str | None = None,
+        verify: bool = True,
+        verify_entities: int = 200,
+        rtol: float = 1e-9,
+        random_seed: int = 42,
+    ) -> FeatureRun:
+        """Plan, verify and run a feature set over one of this dataset's tables.
+
+        Returns the engineered features together with the report about them.
+        This does not go through :meth:`analyze` because it does not produce an
+        ``AnalysisResult``: it engineers data as well as describing it, so it
+        follows :meth:`compare` in having its own result type.
+        """
+        plan = feature_set.plan(
+            self,
+            table=table,
+            verify=verify,
+            verify_entities=verify_entities,
+            rtol=rtol,
+            random_seed=random_seed,
+        )
+        frame = (
+            self._tables[table]
+            if table is not None
+            else next(iter(self._tables.values()))
+        )
+        return plan.run(frame)
 
     def compare(
         self,

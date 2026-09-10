@@ -20,6 +20,9 @@ later plan and explain analysis, but it does not invent numeric truth.
 - Optional AI-assisted investigation via the `ai-gemini` extra
   (`prism_eda.assisted_analysis`): an LLM plans over the deterministic tools only
 - All eight prism-rays on the README roadmap now ship
+- `prism_eda.features`: a feature-engineering planner (batch path). Modular
+  feature functions, traced rather than parsed, executed with shared physical
+  artifacts, verified against an unoptimised oracle on every build
 
 See [implementation status](docs/implementation-status.md) for the exact ledger.
 
@@ -86,6 +89,18 @@ python -m build
   `clustering_segments.py` (what are the groups?), with `clustering.py`
   orchestrating the gate described below and `_clustering.py` holding feature
   admission and the matrix build.
+- `features/`: the feature planner. A second pillar alongside the analysis
+  recipes rather than a ninth prism-ray, because it produces engineered data as
+  well as an account of it, and so follows `Dataset.compare()` in returning its
+  own result type instead of an `AnalysisResult`. Split by stage: `algebra.py`
+  (what an author writes), `ir.py` (the immutable nodes and the structural hash
+  that makes common-subexpression elimination automatic), `tracing.py` (running
+  a feature function with symbolic proxies to record it, never parsing its
+  source), `featureset.py` (the session and declaration order), `planner`-side
+  execution in `executors/` (`reference.py` is the slow oracle,
+  `pandas_exec.py` the vectorised one), `verify.py` (planner soundness and
+  migration fidelity, deliberately separate claims), `contract.py`,
+  `diagnostics.py`, and `results.py`. The core never imports it.
 - `evidence/`: provider-neutral evidence and finding contracts.
 - `artifacts.py`: structured report artifacts such as schema graphs.
 - `reporting/`: the shared self-contained renderer. `sections.py` owns which

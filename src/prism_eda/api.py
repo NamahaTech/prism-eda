@@ -15,6 +15,8 @@ from prism_eda.config import (
 )
 from prism_eda.dataset import Dataset
 from prism_eda.events import EventCallback
+from prism_eda.features.featureset import FeatureSet
+from prism_eda.features.results import FeatureRun
 from prism_eda.image_dataset import ImageDataset, ImageSource
 from prism_eda.results import AnalysisResult
 
@@ -76,6 +78,40 @@ def profile(
         random_seed=random_seed,
         allow_insufficient_evidence=allow_insufficient_evidence,
         detail=detail,
+    )
+
+
+def features(
+    source: DataSource | Dataset,
+    feature_set: FeatureSet,
+    *,
+    table: str | None = None,
+    verify: bool = True,
+    verify_entities: int = 200,
+    rtol: float = 1e-9,
+    random_seed: int = 42,
+    recursive: bool = False,
+    include: Sequence[str] | None = None,
+    exclude: Sequence[str] | None = None,
+    names: Mapping[str, str] | None = None,
+    read_options: Mapping[str, Any] | None = None,
+) -> FeatureRun:
+    """Load a source and run a feature set over it in one call."""
+    dataset = load(
+        source,
+        recursive=recursive,
+        include=include,
+        exclude=exclude,
+        names=names,
+        read_options=read_options,
+    )
+    return dataset.features(
+        feature_set,
+        table=table,
+        verify=verify,
+        verify_entities=verify_entities,
+        rtol=rtol,
+        random_seed=random_seed,
     )
 
 

@@ -10,6 +10,69 @@ stabilizes.
 
 ### Added
 
+- **`prism_eda.features`: a feature-engineering planner.** Feature code forces
+  a choice between modularity and speed — write each feature as its own
+  function and every function re-scans the frame; hand-fuse them and you lose
+  the modularity. This module makes the trade unnecessary: features stay
+  separate and a planner shares the expensive work between them.
+- **Feature functions are traced, not parsed.** Each is executed once at plan
+  time with symbolic proxies, recording an exact expression tree. Parsing
+  pandas source was rejected because sharing a grouper between two features
+  requires *proving* they group identically, which is free from a recorded
+  operation and unsound to extract from arbitrary Python. The cost is that
+  data-dependent branching cannot work, and it raises with an explanation
+  pointing at `@fs.opaque`; schema-dependent branching, which is what real
+  feature code does, is supported.
+- **Common-subexpression elimination falls out of construction.** A node's id
+  hashes its operation, parameters and its children's ids, so two features that
+  reached the same subexpression reach the same node with no analysis pass.
+- **Vectorised across entities, which is where the time is.** The planner does
+  not speed up the per-entity loop, it removes it, and builds each expensive
+  physical artifact once — the sort order, the grouper, each normalised column,
+  each window mask. **112x** against the loop on 20k accounts with 15 features,
+  every value identical. Aggregate fusion on top of a shared grouper was
+  measured at 1.05x and elementwise fusion made things *slower*, so neither is
+  attempted.
+- **Point-in-time correctness via `reference_time=`.** Without it a lookback
+  ends at the entity's newest row, which is right at serving time and quietly
+  wrong for a backfill. With it, every window including `all` ends at the
+  decision moment, and prism reports rows the extract should never have
+  contained.
+- **Verification on every build, raising on disagreement.** The same features
+  are computed a second way — one entity at a time, no sharing — and compared
+  at a relative `1e-9`. A planner that silently returns different numbers than
+  the code it replaced is worse than no planner. Entities are sampled, never
+  rows: a feature reads an entity's whole history, so dropping rows would
+  change the computation rather than sample it.
+- **`verify_against(fn)` for migration**, a deliberately separate claim: a plan
+  agreeing with its own reference executor says nothing about whether it agrees
+  with the hand-written code it replaces.
+- **An exportable contract** carrying declared output order, per-feature
+  defaults, and the source columns read — derived from the expression tree, so
+  the declared read set cannot drift from what the code touches. A permuted
+  output frame is a contract violation, because a model consuming a vector by
+  position cannot detect one.
+- **A feature-plan report** with duplicate-definition, redundancy,
+  constant-feature, fallback, target-leakage, future-row and cost-concentration
+  detectors. Each was calibrated against a clean feature set and produces
+  nothing on it.
+- **Cost is measured; the cost finding is not.** The timing-based version of
+  that detector fired on clean data the first time the suite ran under load.
+  Wall-clock time is a property of the machine, so it is reported as run
+  metadata and never banked as evidence — an evidence id hashes its value, and
+  a duration in there makes lineage unreproducible. The finding uses static
+  operation weights instead.
+- **`account_transactions()` in `examples/sample_data.py`**, with 30% of rows
+  falling after the decision they are attached to, repeating amounts, clustered
+  failures and single-transaction accounts — so the guide's claims are asserted
+  against it rather than described.
+
+### Changed
+
+- The report stylesheet moved into a shared `_report_styles.html` partial so
+  report templates cannot drift into looking like different products. The
+  existing report renders byte-identically apart from an added CSS comment.
+
 - **Tree-based feature importance** in `regression()` and `classification()`.
   A random forest is fitted on the same leakage-screened feature set the
   recipe's linear probe uses, and its features are ranked two ways: held-out

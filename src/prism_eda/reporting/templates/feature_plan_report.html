@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ result.entity }} features — Prism EDA</title>
+  {% if favicon_uri %}
+  <link rel="icon" type="image/png" href="{{ favicon_uri }}">
+  {% endif %}
+  {% include "_report_styles.html" %}
+</head>
+<body>
+  {% set issues = result.issues %}
+  {% set observations = result.observations %}
+
+  <!-- ============ MASTHEAD ============ -->
+  <header class="page mast">
+    <div class="mast-row">
+      <div class="brand">
+        {% if logo_uri %}<img class="brand-mark" src="{{ logo_uri }}" alt="" width="34" height="34">{% endif %}
+        <div>
+          <div class="brand-name">Prism<span style="color:var(--ink-3);font-weight:500">EDA</span></div>
+          <div class="brand-sub">Exploratory data analysis</div>
+        </div>
+      </div>
+      <div class="recipe-pill" aria-label="Report recipe">Feature plan</div>
+    </div>
+    <div class="mast-meta">
+      <span><span class="k">Entity</span>&nbsp; <span class="mono">{{ result.entity }}</span></span>
+      {% if result.time %}<span><span class="k">Time</span>&nbsp; <span class="mono">{{ result.time }}</span></span>{% endif %}
+      {% if result.reference_time %}<span><span class="k">Decision moment</span>&nbsp; <span class="mono">{{ result.reference_time }}</span></span>{% endif %}
+    </div>
+    <div class="spectrum-rule"></div>
+  </header>
+
+  <!-- ============ VERDICT ============ -->
+  <section class="page verdict">
+    <div class="eyebrow">What we found</div>
+    <h1>{% if issues %}Feature set needs review{% else %}Feature plan looks sound{% endif %}</h1>
+    <p class="lede">{{ result.summary }}</p>
+
+    <div class="stats" role="list" aria-label="Feature plan overview">
+      <div class="stat" role="listitem"><div class="n mono">{{ result.contract.names | length }}</div><div class="l">Features</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('entity_count', 0) }}</div><div class="l">Entities</div></div>
+      <div class="stat{% if issues %} flag{% endif %}" role="listitem"><div class="n mono">{{ issues | length }}</div><div class="l">Issue{% if issues | length != 1 %}s{% endif %}</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ observations | length }}</div><div class="l">Alert{% if observations | length != 1 %}s{% endif %}</div></div>
+      <div class="stat" role="listitem"><div class="n mono">{{ result.metadata.get('shared_nodes', 0) }}</div><div class="l">Shared ops</div></div>
+    </div>
+  </section>
+
+  <!-- ============ ISSUES ============ -->
+  <section class="page" id="section-issues">
+    <div class="sec-head">
+      <div class="sec-idx">01</div>
+      <div class="sec-title">
+        <h2>Issues</h2>
+        <p>Things wrong with the feature set: definitions that duplicate each other, degrade silently, or read something they should not be able to see. Ranked by severity.</p>
+      </div>
+    </div>
+    {% if issues %}
+      {% for finding in issues %}
+      {% set sev = finding.severity if finding.severity in ['high', 'medium', 'low'] else 'high' %}
+      <div class="finding" style="--sev: var(--{{ 'high' if sev == 'high' else ('med' if sev == 'medium' else 'low') }}); --sev-bg: var(--{{ 'high-bg' if sev == 'high' else ('med-bg' if sev == 'medium' else 'low-bg') }})">
+        <span class="sev-tag">{{ finding.severity }}</span>
+        <div class="finding-body">
+          <h3>{{ finding.title }}</h3>
+          <p>{{ finding.summary }}</p>
+          {% if finding.recommendation %}<p class="rec">{{ finding.recommendation }}</p>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="empty">Nothing in these definitions looks wrong. The features were checked for duplicate definitions, silent fallbacks, constant output, target reads and rows from after the decision moment.</p>
+    {% endif %}
+  </section>
+
+  <!-- ============ ALERTS ============ -->
+  {% if observations %}
+  <section class="page" id="section-alerts">
+    <div class="sec-head">
+      <div class="sec-idx">02</div>
+      <div class="sec-title">
+        <h2>Alerts</h2>
+        <p>True of this feature set, but not defects. Worth knowing before it ships.</p>
+      </div>
+    </div>
+    {% for finding in observations %}
+    {% set sev = finding.severity if finding.severity in ['high', 'medium', 'low'] else 'low' %}
+    <div class="finding" style="--sev: var(--{{ 'high' if sev == 'high' else ('med' if sev == 'medium' else 'low') }}); --sev-bg: var(--{{ 'high-bg' if sev == 'high' else ('med-bg' if sev == 'medium' else 'low-bg') }})">
+      <span class="sev-tag">{{ finding.severity }}</span>
+      <div class="finding-body">
+        <h3>{{ finding.title }}</h3>
+        <p>{{ finding.summary }}</p>
+        {% if finding.recommendation %}<p class="rec">{{ finding.recommendation }}</p>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- ============ COST ============ -->
+  {% set costs = result.metadata.get('cost', []) %}
+  {% if costs %}
+  <section class="page wide" id="section-cost">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' % (2 + (1 if observations else 0)) }}</div>
+      <div class="sec-title">
+        <h2>Feature cost and fallback rate</h2>
+        <p>Cost is exclusive: work a feature shares with others is not charged to it, so the column sums to the whole rather than counting a shared subtree once per feature that reached it. A fallback is a computation that produced nothing usable, which is not the same as a value that happens to equal the default.</p>
+        <p><strong>Measured</strong> is what this run cost on this machine. <strong>Estimated</strong> is derived from the operations in the plan and is what the cost alert above uses, because a finding built on the clock fires at random under load. The two disagree when a feature is cheap at this size and expensive at another — an opaque feature costs little over a hundred entities and dominates over a million.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Feature</th><th>Measured (ms)</th><th>Measured share</th><th>Estimated share</th><th>Fell back to default</th></tr></thead>
+        <tbody>
+          {% for row in costs %}
+          <tr>
+            <td class="mono">{{ row.feature }}</td>
+            <td class="mono">{{ '%.2f' % row.milliseconds }}</td>
+            <td class="mono">{{ '%.1f' % (row.share * 100) }}%</td>
+            <td class="mono">{{ '%.1f' % (row.estimated_share * 100) }}%</td>
+            <td class="mono">{{ '%.1f' % (row.fallback_share * 100) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- ============ CONTRACT ============ -->
+  <section class="page wide" id="section-contract">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' % (2 + (1 if observations else 0) + (1 if costs else 0)) }}</div>
+      <div class="sec-title">
+        <h2>The contract</h2>
+        <p>The order below is the order a consumer must expect. A model trained on one permutation and served another receives a scrambled vector, and every value in it is a plausible number, so nothing raises.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Feature</th><th>Default</th><th>Reads</th></tr></thead>
+        <tbody>
+          {% for spec in result.contract.features %}
+          <tr>
+            <td class="mono">{{ loop.index }}</td>
+            <td class="mono">{{ spec.name }}</td>
+            <td class="mono">{{ spec.default }}</td>
+            <td class="mono">{{ spec.reads | join(', ') if spec.reads else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ PLAN ============ -->
+  <section class="page" id="section-plan">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' % (3 + (1 if observations else 0) + (1 if costs else 0)) }}</div>
+      <div class="sec-title">
+        <h2>The plan</h2>
+        <p>What the planner shares between features, and what it could not.</p>
+      </div>
+    </div>
+    <pre class="mono" style="white-space:pre-wrap;font-size:12.5px;line-height:1.7">{{ result.plan_description }}</pre>
+  </section>
+
+  <!-- ============ ASSUMPTIONS AND WARNINGS ============ -->
+  {% if result.assumptions or result.warnings %}
+  <section class="page" id="section-warnings">
+    <div class="sec-head">
+      <div class="sec-idx">{{ '%02d' % (4 + (1 if observations else 0) + (1 if costs else 0)) }}</div>
+      <div class="sec-title">
+        <h2>Assumptions and caveats</h2>
+        <p>What this run took for granted, and what it could not cover.</p>
+      </div>
+    </div>
+    <ul class="plain">
+      {% for assumption in result.assumptions %}<li>{{ assumption }}</li>{% endfor %}
+      {% for warning in result.warnings %}<li><span class="mono">{{ warning.code }}</span> — {{ warning.message }}</li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <footer class="page foot">
+    <div class="spectrum-rule"></div>
+    <p>Generated by Prism EDA. Every number on this page was computed locally from your data.</p>
+  </footer>
+</body>
+</html>

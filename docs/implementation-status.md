@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-09-05 (tree-based feature importance)
+Last updated: 2026-09-10 (feature engineering planner)
 
 This file is the living scope ledger. Update it whenever a capability is added,
 removed, or materially re-scoped.
@@ -295,6 +295,40 @@ identifiers, and over-wide categoricals.
 - Product research, architecture, maintainer, roadmap, handoff, and feature
   documentation
 
+### Feature engineering (`prism_eda.features`)
+
+- `FeatureSet` session with `@feature` / `@derive` / `@opaque` decorators and
+  named windows (`days=`, `last_k=`, and the whole-history `all`)
+- Feature functions are **traced**, not parsed: they are executed once at plan
+  time with symbolic proxies, so the planner holds an exact record of the
+  operations rather than an interpretation of the source
+- Closed eight-family op algebra: normalisation/predicates, per-entity as-of
+  windows, filtered aggregates, safe division and log derivations, ordered ops
+  (`lag`, `lead`, `diff`, `run_length_max`, last-k), per-entity distribution
+  shape (`mode_count`, `entropy`, `top_share`, `distinct_ratio`), time
+  flooring, and a finiteness guard
+- Structural common-subexpression elimination: a node's id hashes its op,
+  params and children's ids, so identical subexpressions collapse at
+  construction regardless of which feature produced them
+- Vectorised pandas executor that evaluates every entity at once and builds
+  each expensive physical artifact once — the sort order, the grouper, each
+  normalised column, each window mask. Measured 112x against the per-entity
+  Python loop on 20k accounts with 15 features, every value identical
+- Unoptimised reference executor as the correctness oracle
+- Point-in-time correctness via `reference_time=`: every window, including
+  `all`, ends at the declared decision moment
+- Always-on sampled verification against the reference executor, raising on
+  any disagreement; entities are sampled, never rows
+- `verify_against(fn)` oracle mode for porting existing hand-written feature
+  code one feature at a time
+- Exportable contract: declared output order, per-feature defaults, and the
+  source columns derived from the expression tree
+- Feature-plan report with duplicate-definition, redundancy, constant-feature,
+  fallback, target-leakage, future-row and cost-concentration detectors, each
+  calibrated to stay silent on a clean feature set
+- `pe.features()` / `Dataset.features()` returning a `FeatureRun` (the
+  engineered frame plus its `FeaturePlanResult`)
+
 ## Next
 
 ### Anomaly detection improvements
@@ -342,6 +376,13 @@ identifiers, and over-wide categoricals.
 - Per-channel mean/std normalization constants
 - Domain-specific image quality profiles for OCR, medical imaging, and remote
   sensing
+
+### Feature engineering improvements
+
+- Polars executor over the same semantic IR
+- Cross-table features, with join keys proposed and requiring confirmation
+- A serving path: keyed state artifact plus a single-entity execution path, so
+  one definition drives both a training backfill and an online request
 
 ## Later
 

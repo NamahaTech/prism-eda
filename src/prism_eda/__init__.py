@@ -6,6 +6,7 @@ from prism_eda.api import (
     clustering,
     compare_datasets,
     discover_schema,
+    features,
     load,
     load_images,
     minimal_eda,
@@ -19,6 +20,8 @@ from prism_eda.comparison_results import ComparisonResult
 from prism_eda.config import AnalysisConfig, AnalysisContext, AnalysisMode
 from prism_eda.dataset import Dataset
 from prism_eda.events import Event, EventKind
+from prism_eda.features import FeaturePlan, FeatureSet
+from prism_eda.features.results import FeaturePlanResult, FeatureRun
 from prism_eda.image_dataset import ImageDataset
 from prism_eda.results import AnalysisResult, AnalysisStatus
 
@@ -33,12 +36,17 @@ __all__ = [
     "Dataset",
     "Event",
     "EventKind",
+    "FeaturePlan",
+    "FeaturePlanResult",
+    "FeatureRun",
+    "FeatureSet",
     "ImageDataset",
     "anomaly_detection",
     "classification",
     "clustering",
     "compare_datasets",
     "discover_schema",
+    "features",
     "load",
     "load_images",
     "minimal_eda",

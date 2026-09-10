@@ -136,6 +136,16 @@ def render_html(result: AnalysisResult) -> str:
     )
 
 
+def render_feature_plan_html(result: Any) -> str:
+    """Render a self-contained feature-plan report."""
+    template = _environment().get_template("feature_plan_report.html")
+    return template.render(
+        result=result,
+        logo_uri=_data_uri("logo.png", "image/png"),
+        favicon_uri=_data_uri("favicon.png", "image/png"),
+    )
+
+
 def render_comparison_html(result: ComparisonResult) -> str:
     """Render a complete comparison report as a standalone HTML document."""
     template = _environment().get_template("comparison_report.html")

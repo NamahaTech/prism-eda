@@ -50,6 +50,47 @@ objectives. Five rays ship today; the rest are the roadmap.
 | **Time Series Analysis**  | Time-based data forecasting analysis.                   |
 | **Clustering**            | Categorization, clustering and segmentation support.    |
 
+### Beyond the rays: feature engineering
+
+The eight rays all answer a question about data you already have. The feature
+planner is a second pillar rather than a ninth ray, because it *produces* data
+as well as describing it.
+
+Feature code forces a choice: write each feature as its own function and keep
+the modularity that makes experimentation possible, or hand-fuse them into one
+function and get the speed back by giving that up. `prism_eda.features` makes
+the trade unnecessary — you write the features separately and a planner shares
+the sort order, the grouper, each normalisation and each window mask across
+them, then proves the numbers did not change.
+
+```python
+import prism_eda as pe
+from prism_eda.features import FeatureSet, safe_div
+
+fs = FeatureSet(entity="account_id", time="txn_ts", reference_time="decided_at")
+fs.window("w30d", days=30)
+
+@fs.derive
+def failed(status):
+    return status.str.upper().str.strip().isin({"FAILED", "DECLINED"})
+
+@fs.feature
+def failed_ratio_30d(failed, w30d):
+    return safe_div(w30d.count(where=failed), w30d.count())
+
+run = pe.features(ledger, fs)
+run.features            # one row per account, in declared contract order
+run.report.to_html("features.html")
+```
+
+Measured at **112x** against the per-entity Python loop it replaces, with every
+value identical — verification runs on every build and raises on any
+disagreement, because a planner that silently returns different numbers is
+worse than no planner. The report then says what the definitions themselves
+show: duplicate features, silent fallbacks, a feature reading the target, or
+rows in the extract from after the decision moment. See
+[the guide](docs/usage_docs/feature-engineering.md).
+
 ## Why it exists
 
 Traditional profiling tools produce a broad catalog: types, missing values, duplicates, distributions, and correlations. But a raw

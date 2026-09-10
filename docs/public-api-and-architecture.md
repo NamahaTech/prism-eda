@@ -437,6 +437,47 @@ Column and table names may be sent by default because they provide important
 semantic context. Users can alias or exclude them, and documentation must clearly
 describe provider payload categories and Gemini data-handling implications.
 
+## 12a. Feature engineering (`prism_eda.features`)
+
+A second pillar alongside the analysis recipes, not a ninth prism-ray. It
+returns engineered data as well as a report, so like `Dataset.compare()` it
+bypasses `Dataset.analyze()` and has its own result type rather than pretending
+to be an `AnalysisResult`.
+
+Public surface:
+
+- `FeatureSet(entity=, time=, reference_time=, target=)` — the session.
+  `@feature`, `@derive`, `@opaque` register definitions; `window(name, days=)`
+  or `window(name, last_k=)` declares a reusable window; `all` is the
+  whole-history window. Declaration order is the output contract order.
+- `FeatureSet.plan(source, *, table=, verify=True, ...) -> FeaturePlan`. Tracing
+  happens here, not at decoration time, because a feature may legitimately
+  branch on the schema and the schema is not known before a frame is in hand.
+- `FeaturePlan.execute(frame) -> DataFrame`, `.run(frame) -> FeatureRun`,
+  `.diagnose(frame) -> FeaturePlanResult`, `.contract() -> FeatureContract`,
+  `.verify(frame)`, `.verify_against(fn, frame)`, `.explain()`.
+- `pe.features(source, feature_set, ...)` and `Dataset.features(feature_set)`
+  both return a `FeatureRun` (`.features` frame plus `.report`).
+
+Invariants specific to this module:
+
+1. Feature functions are **traced, never parsed**. Data-dependent branching
+   raises with an explanation; schema-dependent branching is supported.
+2. The op algebra is closed. Anything outside it is an `@fs.opaque` node, which
+   is correct but unplanned, never an approximation that nearly fits.
+3. Verification is on by default and **raises**; the unoptimised reference
+   executor is right by definition.
+4. Verification samples whole entities, never rows: a feature reads an entity's
+   whole history, so dropping rows changes the computation rather than
+   sampling it.
+5. Measured wall-clock time is never banked as evidence. An evidence id hashes
+   its value, and a duration would make lineage unreproducible; cost is
+   reported as run metadata, and the cost *finding* is computed from static
+   operation weights instead.
+6. Declared output order is part of the contract and is checked, not assumed.
+7. Join keys will be proposed and require confirmation; the planner does not
+   join on an inferred key (invariant 10 of the core list).
+
 ## 13. Package layout
 
 ```text

@@ -314,6 +314,80 @@ def subscriptions() -> pd.DataFrame:
 # Sample time series
 # --------------------------------------------------------------------------
 
+
+#: Accounts in the transaction ledger used by the feature-engineering guide.
+N_LEDGER_ACCOUNTS = 120
+
+#: Tokens a payment processor uses for a settlement failure. Real ledgers spell
+#: this inconsistently and in mixed case, which is exactly why a feature set
+#: normalises the column once and shares that normalisation rather than
+#: re-deriving it in every feature that reads status.
+FAILED_TOKENS = ("FAILED", "DECLINED", "failed ")
+
+#: How long after an account's first transaction the decision is recorded. The
+#: ledger deliberately contains rows from *after* each account's decision
+#: moment, because a training extract usually does: filtering to the decision
+#: is the step people forget, and a feature set anchored on the newest row
+#: instead will read them without complaining.
+DECISION_LAG_DAYS = 120
+
+
+def account_transactions() -> pd.DataFrame:
+    """Return the seeded ``account_transactions`` ledger for the feature guide.
+
+    One row per transaction, keyed by ``account_id`` and ordered by
+    ``txn_ts``. ``decided_at`` is the moment a decision was recorded for that
+    account, which is what a point-in-time correct backfill must anchor on.
+
+    The frame is built so that the things the feature report looks for are
+    genuinely present rather than asserted:
+
+    * Every account has transactions **after** its own ``decided_at``, so a
+      feature set that anchors on the newest row silently reads the future and
+      one that declares ``reference_time`` does not.
+    * ``amount`` is rounded to tens so values repeat. With every amount unique
+      a distinct-value ratio is constant at 1.0 and stops measuring anything.
+    * Settlement failures arrive in runs rather than independently, so a
+      longest-consecutive-failures feature has something real to find.
+    * A handful of accounts have a single transaction, where spread and
+      inter-arrival gaps are undefined and a feature must fall back.
+    """
+    rng = np.random.default_rng(SEED)
+    start = pd.Timestamp("2025-01-01")
+
+    rows: list[dict[str, object]] = []
+    for index in range(N_LEDGER_ACCOUNTS):
+        account = f"ACC{index:04d}"
+        # A few accounts have one transaction each: that is where standard
+        # deviation and inter-arrival gaps stop being defined.
+        count = 1 if index % 40 == 0 else int(rng.integers(12, 60))
+        offsets = np.sort(rng.integers(0, 180 * 86_400, count))
+        # Failures cluster: a declined payment is usually retried and declines
+        # again, so an independent coin flip would understate the longest run.
+        failing = False
+        for offset in offsets:
+            failing = bool(rng.random() < (0.55 if failing else 0.12))
+            rows.append(
+                {
+                    "account_id": account,
+                    "txn_ts": start + pd.Timedelta(seconds=int(offset)),
+                    "amount": float(round(rng.gamma(2.0, 180.0), -1) + 10.0),
+                    "status": (
+                        str(rng.choice(FAILED_TOKENS)) if failing else "SUCCESS"
+                    ),
+                    "direction": "DEBIT" if rng.random() < 0.62 else "CREDIT",
+                    "beneficiary": f"B{int(rng.integers(0, 14)):02d}",
+                }
+            )
+
+    frame = pd.DataFrame(rows)
+    # The decision lands before the ledger ends, so every account carries rows
+    # the decision could not have seen.
+    first_seen = frame.groupby("account_id")["txn_ts"].transform("min")
+    frame["decided_at"] = first_seen + pd.Timedelta(days=DECISION_LAG_DAYS)
+    return frame.sort_values(["account_id", "txn_ts"]).reset_index(drop=True)
+
+
 #: Stores in the panel, and how many days of history each one has. ``harbour``
 #: opened recently, which is the point: a panel is rarely balanced, and an
 #: entity with two months of history cannot support a seasonal forecast even
