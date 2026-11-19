@@ -124,6 +124,37 @@ degrading to the static SVG fallback (with a visible notice) when the asset
 is missing or fails to initialise — `tests/test_schema_discovery.py` covers
 this path.
 
+## Sources and exploration
+
+`explore()` is not routed through `Dataset.analyze()`: it reads through
+`prism_eda.sources.Source` objects rather than a dict of loaded frames, so the
+same code serves a DataFrame and a database. `Dataset.explore()` wraps the
+dataset's frames in a `FrameSource`.
+
+- Adding a source: subclass `Source`, implement every abstract method, and run
+  `tests/test_database_sources.py` against it. Canonical values and the
+  sampling hash must match `sources/base.py` exactly, or relationships across
+  sources silently stop being found.
+- SQL sources open a connection per question and close it. Do not add a
+  connection that outlives a method.
+- New exploration evidence must set `metadata["basis"]` to `full_table` or
+  `sample`, and a new finding must be tested on `_clean_tables()` in
+  `tests/test_exploration.py` to show it stays quiet.
+- Run state that should survive an interruption goes on `TableState`,
+  `RelationshipResult` or `NetworkResult`; those are what checkpoints store.
+  They must stay JSON-serialisable dataclasses with accurate type hints, because
+  `checkpoint.loads` rebuilds them from the hints.
+- The parity tests need servers:
+
+  ```bash
+  export PRISM_TEST_CLICKHOUSE_URL=http://user:password@host:8123/database
+  export PRISM_TEST_POSTGRES_DSN="host=... port=5432 user=... dbname=..."
+  pytest tests/test_database_sources.py
+  ```
+
+  They create and drop a `prism_test_<random>` database (ClickHouse) or schema
+  (Postgres) and touch nothing else. CI does not run them.
+
 ## Release and packaging
 
 `pyproject.toml` is canonical and there is deliberately **no `setup.py`**. The

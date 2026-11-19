@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/v/prism-eda?color=6f52ed&label=PyPI" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/pyversions/prism-eda?color=6f52ed" alt="Python 3.11+"></a>
+  <a href="https://pypi.org/project/prism-eda/"><img src="https://img.shields.io/pypi/pyversions/prism-eda?color=6f52ed" alt="Python 3.10+"></a>
   <a href="https://github.com/NamahaTech/prism-eda/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-1f9d55" alt="MIT license"></a>
   <a href="https://github.com/NamahaTech/prism-eda"><img src="https://img.shields.io/badge/docs-guide-0b7285" alt="Documentation"></a>
  <a href="https://pepy.tech/projects/prism-eda"><img src="https://api.pepy.tech/badge/prism-eda" alt="Downloads"></a>
@@ -129,6 +129,22 @@ JavaScript, or an AI provider.
 - Analyze without mutating the caller's DataFrame or writing files until an
   explicit export is requested.
 
+### Deep exploration of databases and multi-table data
+
+- `explore()` profiles every table of a ClickHouse or Postgres database (or a
+  set of DataFrames) in place: counts, missing values, distinct values, ranges
+  and rows over time are computed over every row by the database; distribution
+  shapes, correlations and format checks come from a deterministic row sample.
+- Finds columns that hold the same identifiers **by value, not by name**: in
+  one table, across tables, and across databases, including when one side is a
+  zero-padded string and the other an integer. Each pair is reported with its
+  coverage, a confidence interval, and a row-weighted figure.
+- Where two columns of one table share identifiers (sender and receiver), it
+  measures the network: how many counterparties exist in the data, how many
+  links a record has, and how far 2- and 3-step paths actually reach.
+- Read-only, one bounded query at a time, resumable from checkpoints, and
+  exported as JSON, HTML or PDF.
+
 ### Task-aware analysis
 
 - Infer candidate single/composite keys and directional table relationships with
@@ -189,7 +205,7 @@ JavaScript, or an AI provider.
 
 ## Installation
 
-Prism EDA supports Python 3.11 and newer on macOS, Linux, and Windows.
+Prism EDA supports Python 3.10 and newer on macOS, Linux, and Windows.
 
 ### pip
 
@@ -233,8 +249,12 @@ python -m pip install "prism-eda[excel]"
 # Use the optional Gemini/Gemma assisted investigator.
 python -m pip install "prism-eda[ai-gemini]"
 
-# Request optional Plotly-backed interactive report enhancements.
-python -m pip install "prism-eda[plotly]"
+# PDF reports.
+python -m pip install "prism-eda[pdf]"
+
+# Explore ClickHouse and Postgres databases in place.
+python -m pip install "prism-eda[clickhouse,postgres]"
+
 ```
 
 ### Development setup
@@ -303,6 +323,25 @@ dataset = pe.load("data/", recursive=True)
 schema = dataset.discover_schema(mode="standard")
 schema.to_html("schema.html")
 ```
+
+### A whole database: what is in it and how it connects
+
+```python
+import prism_eda as pe
+
+warehouse = pe.ClickHouseSource(host="ch.internal", username="reader",
+                                password="...", database="bank")
+core = pe.PostgresSource(host="pg.internal", username="reader",
+                         password="...", database="core")
+
+result = pe.explore([warehouse, core], exclude=["tmp_*"])
+print(result.summary)
+result.to_pdf("exploration.pdf", branding=False)   # needs the pdf extra
+```
+
+The same call takes DataFrames or a folder of files:
+`pe.explore("data/")`. See the
+[exploration guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/exploration.md).
 
 ### Classification: test readiness before training
 
@@ -514,7 +553,7 @@ See [AI-assisted analysis](https://github.com/NamahaTech/prism-eda/blob/main/doc
 - [**Usage Guide**](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/README.md) — install, load, analyze, export (start here)
 - [AI-assisted investigation](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/ai-assisted-analysis.md) · [Privacy](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/privacy.md)
 - [Regression readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/regression.md) · [Classification readiness](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/classification.md) · [Time series](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/time-series.md) · [Clustering](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/clustering.md)
-- [Schema discovery](https://github.com/NamahaTech/prism-eda/blob/main/docs/schema-discovery.md)
+- [Schema discovery](https://github.com/NamahaTech/prism-eda/blob/main/docs/schema-discovery.md) · [Deep exploration](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/exploration.md) · [Database sources](https://github.com/NamahaTech/prism-eda/blob/main/docs/usage_docs/database-sources.md)
 - [Implementation plan and handoff](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-plan.md)
 - [Implementation status](https://github.com/NamahaTech/prism-eda/blob/main/docs/implementation-status.md)
 - [Maintainer guide](https://github.com/NamahaTech/prism-eda/blob/main/docs/maintainer-guide.md)
@@ -607,7 +646,7 @@ result = pe.load("data.csv").profile(config=config)
 
 ```python
 result.to_html("report.html")                 # standalone HTML
-result.to_html("report.html", interactive=True)  # optional Plotly enhancement
+result.to_html("report.html", branding=False)   # no product name, logo, or footer
 result.to_json("report.json", indent=2)       # complete serializable result
 payload = result.to_dict()                      # in-memory dict
 ```
@@ -660,7 +699,9 @@ columns; enabling raw values is an explicit opt-in.
 
 Recipes use deterministic sampling budgets where appropriate and record every
 sample in the result. CSV loading and baseline profiling are eager, so memory
-should be considered for very large sources.
+should be considered for very large sources. For data that lives in ClickHouse
+or Postgres, `explore()` does not load tables at all: statistics are computed by
+the database and only bounded samples are fetched.
 
 ### Can I customize thresholds and analysis depth?
 

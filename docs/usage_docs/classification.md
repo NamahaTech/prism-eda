@@ -132,6 +132,13 @@ predicting the majority class. So there is no ranking, no section in the report,
 and a warning saying why. A ranking read off a model that cannot predict is an
 ordering of noise, and printing one would be worse than printing nothing.
 
+"Beat" is measured against the hold-out's own sampling error, not a fixed
+margin. Balanced accuracy on a hundred held-out rows moves by several points
+from the draw alone, so the forest must clear the majority baseline by at least
+0.02 *and* by 2.5 standard errors of balanced accuracy under the hypothesis that
+its predictions are unrelated to the label. A coin-flip label is refused on
+every seed rather than on a lucky one.
+
 On a table where the forest *can* predict, the ranking appears:
 
 ```python

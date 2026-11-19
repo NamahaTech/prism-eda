@@ -420,6 +420,9 @@ everything else into an unreadable strip — or being dropped.
 - Feature importance is reported only when the forest beats a dummy baseline on
   held-out rows. When it does not, there is no section and a warning says why:
   a ranking read off a model that cannot predict is an ordering of noise.
+  For a classification target the margin over the baseline also scales with the
+  hold-out's sampling error; see the
+  [classification guide](classification.md#what-drives-the-label).
 - Importance describes *that forest on those rows*. A different model class can
   rank the same columns differently, and permutation splits credit between two
   columns that carry the same information.

@@ -24,7 +24,7 @@ Core goals:
 - prepare the architecture for Gemini, local models, and other providers without
   making AI mandatory.
 
-The library currently targets Python 3.11+.
+The library currently targets Python 3.10+.
 
 ## Current Package Shape
 
@@ -571,7 +571,8 @@ Before starting a new feature:
 - Baseline profiling is eager and can be expensive for very large files.
 - Directory loading supports CSV, Parquet, and Excel (Excel via the `excel`
   extra; one sheet per workbook).
-- Schema discovery does not search self-referential relationships.
+- Schema discovery does not search self-referential relationships; `explore()`
+  finds them (see `docs/usage_docs/exploration.md`).
 - Schema discovery does not yet infer functional dependencies or denormalization.
 - Anomaly detection is diagnostic and does not train production detectors.
 - Classification does not yet train probe models or compare train/test splits.

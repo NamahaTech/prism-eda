@@ -191,7 +191,10 @@ catalog's structure.
 - **Formats:** CSV, Parquet, and Excel. Other formats raise
   `UnsupportedSourceError`. Excel requires the `excel` extra (see above), and only
   one sheet per file is loaded (the first by default).
-- **Backend:** pandas is the only in-memory backend today.
+- **Backend:** pandas is the only in-memory backend. Databases are read in
+  place by [`explore()`](exploration.md) through
+  [database sources](database-sources.md); the other recipes need the data
+  loaded.
 - **Eager loading:** CSV files are read fully into memory; chunked/streaming
   execution is on the roadmap.
 - **Duplicate column names** within a table raise a `DataLoadError`.

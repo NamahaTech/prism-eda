@@ -14,7 +14,10 @@ later plan and explain analysis, but it does not invent numeric truth.
 
 - Distribution: `prism-eda`
 - Import package: `prism_eda`
-- Supported Python: 3.11+
+- Supported Python: 3.10+
+- Deep exploration (`pe.explore`) over DataFrames, ClickHouse and Postgres:
+  per-table profile pushed down to the database, value-based relationship
+  discovery (including within one table), link networks, HTML and PDF reports
 - Implemented recipes: baseline profile, schema discovery, anomaly detection,
   classification, regression, time series, clustering, image dataset profile
 - Optional AI-assisted investigation via the `ai-gemini` extra
@@ -55,6 +58,25 @@ python -m build
 10. Inferred keys, anomalies, and relationships are candidates until confirmed by
     the user or domain constraints.
 
+## Source invariants
+
+Every `Source` must hold these, and a change that breaks one is a bug even if
+every test still passes:
+
+1. **Read-only.** No statement that creates, alters or writes.
+2. **Bounded.** Every query has a time limit; every answer has a size cap.
+3. **One connection per question**, closed straight after. Nothing is held
+   across a long step.
+4. **Comparable.** Canonical values and the sampling hash are identical on
+   every backend. `tests/test_sources.py` pins them and
+   `tests/test_database_sources.py` checks parity with `FrameSource` on live
+   servers (set `PRISM_TEST_CLICKHOUSE_URL` / `PRISM_TEST_POSTGRES_DSN`). If
+   you change `normalise_value` or `value_hash`, change every SQL dialect in
+   the same commit and run the parity tests.
+5. **An estimate is labelled.** A distinct count or quantile the database
+   estimated is marked as such; full-table and sample-based evidence carry
+   different `basis` metadata.
+
 ## Module ownership
 
 - `api.py`: top-level convenience functions only; delegate to `Dataset`.
@@ -63,6 +85,20 @@ python -m build
   the label/split inferred from the directory layout. A directory of images is
   not a table collection, so it does not go through `catalog/`.
 - `catalog/`: loading, fingerprints, column catalog, keys, and relationships.
+- `sources/`: where `explore()` reads from. `base.py` is the contract every
+  source implements, plus the two functions that make values comparable across
+  backends (`normalise_value`, `value_hash`). `frames.py` is both the pandas
+  source and the reference behaviour the SQL sources are tested against;
+  `clickhouse.py` and `postgres.py` push each question down as SQL. Drivers are
+  imported inside the methods that connect, never at module import.
+- `exploration/`: the `explore()` recipe. `engine.py` orchestrates and owns
+  checkpoints and result assembly; `tables.py` profiles one table (full-table
+  statistics from the source, everything else from a row sample);
+  `relationships.py` finds columns that share identifiers; `network.py`
+  profiles links between records; `hints.py` holds the sections that need a
+  caller's knowledge; `checkpoint.py` turns run state into JSON and back. It
+  reuses `analysis/quality_checks.py`, `distributions.py` and `associations.py`
+  on the row sample rather than reimplementing them.
 - `analysis/`: task recipes that turn deterministic computations into evidence,
   findings, artifacts, warnings, and statuses. The baseline profile is split by
   question: `quality_checks.py` (is anything *wrong*?), `distributions.py` (what
@@ -103,12 +139,25 @@ python -m build
   `diagnostics.py`, and `results.py`. The core never imports it.
 - `evidence/`: provider-neutral evidence and finding contracts.
 - `artifacts.py`: structured report artifacts such as schema graphs.
+- `reporting/pdf.py` and `pdf_charts.py`: the PDF renderer (the `pdf` extra).
+  Imported only when a PDF is asked for. `build_story()` returns the flowables
+  before layout and is what tests inspect: fonts are embedded as subsets, so
+  text in a finished PDF cannot be found by a byte search. `_columns.py` holds
+  the one-cell column summaries the HTML and PDF reports share.
 - `reporting/`: the shared self-contained renderer. `sections.py` owns which
   sections a report has, in what order — the navigation, the anchors, and the
   numbering all read from that one list, so they cannot drift apart. Add a
   section there and in the template together, and `tests/test_report_sections.py`
   will hold the two in agreement.
 - `transformations/`: declarative recommendations; no automatic mutation.
+- `branding.py`: who a report says it is from. One `Branding` value feeds every
+  template through the `_brand_head.html` / `_brand_mast.html` partials, and
+  every render/export method takes `branding=`. Never write the product name
+  into a template, a finding, an evidence description, a warning, or a summary:
+  `tests/test_branding.py` renders every report with `branding=False` and fails
+  on the word in any casing, and checks each result's JSON the same way.
+- `_compat.py`: backports for the oldest supported Python (3.10). Import
+  `StrEnum` from here, never from `enum`.
 - `results.py`: stable result object and explicit exports.
 - `privacy/`: allow/redact/alias/exclude controls for AI-assisted payloads.
 - `assisted_analysis/`: optional LLM layer (providers, deterministic tool
@@ -134,7 +183,11 @@ Do not postpone documentation into a future cleanup task.
 - Assert evidence lineage, not only prose.
 - Test non-mutation and deterministic behavior where applicable.
 - Test JSON and HTML output when adding a new artifact or result field.
+- A new report template goes in `GOALS` in `tests/test_branding.py`.
 - Run visual QA in a browser for report layout changes, including a mobile width.
+- For PDF layout changes, render a report and look at the pages
+  (`pdftoppm -r 60 -png report.pdf pages/p`); the tests check content, not
+  layout.
 - Build the wheel and confirm packaged templates/assets are included.
 
 ## A detector that never stays quiet is not a detector
@@ -156,6 +209,25 @@ generalizes:
 Name-matching heuristics need the same care: a substring test makes a target
 called `y` "leak" into `x1_copy`, so name evidence comes from whole tokens of at
 least three characters.
+
+Exploration needed three:
+
+- Small integers overlap by coincidence: a serial `id` is "contained" in every
+  other serial, and a `duration_ms` fits inside any id range. Short all-digit
+  values are therefore held to stricter evidence (a unique target, 90%
+  coverage, never serial against serial) and are never promoted above
+  `possible` on values alone. A shared word root in the names lifts a pair to
+  `likely`; that is the only use of names in relationship discovery. Do not
+  loosen this to make a known foreign key show up: `examples/bank_data.py`
+  carries an `audit_log.id` that must stay unreported.
+- A quiet timeline has empty periods everywhere. A gap is reported only in a
+  dense series (20 or more periods, a typical period of 20 or more rows), for
+  three or more consecutive empty periods with a busy period on both sides.
+- "Numbers stored as text" is a defect for a measure and a non-event for an
+  account number, where text is what keeps the leading zeros. The check is
+  suppressed for identifier-like columns. A "tables that stop earlier than the
+  rest" finding was removed for the same reason: it fired on every dimension
+  table whose date column is an attribute (an opening date), not an event.
 
 The time-series recipe needed four guards for the same reason:
 
@@ -185,6 +257,14 @@ it, and neither is a threshold someone picked:
   feature clears it only when its own worst repeat still beats that. The spread
   belongs on both sides: a bare mean of three draws is itself noisy, and without
   it a random three-level categorical cleared the floor about as often as not.
+
+The first gate's margin is not a constant for classifiers. Balanced accuracy on
+a hundred held-out rows moves by several points from sampling alone, so a fixed
+0.02 over the baseline let a coin-flip label through on about half of all seeds.
+The margin must also exceed 2.5 standard errors of balanced accuracy under the
+null that predictions are unrelated to the label (`_skill_margin`). The null,
+not the observed recalls, so a separable target with three minority rows in the
+hold-out is not refused for having few of them.
 
 Two measures, not one, and for a reason. Impurity importance is inflated for
 high-cardinality columns; permutation on held-out rows is not. Reporting only
@@ -237,7 +317,22 @@ onto the grid.
 
 ## Important limitations
 
-- Pandas is the only in-memory backend.
+- Pandas is the only in-memory backend. `explore()` reads ClickHouse and
+  Postgres in place; every other recipe needs the data loaded.
+- `explore()` compares single columns only (no composite keys), follows links
+  in the origin → destination direction only, and can miss a relationship that
+  covers well under 2% of a column's values, because screening looks up 256
+  values per column.
+- Canonical matching lower-cases ASCII only: that is the one behaviour
+  ClickHouse, Postgres and Python can be made to share.
+- Postgres distinct counts above five million rows are the planner's
+  `n_distinct` and need a recent `ANALYZE`; exact quantiles and distinct pair
+  counts are not computed above that size.
+- Exact connected groups are computed up to a million rows; above that they are
+  estimated by walking from sampled records.
+- The PDF has a full layout for exploration and the baseline profile only; other
+  recipes get summary, findings and column statistics. Text is DejaVu Sans, so
+  scripts outside Latin, Greek and Cyrillic render as boxes in the PDF.
 - Profile data-quality checks scan every row and never sample; correlations,
   scatters, and distribution fitting sample above the `detail` budget and record
   it. Do not quietly extend sampling to the quality checks: those are exact
@@ -250,8 +345,9 @@ onto the grid.
   capped at three.
 - Non-string column names are profiled but skipped by schema discovery with a
   warning.
-- Automated functional-dependency discovery and self-referential relationships
-  are not implemented.
+- Automated functional-dependency discovery is not implemented. Schema
+  discovery still skips relationships within one table; `explore()` is the
+  recipe that finds them.
 - Persistent AI sessions are not implemented.
 - Image profiling reads pixels only through Pillow: no deep embeddings, so
   near-duplicates are perceptual-hash candidates and semantic duplicates (the

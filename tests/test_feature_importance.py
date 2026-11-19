@@ -362,8 +362,15 @@ def test_classification_ranking_is_scored_against_a_majority_baseline() -> None:
     assert value["features"][0]["feature"] == "a"
 
 
-def test_classification_noise_target_produces_no_ranking() -> None:
-    rng = np.random.default_rng(4)
+@pytest.mark.parametrize("seed", range(8))
+def test_classification_noise_target_produces_no_ranking(seed: int) -> None:
+    """A coin-flip label must be refused on every draw, not on a lucky one.
+
+    On a 120-row hold-out balanced accuracy drifts several points from sampling
+    alone, so a fixed margin over the baseline let roughly half of all seeds
+    through. The gate now scales with that sampling error.
+    """
+    rng = np.random.default_rng(seed)
     frame = pd.DataFrame(
         {
             "a": rng.normal(size=400),

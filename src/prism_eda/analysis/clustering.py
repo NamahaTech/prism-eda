@@ -137,8 +137,8 @@ def _findings_and_steps(
                         confidence=item.confidence,
                         evidence_ids=(item.id,),
                         recommendation=(
-                            "Prism standardizes before clustering. Confirm your "
-                            "own pipeline does too, and see how much the answer "
+                            "This analysis standardizes before clustering. Confirm "
+                            "your own pipeline does too, and see how much the answer "
                             "moves in the sensitivity check."
                         ),
                         category=OBSERVATION,

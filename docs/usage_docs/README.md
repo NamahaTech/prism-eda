@@ -30,6 +30,8 @@ Read them roughly in this order:
 | [The baseline profile](profile.md) | `profile()` — issues vs alerts, distribution shape, correlations, missing structure |
 | [Image dataset profile](image-datasets.md) | `profile_images()` — split leakage, loader traps, quality, duplicates |
 | [Schema discovery](schema-discovery.md) | `discover_schema()` — candidate keys & relationships |
+| [Deep exploration](exploration.md) | `explore()` — whole databases or multi-table data: per-table profile, value-based relationships (including within one table), link networks |
+| [Database sources](database-sources.md) | `ClickHouseSource`, `PostgresSource`, limits, and what each backend estimates |
 | [Anomaly detection](anomaly-detection.md) | `anomaly_detection()` — statistical review candidates |
 | [Classification readiness](classification.md) | `classification()` — leakage, imbalance, separability |
 | [Regression readiness](regression.md) | `regression()` — leakage, censoring, residual bias, influential rows |
@@ -37,7 +39,7 @@ Read them roughly in this order:
 | [Clustering](clustering.md) | `clustering()` — clusterability, stability, candidate segments, and "no structure" as an answer |
 | [Feature engineering](feature-engineering.md) | `FeatureSet` — modular feature functions, a planned execution, point-in-time correctness, and a verified contract |
 | [Results & evidence](results-and-evidence.md) | The `AnalysisResult` object, findings, evidence, statuses |
-| [Exporting reports](exporting-reports.md) | HTML reports, JSON, and embedding in your own tools |
+| [Exporting reports](exporting-reports.md) | HTML, PDF and JSON output, white-labelling, and embedding in your own tools |
 | [Context & configuration](context-and-config.md) | Steering analysis with `AnalysisContext` / `AnalysisConfig` |
 | [Events & progress](events-and-progress.md) | Observing long-running analyses with callbacks |
 | [AI-assisted investigation](ai-assisted-analysis.md) | `Investigator` — let an LLM drive the deterministic tools (optional extra) |

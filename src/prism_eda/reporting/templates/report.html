@@ -3,15 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ dataset_title }} — Prism EDA</title>
-  {#- Brand mark: a beam enters an equilateral prism and the spectrum emerges
-      staggered along the right face, each ray fanning out at its own angle. -#}
-  {# The mark is base64-embedded rather than linked, so a report stays a single
-     offline file. If the packaged asset is missing the masthead falls back to
-     the wordmark alone rather than showing a broken image. #}
-  {% if favicon_uri %}
-  <link rel="icon" type="image/png" href="{{ favicon_uri }}">
-  {% endif %}
+  {% set page_title = dataset_title %}
+  {% include "_brand_head.html" %}
   {% include "_report_styles.html" %}
 </head>
 <body>
@@ -25,13 +18,7 @@
   <!-- ============ MASTHEAD ============ -->
   <header class="page mast">
     <div class="mast-row">
-      <div class="brand">
-        {% if logo_uri %}<img class="brand-mark" src="{{ logo_uri }}" alt="" width="34" height="34">{% endif %}
-        <div>
-          <div class="brand-name">Prism<span style="color:var(--ink-3);font-weight:500">EDA</span></div>
-          <div class="brand-sub">Exploratory data analysis</div>
-        </div>
-      </div>
+{% include "_brand_mast.html" %}
       <div class="recipe-pill" aria-label="Report recipe">
         {% if result.goal == 'schema_discovery' %}Schema discovery{% elif result.goal == 'anomaly_detection' %}Anomaly review{% elif result.goal == 'classification' %}Classification readiness{% elif result.goal == 'regression' %}Regression readiness{% elif result.goal == 'time_series' %}Time series{% elif result.goal == 'clustering' %}Clustering{% elif result.goal == 'image_profile' %}Image dataset profile{% else %}Data profile{% endif %}
       </div>
@@ -42,7 +29,7 @@
       <span><span class="k">Source</span>&nbsp; <span class="mono">{{ source_location }}</span></span>
       {% endif %}
     </div>
-    <div class="spectrum-rule"></div>
+    <div class="{{ 'spectrum-rule' if brand.show_spectrum else 'mast-rule' }}"></div>
   </header>
 
   <!-- ============ VERDICT ============ -->
@@ -1418,7 +1405,7 @@
   <section class="page" id="section-plan">
     <div class="sec-head">
       <div class="sec-idx">{{ sections.number('plan') }}</div>
-      <div class="sec-title"><h2>Reviewable transformation plan</h2><p>These are recommendations only. Prism EDA has not modified the data.</p></div>
+      <div class="sec-title"><h2>Reviewable transformation plan</h2><p>These are recommendations only. The data has not been modified.</p></div>
     </div>
     {% for step in result.transformation_plan.steps %}
     {% set risk = step.risk if step.risk in ['high', 'medium', 'low'] else 'medium' %}
@@ -1448,7 +1435,7 @@
       <div class="lin-body">{% for failure in result.failures %}{{ failure.stage }}: {{ failure.message }}<br>{% endfor %}</div>
     </details>
     {% endif %}
-    <p class="foot-note">Generated locally by Prism EDA.</p>
+    {% if brand.footer %}<p class="foot-note">{{ brand.footer }}</p>{% endif %}
   </footer>
 
   <dialog class="image-preview" id="imagePreview" aria-labelledby="imagePreviewCaption">

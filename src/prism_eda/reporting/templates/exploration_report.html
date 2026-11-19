@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set page_title = report_title %}
+  {% include "_brand_head.html" %}
+  {% include "_report_styles.html" %}
+  <style>
+    .x-bar { display: flex; height: 22px; border-radius: 4px; overflow: hidden; background: #dfe9f7; margin: 6px 0 4px; }
+    .x-bar > span { background: #2a78d6; display: block; }
+    .x-bar-note { font-size: 12px; color: var(--ink-3); margin-bottom: 14px; }
+    .x-buckets { display: flex; align-items: flex-end; gap: 4px; height: 96px; margin-top: 8px; }
+    .x-buckets > div { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+    .x-buckets .b { width: 100%; background: #2a78d6; border-radius: 3px 3px 0 0; min-height: 1px; }
+    .x-buckets .t { font-size: 10px; color: var(--ink-3); margin-top: 3px; white-space: nowrap; }
+    .x-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .x-table { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px; background: var(--surface, #fff); }
+    .x-table > summary { cursor: pointer; padding: 14px 18px; font-weight: 600; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+    .x-table > summary .meta { font-weight: 400; font-size: 12px; color: var(--ink-3); }
+    .x-table .inner { padding: 0 18px 18px; }
+    .x-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: #eef3fb; color: #1c5cab; margin-right: 4px; }
+    .x-sub { font-size: 13px; font-weight: 600; margin: 18px 0 6px; }
+    .x-note { font-size: 12px; color: var(--ink-3); margin: 4px 0 0; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .x-heat { border-collapse: separate; border-spacing: 2px; }
+    .x-heat td { width: 20px; height: 16px; padding: 0; border-radius: 2px; }
+    .x-heat th { font-size: 10px; font-weight: 400; color: var(--ink-3); padding: 0 4px; text-align: right; }
+  </style>
+</head>
+<body>
+  {% macro pct(value, digits=1) %}{% if value is none %}–{% else %}{{ ("%." ~ digits ~ "f%%") | format(value * 100) }}{% endif %}{% endmacro %}
+  {% macro bar(share, left, right) %}
+    <div class="x-bar" role="img" aria-label="{{ left }}: {{ pct(share) }}"><span style="width: {{ (share * 100) | round(2) }}%"></span></div>
+    <div class="x-bar-note">{{ left }} {{ pct(share) }} · {{ right }} {{ pct(1 - share) }}</div>
+  {% endmacro %}
+  {% macro buckets(histogram) %}
+    {% set total = histogram | sum(attribute='count') %}
+    {% set peak = histogram | map(attribute='count') | max %}
+    <div class="x-buckets" role="img" aria-label="Distribution by band">
+      {% for bucket in histogram %}{% if total %}
+      <div title="{{ bucket.label }}: {{ pct(bucket.count / total) }}"><div class="b" style="height: {{ (bucket.count / (peak or 1) * 100) | round(1) }}%"></div><div class="t">{{ bucket.label }}</div></div>
+      {% endif %}{% endfor %}
+    </div>
+  {% endmacro %}
+  {% macro finding_card(finding) %}
+    {% set sev = finding.severity %}
+    <div class="finding" style="--sev: var(--{{ 'high' if sev in ['high', 'critical'] else ('med' if sev == 'medium' else 'low') }}); --sev-bg: var(--{{ 'high-bg' if sev in ['high', 'critical'] else ('med-bg' if sev == 'medium' else 'low-bg') }})">
+      <span class="sev-tag">{{ finding.severity }}</span>
+      <div class="finding-body">
+        <h3>{{ finding.title }}</h3>
+        <p>{{ finding.summary }}</p>
+        {% if finding.recommendation %}<p class="rec">{{ finding.recommendation }}</p>{% endif %}
+      </div>
+    </div>
+  {% endmacro %}
+
+  {% set meta = result.metadata %}
+  {% set inventory = (result.evidence | selectattr('kind', 'equalto', 'explore_inventory') | list | first) %}
+  {% set relationships = result.evidence | selectattr('kind', 'equalto', 'explore_relationship') | list %}
+  {% set domains = result.evidence | selectattr('kind', 'equalto', 'explore_domain') | list %}
+  {% set links = result.evidence | selectattr('kind', 'equalto', 'explore_link') | list %}
+  {% set fanouts = result.evidence | selectattr('kind', 'equalto', 'explore_fanout') | list %}
+  {% set labels = result.evidence | selectattr('kind', 'equalto', 'explore_label') | list %}
+
+  <header class="page mast">
+    <div class="mast-row">
+{% include "_brand_mast.html" %}
+      <div class="recipe-pill" aria-label="Report recipe">Exploration</div>
+    </div>
+    <div class="mast-meta">
+      {% for source in meta.get('sources', []) %}
+      <span><span class="k">{{ source.kind }}</span>&nbsp; <span class="mono">{{ source.get('database') or source.name }}</span></span>
+      {% endfor %}
+      {% if meta.get('started_at') %}<span><span class="k">Run</span>&nbsp; <span class="mono">{{ meta['started_at'][:16] | replace('T', ' ') }} UTC</span></span>{% endif %}
+    </div>
+    <div class="{{ 'spectrum-rule' if brand.show_spectrum else 'mast-rule' }}"></div>
+  </header>
+
+  <section class="page verdict">
+    <div class="eyebrow">Deep exploration</div>
+    <h1>{{ report_title }}</h1>
+    <p class="lede">{{ result.summary }}</p>
+    <div class="stats">
+      <div class="stat"><div class="n">{{ meta.get('table_count', 0) | format_value }}</div><div class="l">Tables</div></div>
+      <div class="stat"><div class="n">{{ result.catalog.row_count | format_value }}</div><div class="l">Rows</div></div>
+      <div class="stat"><div class="n">{{ result.catalog.column_count | format_value }}</div><div class="l">Columns</div></div>
+      <div class="stat"><div class="n">{{ meta.get('relationship_count', 0) }}</div><div class="l">Relationships</div></div>
+      <div class="stat"><div class="n">{{ meta.get('link_count', 0) }}</div><div class="l">Record-to-record links</div></div>
+      <div class="stat{% if issues %} flag{% endif %}"><div class="n">{{ issues | length }}</div><div class="l">Data-quality issues</div></div>
+    </div>
+  </section>
+
+  <nav class="navbar" aria-label="Sections"><div class="navbar-inner">
+    <a href="#section-findings">Findings</a>
+    <a href="#section-inventory">Inventory</a>
+    {% if relationships %}<a href="#section-relationships">Relationships</a>{% endif %}
+    {% if links %}<a href="#section-links">Links</a>{% endif %}
+    {% if labels %}<a href="#section-labels">Labelled rows</a>{% endif %}
+    <a href="#section-tables">Tables</a>
+    <a href="#section-method">Method</a>
+  </div></nav>
+
+  {% if result.warnings %}
+  <section class="page" id="section-warnings">
+    <div class="sec-head"><div class="sec-title"><h2>Warnings</h2><p>What limited this exploration.</p></div></div>
+    {% for warning in result.warnings %}<div class="notice">{% if warning.table %}<strong>{{ warning.table }}</strong> — {% endif %}{{ warning.message }}</div>{% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="page" id="section-findings">
+    <div class="sec-head"><div class="sec-title"><h2>Findings</h2><p>{{ issues | length }} data-quality issue(s) and {{ observations | length }} observation(s), most severe first.</p></div></div>
+    {% if not issues and not observations %}<p class="empty">Nothing was found that needs attention.</p>{% endif %}
+    {% for finding in issues %}{{ finding_card(finding) }}{% endfor %}
+    {% if observations %}<div class="x-sub" style="margin-top:28px">What the data can support</div>{% endif %}
+    {% for finding in observations %}{{ finding_card(finding) }}{% endfor %}
+  </section>
+
+  {% if inventory %}
+  <section class="page" id="section-inventory">
+    <div class="sec-head"><div class="sec-title"><h2>Data inventory</h2><p>Every table explored. Row counts cover every row.</p></div></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Table</th><th>Source</th><th class="num">Rows</th><th class="num">Columns</th><th class="num">Size</th><th>Period covered</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for row in inventory.value.tables | sort(attribute='rows', reverse=true) %}
+        {% set span = time_ranges.get(row.table) %}
+        <tr><td><a href="#table-{{ loop.index }}">{{ row.table }}</a></td><td>{{ row.source }}</td><td class="num">{{ row.rows | format_value }}{% if not row.rows_exact %} ≈{% endif %}</td><td class="num">{{ row.columns }}</td><td class="num">{{ row.bytes | bytes }}</td><td>{% if span %}{{ span.min[:10] }} → {{ span.max[:10] }}{% else %}–{% endif %}</td><td>{{ {'profiled': '', 'partial': 'Partly profiled', 'empty': 'Empty', 'failed': 'Not readable'}[row.status] }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  {% if relationships %}
+  <section class="page" id="section-relationships">
+    <div class="sec-head"><div class="sec-title"><h2>How the data connects</h2><p>{{ meta.get('identifier_columns', 0) }} identifier-like columns were compared by their values, not their names. <strong>Values covered</strong> is the share of the first column's distinct values found in the second; <strong>rows covered</strong> weights that by how often each value occurs.</p></div></div>
+    {% for tier, title in [('confirmed', 'Relationships'), ('possible', 'Possible relationships (weak evidence: short numeric values)')] %}
+    {% set shown = relationships | selectattr('value.tier', 'equalto', 'possible') | list if tier == 'possible' else relationships | rejectattr('value.tier', 'equalto', 'possible') | list %}
+    {% if shown %}
+    <div class="x-sub">{{ title }}</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Column</th><th>Also found in</th><th>Type</th><th class="num">Values covered</th><th class="num">95% interval</th><th class="num">Rows covered</th><th class="num">Reverse</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for item in shown %}{% set v = item.value %}
+        <tr{% if not v.primary %} style="color:var(--ink-3)"{% endif %}>
+          <td><code>{{ v.child.table }}.{{ v.child.column }}</code></td><td><code>{{ v.parent.table }}.{{ v.parent.column }}</code></td>
+          <td>{% if v.same_table %}Link within table{% else %}{{ {'many_to_one': 'Reference', 'one_to_one': 'Same key', 'shared_values': 'Shared values'}[v.kind] }}{% endif %}</td>
+          <td class="num">{{ pct(v.coverage) }}</td><td class="num">{{ pct(v.coverage_interval[0], 0) }}–{{ pct(v.coverage_interval[1], 0) }}</td><td class="num">{{ pct(v.row_coverage) }}</td><td class="num">{{ pct(v.reverse_coverage) }}</td>
+          <td>{% if v.cross_source %}<span class="x-tag">across databases</span>{% endif %}{% if v.tier == 'likely' %}<span class="x-tag">supported by names</span>{% endif %}{% if v.format_note %}<span class="x-tag" title="{{ v.format_note }}">format differs</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% endif %}
+    {% endfor %}
+    {% if domains %}
+    <div class="x-sub">Identifier groups</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Group</th><th>Reference column</th><th>Columns in the group</th></tr></thead>
+      <tbody>{% for item in domains %}{% set v = item.value %}
+        <tr><td>{{ v.id }}</td><td>{% if v.reference %}<code>{{ v.reference.table }}.{{ v.reference.column }}</code>{% else %}None (no column is unique){% endif %}</td><td>{% for member in v.members %}<code>{{ member.table }}.{{ member.column }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if links %}
+  <section class="page" id="section-links">
+    <div class="sec-head"><div class="sec-title"><h2>Links between records</h2><p>Where two columns of one table hold the same kind of identifier, every row connects two records. Degrees and reach are measured on sampled records with all of their rows.</p></div></div>
+    {% for item in links %}{% set v = item.value %}
+    <div class="x-sub" style="font-size:15px">{{ v.table }}: {{ v.origin }} → {{ v.destination }}</div>
+    {% set reach = v.get('reach') %}{% set known = v.get('destination_known') %}{% set also = v.get('destinations_also_origins') %}{% set out_degree = v.get('out_degree') %}{% set in_degree = v.get('in_degree') %}{% set reference = v.get('reference') or 'the reference list' %}
+    {% set hops = (reach.hops if reach else []) %}
+    <div class="stats">
+      <div class="stat"><div class="n">{{ v.get('linked_rows', v.rows) | format_value }}</div><div class="l">Rows with both ends</div></div>
+      <div class="stat"><div class="n">{{ v.distinct_origins | format_value }}</div><div class="l">Distinct {{ v.origin }}</div></div>
+      <div class="stat"><div class="n">{{ v.distinct_destinations | format_value }}</div><div class="l">Distinct {{ v.destination }}</div></div>
+      {% for hop in hops %}{% if hop.hop > 1 %}<div class="stat"><div class="n">{{ pct(hop.seeds_reaching, 0) }}</div><div class="l">Reach a {{ hop.hop }}-step connection</div></div>{% endif %}{% endfor %}
+    </div>
+    <div class="x-grid">
+      <div>
+        {% if known %}
+        <div class="x-sub">Distinct {{ v.destination }} values</div>
+        {{ bar(known.coverage, 'In ' ~ reference, 'not in the data') }}
+        {% if known.row_coverage is not none %}
+        <div class="x-sub">Rows, by whether their {{ v.destination }} is known</div>
+        {{ bar(known.row_coverage, 'In ' ~ reference, 'not in the data') }}
+        {% endif %}
+        {% endif %}
+        {% if also is not none %}
+        <div class="x-sub">{{ v.destination }} values that also act as {{ v.origin }}</div>
+        {{ bar(also, 'Both roles', 'destination only') }}
+        {% endif %}
+      </div>
+      <div>
+        {% if out_degree and out_degree.get('histogram') %}<div class="x-sub">Distinct {{ v.destination }} per {{ v.origin }}</div>{{ buckets(out_degree.histogram) }}<p class="x-note">Median {{ out_degree.median | format_value }}, 99th percentile {{ out_degree.p99 | format_value }}, maximum {{ out_degree.max | format_value }}.</p>{% endif %}
+        {% if in_degree and in_degree.get('histogram') %}<div class="x-sub">Distinct {{ v.origin }} per {{ v.destination }}</div>{{ buckets(in_degree.histogram) }}<p class="x-note">Median {{ in_degree.median | format_value }}, 99th percentile {{ in_degree.p99 | format_value }}, maximum {{ in_degree.max | format_value }}.</p>{% endif %}
+      </div>
+    </div>
+    {% if hops %}
+    <div class="x-sub">Following links outward from {{ reach.seeds }} sampled {{ v.origin }} values</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Within</th><th class="num">Starting records that get this far</th><th class="num">Median records reachable</th><th class="num">90th percentile</th><th class="num">Maximum</th></tr></thead>
+      <tbody>{% for hop in hops %}<tr><td>{{ hop.hop }} step{% if hop.hop > 1 %}s{% endif %}</td><td class="num">{{ pct(hop.seeds_reaching, 0) }}</td><td class="num">{{ hop.median_reach | format_value }}</td><td class="num">{{ hop.p90_reach | format_value }}</td><td class="num">{{ hop.max_reach | format_value }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="x-note">{% if reach.truncated_hops %}The walk reached its size limit, so later steps are lower bounds. {% endif %}{% if reach.continuation_rate is not none %}{{ pct(reach.continuation_rate) }} of first-step counterparties have onward links of their own. {% endif %}{% if reach.reciprocity is not none %}{{ pct(reach.reciprocity) }} of first-step links are returned in the opposite direction.{% endif %}</p>
+    {% endif %}
+    {% set c = v.get('components') %}{% if c %}
+    <p class="x-note">{% if c.method == 'exact' %}Ignoring direction, the {{ c.entities | format_value }} records form {{ c.components | format_value }} connected group(s); the largest holds {{ pct(c.largest_share) }} of them.{% else %}Walking in both directions from {{ c.seeds }} sampled records, {{ pct(c.open_share, 0) }} belong to a group still growing when the walk stopped{% if c.get('open_at_least') %} (at least {{ c.open_at_least | format_value }} records){% endif %}; {{ pct(c.closed_share, 0) }} sit in a small closed group.{% endif %}</p>
+    {% endif %}
+    {% endfor %}
+    {% if fanouts %}
+    <div class="x-sub" style="margin-top:28px">How identifiers go together</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Table</th><th>For each</th><th>Distinct</th><th class="num">Sampled</th><th class="num">More than one</th><th class="num">Median</th><th class="num">99th pct</th><th class="num">Max</th></tr></thead>
+      <tbody>{% for item in fanouts %}{% for pair in item.value.pairs %}<tr><td>{{ item.value.table }}</td><td><code>{{ pair.key }}</code></td><td><code>{{ pair.other }}</code></td><td class="num">{{ pair.entities | format_value }}</td><td class="num">{{ pct(pair.share_multiple) }}</td><td class="num">{{ pair.median | format_value }}</td><td class="num">{{ pair.p99 | format_value }}</td><td class="num">{{ pair.max | format_value }}</td></tr>{% endfor %}{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if labels %}{% set v = labels[0].value %}
+  <section class="page" id="section-labels">
+    <div class="sec-head"><div class="sec-title"><h2>Labelled rows</h2><p>Rows of {{ v.table }} where {{ v.column }} is {{ v.positive_values | join(', ') }}, compared with all other rows.</p></div></div>
+    <div class="stats">
+      <div class="stat"><div class="n">{{ v.get('labelled_rows') | format_value }}</div><div class="l">Labelled rows</div></div>
+      <div class="stat"><div class="n">{{ pct(v.get('labelled_rate'), 2) }}</div><div class="l">Share of the table</div></div>
+      <div class="stat"><div class="n">{{ v.labelled_sampled | format_value }}</div><div class="l">Labelled rows compared</div></div>
+      <div class="stat"><div class="n">{{ v.others_sampled | format_value }}</div><div class="l">Other rows compared</div></div>
+    </div>
+    {% if v.get('separators') %}
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Column</th><th>Type</th><th class="num">Separation (0–1)</th><th>Difference</th></tr></thead>
+      <tbody>{% for entry in v.separators %}<tr><td><code>{{ entry.column }}</code></td><td>{{ entry.type }}</td><td class="num">{{ "%.2f" | format(entry.strength) }}</td><td>{% if entry.type == 'numeric' %}median {{ entry.labelled_median | format_value }} labelled vs {{ entry.other_median | format_value }} others{% else %}'{{ entry.value }}': {{ pct(entry.labelled_share, 0) }} labelled vs {{ pct(entry.other_share, 0) }} others{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="empty">No column differs clearly between labelled rows and the rest.</p>{% endif %}
+    {% for link in v.get('links', []) %}
+    <div class="x-sub">Labelled records in {{ link.table }} ({{ link.origin }} → {{ link.destination }})</div>
+    <p>{{ pct(link.labelled_as_origin, 0) }} appear as {{ link.origin }} and {{ pct(link.labelled_as_destination, 0) }} as {{ link.destination }}.{% if link.get('labelled_out_degree') %} Their median number of distinct {{ link.destination }} values is {{ link.labelled_out_degree.median | format_value }}{% if link.get('baseline_out_degree_median') is not none %} against {{ link.baseline_out_degree_median | format_value }} overall{% endif %}.{% endif %}{% if link.get('partners_also_labelled') is not none %} {{ pct(link.partners_also_labelled) }} of their counterparties are themselves labelled.{% endif %}</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="page" id="section-tables">
+    <div class="sec-head"><div class="sec-title"><h2>Table by table</h2><p>Largest first. Counts, ranges and most frequent values cover every row unless marked ≈; charts come from a row sample.</p></div></div>
+    {% for table in result.catalog.tables | sort(attribute='row_count', reverse=true) %}
+    {% set extras = by_table.get(table.name, {}) %}
+    <details class="x-table" id="table-{{ loop.index }}"{% if loop.index <= 3 %} open{% endif %}>
+      <summary>{{ table.name }} <span class="meta">{{ table.row_count | format_value }} rows · {{ table.column_count }} columns{% if table.memory_bytes %} · {{ table.memory_bytes | bytes }}{% endif %}</span></summary>
+      <div class="inner">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Column</th><th>Type</th><th class="num">Filled</th><th class="num">Distinct</th><th>Range or most frequent values</th><th>Flags</th></tr></thead>
+          <tbody>
+          {% for column in table.columns %}{% set s = column.statistics %}
+            <tr><td><code>{{ column.name }}</code></td><td>{{ column.physical_type }}</td>
+              <td class="num">{% if column.row_count %}{{ pct(1 - column.missing_rate) }}{% else %}–{% endif %}</td>
+              <td class="num">{% if column.unique_count is not none %}{% if not s.get('distinct_exact', true) %}≈ {% endif %}{{ column.unique_count | format_value }}{% else %}–{% endif %}</td>
+              <td>{{ column_detail(table.name, column) }}</td>
+              <td>{% for flag in column_flags(table.name, column) %}<span class="x-tag">{{ flag }}</span>{% endfor %}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        {% for item in extras.get('explore_timeline', []) %}
+        <div class="x-sub">Rows per {{ item.value.granularity }} · {{ item.value.column }}</div>
+        {{ item.value | timeline_svg }}
+        {% endfor %}
+        {% for item in extras.get('explore_time_pattern', []) %}{% set peak = item.value.grid | map('max') | max %}
+        <div class="x-sub">When rows happen · {{ item.value.column }}</div>
+        <table class="x-heat" role="img" aria-label="Rows by weekday and hour">
+          {% for row in item.value.grid %}<tr><th>{{ item.value.weekdays[loop.index0] }}</th>{% for cell in row %}<td title="{{ cell }} rows at {{ '%02d' | format(loop.index0) }}:00" style="background: rgba(28, 92, 171, {{ (0.06 + 0.94 * cell / (peak or 1)) | round(3) }})"></td>{% endfor %}</tr>{% endfor %}
+        </table>
+        <p class="x-note">From a sample of {{ item.value.rows | format_value }} rows; columns are hours 00–23. {{ pct(item.value.weekend_share, 0) }} fall on a weekend, {{ pct(item.value.night_share, 0) }} between 22:00 and 06:00.</p>
+        {% endfor %}
+        {% set charts = chart_cards.get(table.name, []) %}
+        {% if charts %}
+        <div class="x-sub">Distributions</div>
+        <div class="chart-grid">
+          {% for card in charts %}
+          <div class="chart-card"><h3>{{ card.column }}</h3>{% if card.kind == 'numeric' %}{{ card.value | histogram_svg(true) }}{% else %}{{ card.value | category_bars_svg }}{% endif %}</div>
+          {% endfor %}
+        </div>
+        <p class="x-note">From a row sample.</p>
+        {% endif %}
+        {% for item in extras.get('profile_sample_rows', []) %}
+        <div class="x-sub">Example rows</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr>{% for name in item.value.columns %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+          <tbody>{% for row in item.value.head %}<tr>{% for cell in row['values'] %}<td>{{ cell | format_cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+  </section>
+
+  <section class="page" id="section-method">
+    <div class="sec-head"><div class="sec-title"><h2>Method and limits</h2><p>Relationship coverage is measured by looking up a sample of a column's distinct values in the other column. Each lookup is exact; the interval reflects only which values were looked up. Values are compared trimmed, lower-cased and without leading zeros.</p></div></div>
+    {% if result.failures %}
+    <div class="x-sub">Steps that could not be completed</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Table</th><th>Step</th><th>What happened</th></tr></thead>
+      <tbody>{% for failure in result.failures %}<tr><td>{{ failure.table or '–' }}</td><td>{{ failure.stage }}</td><td>{{ failure.message }}</td></tr>{% endfor %}</tbody></table></div>
+    {% endif %}
+    {% if result.sampling %}
+    <div class="x-sub">Sampling</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Where</th><th class="num">Rows available</th><th class="num">Rows used</th></tr></thead>
+      <tbody>{% for record in result.sampling %}<tr><td>{{ record.operation }}</td><td class="num">{{ record.source_rows | format_value }}</td><td class="num">{{ record.sampled_rows | format_value }}</td></tr>{% endfor %}</tbody></table></div>
+    {% endif %}
+  </section>
+
+  <footer class="page">
+    <div class="repro"><span class="k">Seed</span><span class="v">{{ meta.get('random_seed', 'n/a') }}{% if meta.get('duration_seconds') is not none %} · {{ meta['duration_seconds'] }} s{% endif %}</span></div>
+    {% if brand.footer %}<p class="foot-note">{{ brand.footer }}</p>{% endif %}
+  </footer>
+</body>
+</html>

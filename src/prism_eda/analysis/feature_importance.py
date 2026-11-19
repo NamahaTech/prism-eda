@@ -116,7 +116,7 @@ _MIN_IMPORTANCE_ROWS = 80
 #: as the clustering metrics.
 _STABLE_DIGITS = 12
 
-_SENTINEL_PREFIX = "__prism_sentinel"
+_SENTINEL_PREFIX = "__noise_sentinel"
 _SENTINEL_NORMAL = f"{_SENTINEL_PREFIX}_normal__"
 _SENTINEL_UNIFORM = f"{_SENTINEL_PREFIX}_uniform__"
 _SENTINEL_SHUFFLED = f"{_SENTINEL_PREFIX}_shuffled__"
@@ -124,6 +124,13 @@ _SENTINEL_SHUFFLED = f"{_SENTINEL_PREFIX}_shuffled__"
 #: Gate 1. The forest must clear the dummy baseline by this much on held-out
 #: rows before any importance is reported at all.
 _MIN_SKILL_MARGIN = 0.02
+
+#: A fixed margin is not enough for a classifier scored on a small hold-out:
+#: on 120 rows balanced accuracy moves by about 0.045 from sampling alone, so a
+#: coin-flip label cleared 0.02 on roughly half of all seeds. The margin is
+#: therefore also required to exceed this many standard errors of the held-out
+#: score itself. 2.5 puts the false-pass rate for pure noise under one percent.
+_SKILL_STANDARD_ERRORS = 2.5
 
 #: Two columns at or above this absolute correlation carry one relationship.
 #: Permutation splits their credit, so neither may be recommended for dropping.
@@ -421,6 +428,35 @@ def _score(task: Task, actual: pd.Series, predicted: Any) -> float:
     return float(balanced_accuracy_score(actual, predicted))
 
 
+def _skill_margin(task: Task, actual: pd.Series, predicted: Any) -> float:
+    """How far above the baseline a held-out score must be to count as skill.
+
+    For classification the floor is the sampling error balanced accuracy would
+    have on these rows if the predictions were unrelated to the label. Under
+    that null each class's recall is a binomial proportion whose rate is simply
+    how often the model predicts that class, and balanced accuracy is the mean
+    of those recalls. Measuring against the null, rather than against the
+    observed recalls, keeps a genuinely separable target on a small hold-out
+    from being penalised for having few minority rows. Regression keeps the
+    fixed margin, because an out-of-sample R² on noise is negative rather than
+    scattered around the baseline, and the gate already requires it positive.
+    """
+    if task == "regression":
+        return _MIN_SKILL_MARGIN
+    actual_values = np.asarray(actual)
+    predicted_values = np.asarray(predicted)
+    classes = np.unique(actual_values)
+    variance = 0.0
+    for label in classes:
+        count = int((actual_values == label).sum())
+        if count == 0:
+            continue
+        predicted_share = float((predicted_values == label).mean())
+        variance += predicted_share * (1.0 - predicted_share) / count
+    standard_error = float(np.sqrt(variance)) / max(len(classes), 1)
+    return max(_MIN_SKILL_MARGIN, _SKILL_STANDARD_ERRORS * standard_error)
+
+
 def importance_evidence(
     frame: pd.DataFrame,
     table: TableCatalog,
@@ -532,7 +568,8 @@ def importance_evidence(
     )
     try:
         forest.fit(train_x, train_y)
-        model_score = _score(task, test_y, forest.predict(test_x))
+        forest_predictions = forest.predict(test_x)
+        model_score = _score(task, test_y, forest_predictions)
     except (ValueError, np.linalg.LinAlgError):  # pragma: no cover - degenerate
         return None
 
@@ -541,7 +578,8 @@ def importance_evidence(
 
     # Gate 1. Importance read off a model that cannot predict is not weak
     # evidence; it is an ordering of noise. Say so and produce nothing.
-    if model_score - baseline_score < _MIN_SKILL_MARGIN or (
+    skill_margin = _skill_margin(task, test_y, forest_predictions)
+    if model_score - baseline_score < skill_margin or (
         task == "regression" and model_score <= 0.0
     ):
         warnings.append(

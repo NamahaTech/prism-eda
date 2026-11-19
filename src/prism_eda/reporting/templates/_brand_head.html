@@ -1,0 +1,7 @@
+  {# One place decides what a report calls itself in the browser tab. The
+     images are base64-embedded rather than linked, so a report stays a single
+     offline file; with no favicon configured the link is simply absent. #}
+  <title>{{ page_title }}{{ brand.title_suffix }}</title>
+  {% if favicon_uri %}
+  <link rel="icon" href="{{ favicon_uri }}">
+  {% endif %}

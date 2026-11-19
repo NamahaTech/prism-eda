@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pandas as pd
+import pytest
 
 import prism_eda as pe
 
@@ -53,17 +54,20 @@ def test_report_embeds_the_packaged_logo(tmp_path) -> None:
     html = result.to_html(tmp_path / "report.html").read_text(encoding="utf-8")
 
     assert '<img class="brand-mark" src="data:image/png;base64,' in html
-    assert '<link rel="icon" type="image/png" href="data:image/png;base64,' in html
+    assert '<link rel="icon" href="data:image/png;base64,' in html
 
 
 def test_report_renders_without_the_packaged_logo(monkeypatch, tmp_path) -> None:
     """A missing asset degrades the masthead; it does not fail the render."""
-    import prism_eda.reporting.renderer as renderer
+    import prism_eda.branding as branding
 
-    monkeypatch.setattr(renderer, "_data_uri", lambda *args: None)
+    monkeypatch.setattr(branding, "_PACKAGED_LOGO", "package:assets/missing.png")
+    monkeypatch.setattr(branding, "_PACKAGED_FAVICON", "package:assets/missing.png")
     result = pe.profile(pd.DataFrame({"value": [1, 2, 3]}))
 
-    html = result.to_html(tmp_path / "report.html").read_text(encoding="utf-8")
+    html = result.to_html(
+        tmp_path / "report.html", branding=branding.Branding.prism()
+    ).read_text(encoding="utf-8")
 
     assert '<img class="brand-mark"' not in html
     assert "data:image/png;base64," not in html
@@ -95,17 +99,9 @@ def test_html_renders_category_values(tmp_path) -> None:
     assert "further label(s) are folded into" in html
 
 
-def test_interactive_export_falls_back_without_plotly(tmp_path, monkeypatch) -> None:
+def test_the_interactive_flag_is_gone(tmp_path) -> None:
+    """It never produced interactive charts, so 2.0 removed it outright."""
     result = pe.profile(pd.DataFrame({"value": [1, 2]}))
 
-    original_import = __import__
-
-    def guarded_import(name, *args, **kwargs):
-        if name == "plotly":
-            raise ImportError("not installed")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr("builtins.__import__", guarded_import)
-    target = result.to_html(tmp_path / "interactive.html", interactive=True)
-
-    assert "Plotly is not installed" in target.read_text(encoding="utf-8")
+    with pytest.raises(TypeError):
+        result.to_html(tmp_path / "report.html", interactive=True)  # type: ignore[call-arg]

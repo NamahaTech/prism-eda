@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -159,14 +160,17 @@ def test_mixed_python_types_are_detected() -> None:
 def test_date_sentinels_future_and_implausible_dates() -> None:
     frame = pd.DataFrame(
         {
-            "seen_at": pd.to_datetime(
+            # Second resolution, because the year 1500 does not fit in the
+            # nanosecond timestamps pandas 2 infers from strings.
+            "seen_at": np.array(
                 [
                     "1970-01-01",
                     "2024-01-01",
                     "2024-01-02",
                     "2030-01-01",
                     "1500-01-01",
-                ]
+                ],
+                dtype="datetime64[s]",
             )
         }
     )

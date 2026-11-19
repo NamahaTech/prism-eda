@@ -6,9 +6,156 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project intends to follow semantic versioning once its public API
 stabilizes.
 
-## [Unreleased]
+## [2.0.0] - Unreleased
+
+A major release. It widens what the library can be installed on (Python 3.10),
+makes every report white-labellable, and removes two things that never worked.
+Read **Breaking changes** before upgrading from 1.x.
+
+### Breaking changes
+
+- **`to_html(..., interactive=True)` is removed**, on `AnalysisResult` and
+  `ComparisonResult`. The flag never produced an interactive chart: it only
+  appended a "Plotly is not installed" note when the import failed, and did
+  nothing at all when it succeeded. Passing it now raises `TypeError`. Drop the
+  argument; the report is unchanged.
+- **The `plotly` extra is removed.** Nothing in the library imported Plotly for
+  any purpose other than the check above. `pip install "prism-eda[plotly]"` no
+  longer resolves an extra; install `prism-eda` on its own.
+- **`prism_eda.reporting.renderer._data_uri` is gone.** It was private, but
+  tests outside the project patched it to simulate a missing logo. Images are
+  now resolved by `prism_eda.branding.Branding`.
+- **Text that named the product inside results is now neutral**, because
+  findings and evidence travel into other people's reports. The clustering
+  scale finding's recommendation reads "This analysis standardizes before
+  clustering" and the transformation-plan heading reads "The data has not been
+  modified". The finding's id is unchanged (ids hash the title and evidence,
+  not the recommendation). The internal noise-sentinel column prefix changed
+  from `__prism_sentinel` to `__noise_sentinel`.
+- **A classifier must now clear its own sampling error before feature
+  importance is reported** (see *Fixed*). Targets with very weak signal on a
+  small table that previously got a "What drives the label" section may now get
+  the `feature_importance_no_signal` warning instead.
+- The `<link rel="icon">` tag no longer carries `type="image/png"`, because a
+  custom favicon need not be a PNG. Anything matching the old tag verbatim
+  needs updating.
+
+### Added: deep exploration, database sources, PDF
+
+- **`pe.explore()`: deep exploration of multi-table data and whole databases.**
+  One call profiles every table, finds the columns that hold the same
+  identifiers, and measures the networks those links form. It accepts anything
+  `load()` does, a `Dataset` (`dataset.explore()`), or one or more database
+  sources, and returns an ordinary `AnalysisResult` with
+  `goal == "exploration"`. Guide: `docs/usage_docs/exploration.md`.
+- **Database sources** (`prism_eda.sources`): `ClickHouseSource` and
+  `PostgresSource` read tables in place. Row counts, missing and blank values,
+  distinct counts, ranges, quantiles, most frequent values and rows per period
+  are computed by the database over every row; only bounded samples are
+  fetched. Every query is read-only, has a time limit, and runs on its own
+  connection that is closed straight after. `SourceLimits` sets the per-query
+  time, thread and memory limits. `FrameSource` presents DataFrames through
+  the same contract. New extras: `clickhouse` (`clickhouse-connect`) and
+  `postgres` (`psycopg`); drivers are imported only when a source connects.
+  Guide: `docs/usage_docs/database-sources.md`.
+- **Relationships found by value, not by name**, in one table, across tables
+  and across databases. Values are compared in a canonical form (trimmed,
+  ASCII lower-cased, leading zeros removed), so an integer column and a
+  zero-padded text column holding the same account numbers match. Each pair
+  reports the share of distinct values covered with a 95% interval, a
+  row-weighted share, and the reverse share. Related columns are grouped into
+  identifier groups with a reference column where one is unique.
+- **Relationships within a table.** Two columns of one table that share
+  identifiers (sender and receiver) are reported as a link, which schema
+  discovery has never done.
+- **Link networks.** For each link: how many counterparties exist in the data
+  by distinct value and by row, counterparty distributions in both directions,
+  how far 2- and 3-step paths reach from sampled records, onward-link and
+  reciprocity rates, and connected groups. Measured on sampled records with
+  all of their rows, with every walk capped and the cap reported when hit.
+  Fan-out between identifier columns shows values shared more widely than
+  assumed.
+- **A stricter rule for small integers.** Serial ids and counters overlap by
+  coincidence, so short all-digit values need a unique target and 90% coverage,
+  are never related serial-to-serial, and stay in a separate `possible` tier
+  unless the names share a word root. Names are used for nothing else.
+- **Format-mismatch findings.** Two related columns that write the same values
+  differently (leading zeros, case, surrounding spaces) raise one high-severity
+  finding: a plain equality join between them matches nothing.
+- **Timelines with gap detection**, counted over every row, for the busiest
+  date columns of each table.
+- **Optional hints** (`label`, `entity`, `timestamp`, `amount`) add sections
+  that would be noise if guessed: what separates labelled rows, where labelled
+  records sit in the link network, activity per entity, and round-figure
+  heaping of amounts.
+- **Progress, cancelling and resuming.** A `progress` callback receives a
+  monotonic fraction and may raise to cancel. A `checkpoints` store receives
+  each finished table, the relationship stage and the link stage as JSON, and a
+  later run with the same settings loads them instead of recomputing.
+  `MemoryCheckpoints` is provided; any object with `load` and `save` works.
+- **Failure isolation.** A table that cannot be read, a column whose statistics
+  fail, or a step that times out is recorded and the run continues.
+- **PDF reports.** `render_pdf()` and `to_pdf()` on `AnalysisResult` (new `pdf`
+  extra: reportlab and matplotlib) produce a document with a cover, a contents
+  page with page numbers and a bookmark outline, a summary, findings, and one
+  section per table, with `title`, `subtitle`, `detailed_tables` and `branding`
+  arguments. The full layout covers exploration and the baseline profile; other
+  recipes render their summary, findings and column statistics.
+- **An HTML report for exploration** (`exploration_report.html`), in the same
+  self-contained, no-network form as the other reports.
+- `render_html()` and `to_html()` take `title=` to replace the report heading.
+- New public names: `explore`, `ExploreConfig`, `Hints`, `ColumnHint`,
+  `MemoryCheckpoints`, `ClickHouseSource`, `PostgresSource`, `FrameSource`,
+  `SourceLimits`.
+- `examples/bank_data.py`: a synthetic bank with known properties, used by the
+  exploration tests and the guide.
+- Parity tests that compare the ClickHouse and Postgres sources with
+  `FrameSource` on the same data. They run only when
+  `PRISM_TEST_CLICKHOUSE_URL` / `PRISM_TEST_POSTGRES_DSN` point at a server,
+  and work in a throwaway database or schema they create and drop.
+
+### Packaging note
+
+- The `dist/` directory is build output and is not part of the repository. A
+  `prism_eda-1.0.1` wheel that sat there locally had been built from code newer
+  than the `v1.0.1` tag; it was never a release artefact and has been replaced
+  by the 2.0.0 build.
 
 ### Added
+
+- **Python 3.10 support.** The minimum is now 3.10 (was 3.11), and CI runs
+  3.10 through 3.13. The only 3.11-only constructs were `enum.StrEnum` and
+  `datetime.UTC`; a small internal `_compat.StrEnum` backport keeps enum
+  members formatting as their value on 3.10 exactly as they do on 3.11+. The
+  suite is also exercised against pandas 2.3 / numpy 2.2, the versions a 3.10
+  deployment is likely to carry.
+- **Branding control on every report.** A new public `Branding` dataclass
+  (`name`, `name_accent`, `tagline`, `logo`, `favicon`, `footer`,
+  `show_spectrum`) decides the product name, logo, favicon, decorative gradient
+  and footer line. Every render and export method — `render_html()` and
+  `to_html()` on `AnalysisResult`, `ComparisonResult` and `FeaturePlanResult`,
+  and the `prism_eda.reporting` renderer functions — takes a keyword-only
+  `branding=` argument: `False` renders none of it, a `Branding` substitutes
+  your own, `None` (the default) uses the process default.
+- **`set_default_branding()` / `get_default_branding()`** switch branding once
+  for a whole process, so an integrator does not have to thread an argument
+  through every call site. `set_default_branding(False)` is all it takes to
+  ship unbranded reports.
+- **Unbranded means unbranded.** With branding off, the rendered document does
+  not contain the product name in any casing — title, masthead, footer, body
+  copy, CSS, or embedded assets — and carries no logo, favicon, or gradient.
+  This is asserted for every recipe's report, the feature-plan report and the
+  comparison report, and for the JSON result.
+- **A comparison report.** `compare_datasets(...).render_html()` now renders:
+  both sides named in the masthead, row and column counts side by side, and one
+  card per shared column with the dual histogram or dual bar chart on a shared
+  axis above a statistics table.
+- **Shared-grain detection in schema discovery.** A column combination that
+  identifies rows in three or more tables is reported once as a shared grain
+  (`conformed_key` evidence, a *Shared grains* report section ahead of the key
+  list) instead of as a web of pairwise relationships, and relationships
+  between two tables that both sit on a shared grain are suppressed. This
+  shipped in the code after 1.0.1 without a changelog entry.
 
 - **`prism_eda.features`: a feature-engineering planner.** Feature code forces
   a choice between modularity and speed — write each feature as its own
@@ -66,13 +213,6 @@ stabilizes.
   falling after the decision they are attached to, repeating amounts, clustered
   failures and single-transaction accounts — so the guide's claims are asserted
   against it rather than described.
-
-### Changed
-
-- The report stylesheet moved into a shared `_report_styles.html` partial so
-  report templates cannot drift into looking like different products. The
-  existing report renders byte-identically apart from an added CSS comment.
-
 - **Tree-based feature importance** in `regression()` and `classification()`.
   A random forest is fitted on the same leakage-screened feature set the
   recipe's linear probe uses, and its features are ranked two ways: held-out
@@ -114,9 +254,50 @@ stabilizes.
 
 ### Changed
 
+- The report stylesheet moved into a shared `_report_styles.html` partial so
+  report templates cannot drift into looking like different products. The
+  existing report renders byte-identically apart from an added CSS comment.
+- The identity parts of the report templates (title, favicon, masthead block)
+  moved into shared `_brand_head.html` / `_brand_mast.html` partials, so the
+  three report templates cannot disagree about who a report is from.
+- The feature-plan report's footer now leads with "Every number on this page
+  was computed locally from your data." and puts the brand line beneath it,
+  matching the other reports.
+- The "goal is not implemented" error no longer quotes a version number.
+- `model_dump(mode=...)` errors no longer name the product.
 - `classification.py` now selects its probe feature groups in the orchestrator
   and passes them into `_classification_probe_evidence`, so the logistic probe
   and the importance stage demonstrably share one screen and one exclusion list.
+
+### Fixed
+
+- **`compare_datasets(...).render_html()` raised `TemplateNotFound`.** The
+  renderer loaded a `comparison_report.html` that was never added to the
+  package. The template now exists (see *Added*).
+- **The feature-plan report had no logo or favicon.** It asked for the assets
+  by a path that did not exist, and a missing asset degrades silently by
+  design, so nothing reported it.
+- **A coin-flip label could get a feature-importance ranking.** The gate that
+  stops a skill-less forest from producing a ranking compared balanced accuracy
+  with the baseline using a fixed 0.02 margin. On a hold-out of about a hundred
+  rows, balanced accuracy moves by more than twice that from sampling alone, so
+  a pure-noise binary target cleared the gate on roughly half of all random
+  seeds. The margin must now also exceed 2.5 standard errors of balanced
+  accuracy under the hypothesis that predictions are unrelated to the label.
+  Regression is unchanged.
+- `features` was missing from `prism_eda.api.__all__`.
+
+### Removed
+
+- The `interactive` argument of `to_html()` and the `plotly` extra (see
+  *Breaking changes*).
+
+## [1.0.1] - 2026-08-09
+
+### Changed
+
+- Version bump only, to publish the 1.0.0 code to PyPI under a fresh version
+  number. No behaviour change from 1.0.0.
 
 ## [1.0.0] - 2026-08-09
 

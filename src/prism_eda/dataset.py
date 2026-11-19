@@ -28,9 +28,17 @@ from prism_eda.config import (
 )
 from prism_eda.events import EventCallback
 from prism_eda.exceptions import AnalysisError
+from prism_eda.exploration.config import (
+    CheckpointStore,
+    ExploreConfig,
+    Hints,
+    ProgressCallback,
+)
+from prism_eda.exploration.engine import explore_sources
 from prism_eda.features.featureset import FeatureSet
 from prism_eda.features.results import FeatureRun
 from prism_eda.results import AnalysisResult
+from prism_eda.sources.frames import FrameSource
 
 
 class Dataset:
@@ -256,9 +264,36 @@ class Dataset:
                 callbacks=tuple(callbacks),
             )
         raise NotImplementedError(
-            f"Goal {goal!r} is not implemented yet. Prism EDA 0.1 currently "
-            "supports 'profile', 'schema_discovery', 'anomaly_detection', "
+            f"Goal {goal!r} is not implemented. Supported goals are "
+            "'profile', 'schema_discovery', 'anomaly_detection', "
             "'classification', 'regression', 'time_series', and 'clustering'."
+        )
+
+    def explore(
+        self,
+        *,
+        include: str | Sequence[str] | None = None,
+        exclude: str | Sequence[str] | None = None,
+        hints: Hints | Mapping[str, Any] | None = None,
+        config: ExploreConfig | None = None,
+        callbacks: Sequence[EventCallback] = (),
+        progress: ProgressCallback | None = None,
+        checkpoints: CheckpointStore | None = None,
+    ) -> AnalysisResult:
+        """Deep exploration: per-table profile, relationships, and links."""
+        source = FrameSource(
+            self._tables,
+            locations={name: info.location for name, info in self._sources.items()},
+        )
+        return explore_sources(
+            [source],
+            include=include,
+            exclude=exclude,
+            config=config,
+            hints=dict(hints) if isinstance(hints, Mapping) else hints,
+            callbacks=callbacks,
+            progress=progress,
+            checkpoints=checkpoints,
         )
 
     def profile(

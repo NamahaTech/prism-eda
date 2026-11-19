@@ -11,9 +11,8 @@ Status: Living public contract. Implemented behavior is tracked in
 - Python package: `prism_eda`
 - Base install: `pip install prism-eda`
 - Gemini/Gemma-assisted investigation: `pip install prism-eda[ai-gemini]`
-- Interactive Plotly artifacts: `pip install prism-eda[plotly]`
 - Image dataset profiling is included in the base install and uses Pillow.
-- Python support: 3.11 and newer
+- Python support: 3.10 and newer
 - License: MIT
 
 The base install contains deterministic loading, cataloging, analysis, evidence,
@@ -285,17 +284,79 @@ html = result.render_html()
 payload = result.model_dump(mode="json")
 ```
 
-HTML is self-contained by default. Core static visualizations use semantic HTML,
-CSS, and inline SVG. If the Plotly extra is installed, users may request richer
-interactive artifacts:
+PDF is an optional extra (`pdf`: reportlab and matplotlib):
 
 ```python
-result.to_html("report.html", interactive=True)
+result.to_pdf("report.pdf", title="...", subtitle="...", detailed_tables=80)
+data = result.render_pdf()
 ```
 
-When `interactive=True` and Plotly is unavailable, export continues with static
-charts and records a warning. A missing optional renderer must not remove all
-visual evidence from the report.
+`render_html()` / `to_html()` and the PDF methods all take `branding=`; the HTML
+methods and the PDF methods take `title=`. The PDF renderer lives in
+`reporting/pdf.py` and `reporting/pdf_charts.py` and is imported only when a PDF
+is requested, so the core never imports reportlab or matplotlib.
+
+HTML is self-contained by default. Core static visualizations use semantic HTML,
+CSS, and inline SVG. There is no interactive-chart option: the `interactive`
+argument and the `plotly` extra were removed in 2.0.0 because they never
+rendered anything.
+
+### Branding
+
+Who a report says it is from is one value, `prism_eda.Branding`, read by every
+template through the shared `_brand_head.html` and `_brand_mast.html` partials:
+
+```python
+result.to_html("report.html", branding=False)                 # unbranded
+result.to_html("report.html", branding=Branding(name="Acme")) # custom
+prism_eda.set_default_branding(False)                         # process-wide
+```
+
+`branding` is keyword-only on `render_html()` / `to_html()` of `AnalysisResult`,
+`ComparisonResult`, and `FeaturePlanResult`, and on the renderer functions in
+`prism_eda.reporting.renderer`. `None` resolves to the process default, `False`
+to `Branding.none()`, `True` to `Branding.prism()`. Two contracts follow from
+it and are tested for every report:
+
+- With branding off, the rendered document does not contain the product name
+  in any casing, and embeds no logo, favicon, or gradient.
+- Nothing that lands in an `AnalysisResult` — summaries, findings, evidence
+  descriptions, warnings, metadata — names the product, so the JSON output is
+  neutral without a switch. New recipes must keep it that way.
+
+## 7a. Deep exploration and sources
+
+```python
+result = pe.explore(source, include=..., exclude=..., hints=..., config=...,
+                    callbacks=..., progress=..., checkpoints=..., **options)
+result = dataset.explore(...)
+```
+
+`source` is anything `load()` accepts, a `Dataset`, a `Source`, or a sequence of
+sources. The result is an `AnalysisResult` with `goal == "exploration"`.
+
+Public names: `explore`, `ExploreConfig`, `Hints`, `ColumnHint`,
+`MemoryCheckpoints`, `ClickHouseSource`, `PostgresSource`, `FrameSource`,
+`SourceLimits` (top level); `Source`, `TableInfo`, `ColumnInfo`, `ColumnStats`,
+`SourceError`, `SourceTimeout`, `select_tables`, `normalise_value`
+(`prism_eda.sources`); `CheckpointStore`, `Progress` (`prism_eda.exploration`).
+
+Contracts:
+
+- A source is read-only, answers each question with one bounded query on its
+  own connection, and compares values in the canonical form of
+  `sources.base.normalise_value`, sampled with `value_hash`. Those two functions
+  are reproduced in every SQL dialect and pinned by tests; changing them means
+  changing every dialect in the same commit.
+- Full-table evidence and sample-based evidence are kept apart by
+  `metadata["basis"]`. A database estimate is never presented as exact.
+- A failing table or step is recorded and the run continues. Only a run in
+  which no source can be listed raises.
+- The `progress` callback may raise to cancel; event `callbacks` may not.
+- Checkpoints are JSON keyed by the configuration; a checkpoint that cannot be
+  read is recomputed, never an error.
+- Relationships are found from values. Names are consulted only to break the
+  small-integer tie described in the exploration guide.
 
 ## 8. Sampling and 10-million-row behavior
 
@@ -525,9 +586,26 @@ src/prism_eda/
     clustering_readiness.py # scale, redundancy, geometry, Hopkins tendency
     clustering_search.py    # k-sweep, resampling stability, sensitivity
     clustering_segments.py  # segment profiles, medoids, PCA projection
+  sources/                  # where exploration reads from
+    base.py                 # the Source contract, canonical values, the hash
+    frames.py               # FrameSource: pandas, and the reference behaviour
+    clickhouse.py           # ClickHouseSource (clickhouse extra)
+    postgres.py             # PostgresSource (postgres extra)
+    _sql.py                 # helpers shared by the SQL sources
+  exploration/              # the explore() recipe
+    config.py               # ExploreConfig, Hints, Progress, CheckpointStore
+    engine.py               # orchestration, checkpoints, result assembly
+    tables.py               # per-table profile: full-table stats + row sample
+    relationships.py        # value-based relationship discovery, domains
+    network.py              # links between records, reach, components, fan-out
+    hints.py                # label, entity, timestamp and amount sections
+    checkpoint.py           # JSON (de)serialisation of run state
   transformations/
     models.py
   reporting/
+    _columns.py             # one-cell column summaries shared by HTML and PDF
+    pdf.py                  # PDF renderer (pdf extra)
+    pdf_charts.py           # matplotlib charts for the PDF
     renderer.py
     sections.py             # the ordered section list: nav, anchors, numbering
     charts.py               # dependency-free inline SVG
@@ -563,7 +641,10 @@ Core dependencies should be limited to packages that support the 0.1 contract:
 
 Matplotlib, Seaborn, tqdm, Plotly, LangChain, LangGraph, and Gemini SDK packages
 should not be unconditional core dependencies. Progress uses events; core charts
-use HTML/CSS/SVG; Plotly and AI integrations live in extras.
+use HTML/CSS/SVG; AI integrations live in extras. reportlab and matplotlib are
+the `pdf` extra and are imported only by `reporting/pdf*.py`;
+`clickhouse-connect` and `psycopg` are the `clickhouse` and `postgres` extras
+and are imported only inside the source that needs them, at connection time.
 
 ## 15. Testing contract
 

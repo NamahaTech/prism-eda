@@ -19,6 +19,7 @@ import pandas as pd
 
 from prism_eda._serialization import to_jsonable
 from prism_eda.artifacts import Artifact
+from prism_eda.branding import BrandingLike
 from prism_eda.evidence.models import Evidence, Finding, split_findings
 from prism_eda.features.contract import FeatureContract
 from prism_eda.results import AnalysisStatus, AnalysisWarning, SamplingRecord
@@ -65,19 +66,23 @@ class FeaturePlanResult:
     def model_dump(self, *, mode: str = "json") -> dict[str, Any]:
         """Compatibility-friendly typed-model style serialization."""
         if mode != "json":
-            raise ValueError("Prism EDA currently supports only mode='json'")
+            raise ValueError("Only mode='json' is supported")
         return self.to_dict()
 
-    def render_html(self) -> str:
-        """Render a self-contained HTML report without writing to disk."""
+    def render_html(self, *, branding: BrandingLike = None) -> str:
+        """Render a self-contained HTML report without writing to disk.
+
+        ``branding`` follows the same rule as every other report: ``False`` for
+        none, a :class:`~prism_eda.branding.Branding` for a custom identity.
+        """
         from prism_eda.reporting.renderer import render_feature_plan_html
 
-        return render_feature_plan_html(self)
+        return render_feature_plan_html(self, branding=branding)
 
-    def to_html(self, path: str | Path) -> Path:
+    def to_html(self, path: str | Path, *, branding: BrandingLike = None) -> Path:
         """Write a self-contained HTML report and return its path."""
         target = Path(path)
-        target.write_text(self.render_html(), encoding="utf-8")
+        target.write_text(self.render_html(branding=branding), encoding="utf-8")
         return target
 
     def to_json(self, path: str | Path, *, indent: int = 2) -> Path:

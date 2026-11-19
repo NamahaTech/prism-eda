@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- **Python 3.11 or newer.**
+- **Python 3.10 or newer.**
 - A working `pip`. Prism's core dependencies (pandas, NumPy, PyArrow,
   scikit-learn, Jinja2) are installed automatically.
 
@@ -20,7 +20,7 @@ print(pe.__version__)
 ```
 
 ```text
-1.0.0
+2.0.0
 ```
 
 ## Optional extras
@@ -30,15 +30,22 @@ capabilities into extras. Install only what you need:
 
 | Extra | Install | Adds |
 |-------|---------|------|
-| `plotly` | `pip install "prism-eda[plotly]"` | Interactive charts when exporting reports with `interactive=True` |
+| `excel` | `pip install "prism-eda[excel]"` | Reading Excel workbooks (`openpyxl`) |
+| `pdf` | `pip install "prism-eda[pdf]"` | PDF reports: `to_pdf()` / `render_pdf()` (`reportlab`, `matplotlib`) |
+| `clickhouse` | `pip install "prism-eda[clickhouse]"` | `ClickHouseSource` for `explore()` (`clickhouse-connect`) |
+| `postgres` | `pip install "prism-eda[postgres]"` | `PostgresSource` for `explore()` (`psycopg`) |
+| `ai-gemini` | `pip install "prism-eda[ai-gemini]"` | The optional LLM-assisted investigator |
 | `dev` | `pip install "prism-eda[dev]"` | `ruff`, `mypy`, `build`, `hatchling` for development |
 | `test` | `pip install "prism-eda[test]"` | `pytest`, `pytest-cov` for running the test suite |
 
-> Reports are fully functional **without** any extra — core charts are rendered
+Extras combine: `pip install "prism-eda[pdf,clickhouse,postgres]"`. A database
+driver is imported only when its source is used, and `PostgresSource` also
+works with an existing `psycopg2` installation.
+
+> HTML reports are fully functional **without** any extra — core charts are rendered
 > as inline SVG and interactive pieces (like the schema ER diagram) embed a
 > vendored library, so an HTML report has no CDN or network requirement and
-> degrades gracefully without JavaScript. The `plotly` extra only upgrades
-> charts to interactive versions when you explicitly ask for them.
+> degrades gracefully without JavaScript.
 
 ## Install from source (for contributors)
 

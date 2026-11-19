@@ -15,10 +15,18 @@ from prism_eda.config import (
 )
 from prism_eda.dataset import Dataset
 from prism_eda.events import EventCallback
+from prism_eda.exploration.config import (
+    CheckpointStore,
+    ExploreConfig,
+    Hints,
+    ProgressCallback,
+)
+from prism_eda.exploration.engine import explore_sources
 from prism_eda.features.featureset import FeatureSet
 from prism_eda.features.results import FeatureRun
 from prism_eda.image_dataset import ImageDataset, ImageSource
 from prism_eda.results import AnalysisResult
+from prism_eda.sources.base import Source
 
 
 def load(
@@ -438,6 +446,67 @@ def discover_schema(
     )
 
 
+def explore(
+    source: DataSource | Dataset | Source | Sequence[Source],
+    *,
+    include: str | Sequence[str] | None = None,
+    exclude: str | Sequence[str] | None = None,
+    hints: Hints | Mapping[str, Any] | None = None,
+    config: ExploreConfig | None = None,
+    callbacks: Sequence[EventCallback] = (),
+    progress: ProgressCallback | None = None,
+    checkpoints: CheckpointStore | None = None,
+    **options: Any,
+) -> AnalysisResult:
+    """Explore multi-table data or whole databases in depth.
+
+    ``source`` is anything :func:`load` accepts, a :class:`Dataset`, or one or
+    more database sources (:class:`ClickHouseSource`, :class:`PostgresSource`).
+    ``include`` and ``exclude`` are glob patterns over table names. Keyword
+    options not listed here set fields of :class:`ExploreConfig`
+    (``sample_rows=20_000``, ``max_hops=2``…).
+
+    Beyond a per-table profile, exploration finds columns that hold the same
+    identifiers — in one table or across tables and databases, whatever they
+    are called — and profiles the networks those links form.
+    """
+    if config is None:
+        config = ExploreConfig(**options)
+    elif options:
+        unknown = ", ".join(sorted(options))
+        raise TypeError(f"Pass either config or keyword options, not both: {unknown}")
+    if isinstance(source, Source):
+        sources: list[Source] = [source]
+    elif (
+        isinstance(source, Sequence)
+        and not isinstance(source, (str, bytes))
+        and len(source) > 0
+        and all(isinstance(item, Source) for item in source)
+    ):
+        sources = list(source)  # type: ignore[arg-type]
+    else:
+        dataset = source if isinstance(source, Dataset) else Dataset.load(source)  # type: ignore[arg-type]
+        return dataset.explore(
+            include=include,
+            exclude=exclude,
+            hints=hints,
+            config=config,
+            callbacks=callbacks,
+            progress=progress,
+            checkpoints=checkpoints,
+        )
+    return explore_sources(
+        sources,
+        include=include,
+        exclude=exclude,
+        config=config,
+        hints=dict(hints) if isinstance(hints, Mapping) else hints,
+        callbacks=callbacks,
+        progress=progress,
+        checkpoints=checkpoints,
+    )
+
+
 def compare_datasets(
     base: DataSource | Dataset,
     comparator: DataSource | Dataset,
@@ -479,11 +548,13 @@ def compare_datasets(
 
 
 __all__ = [
+    "explore",
     "anomaly_detection",
     "classification",
     "clustering",
     "compare_datasets",
     "discover_schema",
+    "features",
     "load",
     "load_images",
     "minimal_eda",

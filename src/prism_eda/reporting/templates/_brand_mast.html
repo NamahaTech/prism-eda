@@ -1,0 +1,14 @@
+      {# The identity block of the masthead. Every part is optional, so an
+         unbranded report renders none of it and a custom one renders only what
+         was supplied. #}
+      {% if brand.has_masthead %}
+      <div class="brand">
+        {% if logo_uri %}<img class="brand-mark" src="{{ logo_uri }}" alt="" width="34" height="34">{% endif %}
+        {% if brand.name or brand.name_accent or brand.tagline %}
+        <div>
+          {% if brand.name or brand.name_accent %}<div class="brand-name">{{ brand.name or '' }}{% if brand.name_accent %}<span class="brand-accent">{{ brand.name_accent }}</span>{% endif %}</div>{% endif %}
+          {% if brand.tagline %}<div class="brand-sub">{{ brand.tagline }}</div>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}

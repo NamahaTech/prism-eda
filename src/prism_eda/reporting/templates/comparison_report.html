@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set base_label = result.metadata.get('base_label', 'Base dataset') %}
+  {% set compare_label = result.metadata.get('compare_label', 'Comparator dataset') %}
+  {# Comparing two extracts of one table gives both sides the same name, and
+     "orders vs orders" tells the reader nothing about which bar is which. #}
+  {% if base_label == compare_label %}
+    {% set page_title = base_label ~ " comparison" %}
+    {% set base_label = "Base" %}
+    {% set compare_label = "Comparison" %}
+  {% else %}
+    {% set page_title = base_label ~ " vs " ~ compare_label %}
+  {% endif %}
+  {% include "_brand_head.html" %}
+  {% include "_report_styles.html" %}
+  <style>
+    .cmp-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+    .cmp-base { background: #2563eb; opacity: .8; }
+    .cmp-compare { background: #dc2626; opacity: .8; }
+    .cmp-stats td.num, .cmp-stats th.num { text-align: right; }
+  </style>
+</head>
+<body>
+  {% set charts = result.evidence | selectattr('kind', 'equalto', 'column_comparison_chart') | list %}
+
+  <!-- ============ MASTHEAD ============ -->
+  <header class="page mast">
+    <div class="mast-row">
+{% include "_brand_mast.html" %}
+      <div class="recipe-pill" aria-label="Report recipe">Dataset comparison</div>
+    </div>
+    <div class="mast-meta">
+      <span><span class="k">Base</span>&nbsp; <span class="mono">{{ base_label }}</span></span>
+      <span><span class="k">Compared with</span>&nbsp; <span class="mono">{{ compare_label }}</span></span>
+    </div>
+    <div class="{{ 'spectrum-rule' if brand.show_spectrum else 'mast-rule' }}"></div>
+  </header>
+
+  <!-- ============ VERDICT ============ -->
+  <section class="page verdict">
+    <div class="eyebrow">Side by side</div>
+    <h1>{{ page_title }}</h1>
+    <p class="lede">{{ result.summary }}</p>
+    <div class="stats">
+      <div class="stat"><div class="n">{{ charts | length | format_value }}</div><div class="l">Columns compared</div></div>
+      <div class="stat"><div class="n">{{ result.base_catalog.row_count | format_value }}</div><div class="l">Rows · {{ base_label }}</div></div>
+      <div class="stat"><div class="n">{{ result.compare_catalog.row_count | format_value }}</div><div class="l">Rows · {{ compare_label }}</div></div>
+      <div class="stat"><div class="n">{{ result.base_catalog.column_count | format_value }}</div><div class="l">Columns · {{ base_label }}</div></div>
+      <div class="stat"><div class="n">{{ result.compare_catalog.column_count | format_value }}</div><div class="l">Columns · {{ compare_label }}</div></div>
+    </div>
+  </section>
+
+  {% if result.warnings %}
+  <section class="page" id="section-warnings">
+    <div class="sec-head">
+      <div class="sec-title"><h2>Warnings</h2><p>What limited this comparison.</p></div>
+    </div>
+    <ul class="plain">
+      {% for warning in result.warnings %}<li><span class="mono">{{ warning.code }}</span> — {{ warning.message }}</li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% for table, items in charts | groupby('scope.table') %}
+  <section class="page" id="section-columns-{{ loop.index0 }}">
+    <div class="sec-head">
+      <div class="sec-title">
+        <h2>{{ table }}</h2>
+        <p>{{ items | length }} column(s) present on both sides, each drawn on a shared axis.</p>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="cmp-key cmp-base"></i>{{ base_label }}</span>
+      <span><i class="cmp-key cmp-compare"></i>{{ compare_label }}</span>
+    </div>
+    {% for item in items %}
+    {% set value = item.value %}
+    <div class="col-card" style="margin-top:14px">
+      <h3 class="mono" style="margin:0 0 12px">{{ item.scope.columns | join(', ') }}</h3>
+      {% if value.chart_type == 'dual_histogram' %}
+        {{ value | dual_histogram_svg }}
+      {% else %}
+        {{ value | dual_bar_svg }}
+      {% endif %}
+      <div class="tbl-wrap" style="margin-top:14px">
+        <table class="cmp-stats">
+          <thead>
+            <tr>
+              <th>Statistic</th>
+              <th class="num">{{ base_label }}</th>
+              <th class="num">{{ compare_label }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key in value.base_stats %}
+            <tr>
+              <td>{{ key | replace('_', ' ') }}</td>
+              <td class="num mono">{{ value.base_stats[key] | format_value }}</td>
+              <td class="num mono">{{ value.compare_stats.get(key) | format_value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="page">
+    <div class="repro">
+      <span class="k">Mode</span><span class="v">{{ result.metadata.get('mode', 'n/a') }}</span>
+    </div>
+    {% if result.failures %}
+    <details class="lineage" style="margin-top:20px">
+      <summary>{{ result.failures | length }} optional computation failure(s)</summary>
+      <div class="lin-body">{% for failure in result.failures %}{{ failure.stage }}: {{ failure.message }}<br>{% endfor %}</div>
+    </details>
+    {% endif %}
+    {% if brand.footer %}<p class="foot-note">{{ brand.footer }}</p>{% endif %}
+  </footer>
+</body>
+</html>

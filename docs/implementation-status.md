@@ -9,7 +9,7 @@ removed, or materially re-scoped.
 
 ### Foundation
 
-- Python 3.11+ package using Hatchling and a `src` layout
+- Python 3.10+ package using Hatchling and a `src` layout
 - DataFrame, CSV, Parquet, Excel (via the `excel` extra), path-list, named
   mapping, and directory loading
 - Optional recursive directory discovery
@@ -146,7 +146,10 @@ identifiers, and over-wide categoricals.
   uniform, and a shuffled copy of the widest real feature — ride along in the
   same fit, and the floor is the best any reached *plus its own spread*
 - Skill gate: no importance is reported at all when the forest fails to beat a
-  dummy baseline, recorded as a `feature_importance_no_signal` warning
+  dummy baseline, recorded as a `feature_importance_no_signal` warning; for a
+  classifier the margin also has to exceed 2.5 standard errors of balanced
+  accuracy under the no-relationship null, so a noise label is refused on every
+  seed
 - Findings: impurity/permutation disagreement, a forest materially out-scoring
   the linear probe (an alert — curved data is true, not broken), and a single
   column recovering nearly all of the full model's score, measured by refitting
@@ -256,6 +259,43 @@ identifiers, and over-wide categoricals.
   or strong parent-coverage, suppressing coincidental ID-range overlap;
   relationship titles name their tables/columns
 
+### Deep exploration (`explore()`)
+
+- `prism_eda.sources`: the `Source` contract with `FrameSource`,
+  `ClickHouseSource` and `PostgresSource`; read-only, one bounded query per
+  connection, per-query time/thread/memory limits, retry on dropped connections
+- Canonical value form and a shared hash (first eight bytes of MD5) reproduced
+  in ClickHouse, Postgres and pandas, pinned by tests and by parity tests
+  against live servers
+- Per-table profile: full-table statistics pushed down to the database; a
+  deterministic row sample for distributions, associations, format checks,
+  weekday-by-hour activity and example rows; timelines with gap detection
+- Value-based relationship discovery across columns of one table, across
+  tables and across sources: hash sample, screen, verify; coverage with a
+  Wilson interval and a row-weighted figure; identifier groups; format-mismatch
+  findings; the stricter rule and `possible` tier for small integers
+- Link networks: counterparty coverage, degree distributions, 2- and 3-step
+  reach from sampled records, onward-link and reciprocity rates, connected
+  groups (exact to a million rows, estimated above), fan-out between
+  identifiers
+- Optional hints (label, entity, timestamp, amount)
+- Progress reporting with cancel-by-raise, and JSON checkpoints for resuming
+- Dedicated HTML report template and a PDF renderer (`pdf` extra)
+
+### Branding
+
+- Public `Branding` dataclass plus `set_default_branding()` /
+  `get_default_branding()`; keyword-only `branding=` on every `render_html()` /
+  `to_html()` and renderer function
+- `branding=False` leaves no product name (any casing), logo, favicon, gradient
+  or footer in the document; asserted for all eight recipes, the feature-plan
+  report and the comparison report
+- Result text (findings, evidence, warnings, summaries) never names the
+  product, asserted against the JSON of every result
+- Comparison report template (`comparison_report.html`), previously missing
+- The same switch on `render_pdf()` / `to_pdf()`: cover logo and name, page
+  footer, and document author
+
 ### Privacy
 
 - `PrivacyPolicy`/`ColumnPolicy` allow/redact/alias/exclude controls with keyed
@@ -284,7 +324,9 @@ identifiers, and over-wide categoricals.
 
 ### Engineering
 
-- Ruff, mypy, pytest, coverage configuration, and CI for Python 3.11–3.13
+- Ruff, mypy, pytest, coverage configuration, and CI for Python 3.10–3.13
+- Python 3.10 support through an internal `_compat.StrEnum` backport; suite
+  also run against pandas 2.3 / numpy 2.2
 - Wheel/sdist build and packaged-template verification
 - CI wheel-install smoke test that imports the built wheel into a clean
   environment and renders a report from the packaged template
@@ -384,17 +426,26 @@ identifiers, and over-wide categoricals.
 - A serving path: keyed state artifact plus a single-entity execution path, so
   one definition drives both a training backfill and an online request
 
+### Exploration improvements
+
+- Composite-key relationships across database tables
+- A sketch-based first pass so relationships covering well under 2% of a
+  column are not missed by screening
+- Reach in both directions, and weighted links (amounts, counts)
+- Sources for other engines (MySQL, BigQuery, DuckDB) against the same contract
+- PDF layouts for the recipe-specific sections of the other recipes
+
 ## Later
 
 - Chunked CSV execution and a general execution planner
 - Functional dependencies and denormalization analysis
-- Plotly interactive artifact implementations
 - Assisted-analysis follow-ups: critique/clarification nodes, an interactive
   question/answer loop, async `astart`/`arun`, and additional provider adapters
 - Extending the privacy policy into a fuller model-payload builder (beyond the
   overview/schema description it governs today)
 - Persistent investigation checkpoints
-- Additional DataFrame backends
+- Additional DataFrame backends (database tables are already read in place by
+  `explore()`; the other recipes still need pandas)
 
 ## Known technical debt
 

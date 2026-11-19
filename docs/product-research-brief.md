@@ -575,7 +575,7 @@ The following decisions were confirmed on 2026-06-13:
 - Plotly is an optional extra for interactive charts. Core reports should still
   contain lightweight static charts rendered with HTML, CSS, or inline SVG.
 - Reports lead with a concise decision summary before detailed evidence.
-- The project remains MIT licensed and supports Python 3.11 and newer.
+- The project remains MIT licensed and supports Python 3.10 and newer.
 - The distribution name is `prism-eda`. The Python import package is
   `prism_eda`, because Python package imports cannot contain hyphens.
 - No representative real-world datasets are currently available from the project

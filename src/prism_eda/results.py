@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from prism_eda._compat import StrEnum
 from prism_eda._serialization import to_jsonable
 from prism_eda.artifacts import Artifact
+from prism_eda.branding import BrandingLike
 from prism_eda.catalog.models import DatasetCatalog
 from prism_eda.evidence.models import Evidence, Finding
 from prism_eda.transformations.models import TransformationPlan
@@ -75,30 +76,79 @@ class AnalysisResult:
     def model_dump(self, *, mode: str = "json") -> dict[str, Any]:
         """Compatibility-friendly typed-model style serialization."""
         if mode != "json":
-            raise ValueError("Prism EDA currently supports only mode='json'")
+            raise ValueError("Only mode='json' is supported")
         return self.to_dict()
 
-    def render_html(self) -> str:
-        """Render a self-contained HTML report without writing to disk."""
+    def render_html(
+        self, *, branding: BrandingLike = None, title: str | None = None
+    ) -> str:
+        """Render a self-contained HTML report without writing to disk.
+
+        ``branding=False`` renders the report with no product name, logo,
+        favicon, or footer; a :class:`~prism_eda.branding.Branding` supplies a
+        custom identity; ``None`` uses the process default.
+        """
         from prism_eda.reporting.renderer import render_html
 
-        return render_html(self)
+        return render_html(self, branding=branding, title=title)
 
-    def to_html(self, path: str | Path, *, interactive: bool = False) -> Path:
+    def to_html(
+        self,
+        path: str | Path,
+        *,
+        branding: BrandingLike = None,
+        title: str | None = None,
+    ) -> Path:
         """Write a self-contained HTML report and return its path."""
         target = Path(path)
-        html = self.render_html()
-        if interactive:
-            try:
-                import plotly  # type: ignore[import-not-found]  # noqa: F401
-            except ImportError:
-                html = html.replace(
-                    "</body>",
-                    '<div class="runtime-warning">Interactive charts were requested '
-                    "but Plotly is not installed; static charts are "
-                    "shown.</div></body>",
-                )
-        target.write_text(html, encoding="utf-8")
+        target.write_text(
+            self.render_html(branding=branding, title=title), encoding="utf-8"
+        )
+        return target
+
+    def render_pdf(
+        self,
+        *,
+        branding: BrandingLike = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        detailed_tables: int = 80,
+    ) -> bytes:
+        """Render a PDF report and return its bytes (needs the ``pdf`` extra).
+
+        ``title`` and ``subtitle`` replace the cover's defaults. ``branding``
+        works as it does for HTML. ``detailed_tables`` caps how many tables
+        (largest first) get charts; the rest keep their column statistics.
+        """
+        from prism_eda.reporting.pdf import render_pdf
+
+        return render_pdf(
+            self,
+            branding=branding,
+            title=title,
+            subtitle=subtitle,
+            detailed_tables=detailed_tables,
+        )
+
+    def to_pdf(
+        self,
+        path: str | Path,
+        *,
+        branding: BrandingLike = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        detailed_tables: int = 80,
+    ) -> Path:
+        """Write a PDF report and return its path (needs the ``pdf`` extra)."""
+        target = Path(path)
+        target.write_bytes(
+            self.render_pdf(
+                branding=branding,
+                title=title,
+                subtitle=subtitle,
+                detailed_tables=detailed_tables,
+            )
+        )
         return target
 
     def to_json(self, path: str | Path, *, indent: int = 2) -> Path:

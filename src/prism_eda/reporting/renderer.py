@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from base64 import b64encode
 from importlib import resources
 from pathlib import PurePath
 from typing import Any
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
+from prism_eda.branding import Branding, BrandingLike, resolve_branding
 from prism_eda.comparison_results import ComparisonResult
 from prism_eda.evidence.models import split_findings
+from prism_eda.reporting._columns import (
+    column_detail,
+    column_flags,
+    shared_columns,
+    size,
+)
 from prism_eda.reporting.charts import (
     acf_stems_svg,
     association_heatmap_svg,
@@ -87,18 +93,19 @@ def _environment() -> Environment:
     return environment
 
 
-def _data_uri(asset: str, media_type: str) -> str | None:
-    """Base64-encode a packaged asset for inlining, or None when unavailable.
+def _brand_context(branding: BrandingLike) -> dict[str, Any]:
+    """What every template needs to draw (or omit) the report's identity.
 
     Reports must stay single self-contained files with no network requests, so
-    images travel inside the document. A missing asset degrades the masthead
-    rather than failing the render.
+    the images travel inside the document as data URIs. A missing packaged
+    asset degrades the masthead rather than failing the render.
     """
-    try:
-        payload = resources.files("prism_eda.reporting").joinpath(asset).read_bytes()
-    except (FileNotFoundError, ModuleNotFoundError, OSError):
-        return None
-    return f"data:{media_type};base64,{b64encode(payload).decode('ascii')}"
+    brand: Branding = resolve_branding(branding)
+    return {
+        "brand": brand,
+        "logo_uri": brand.logo_data_uri(),
+        "favicon_uri": brand.favicon_data_uri(),
+    }
 
 
 def _load_cytoscape_js() -> str | None:
@@ -115,8 +122,85 @@ def _load_cytoscape_js() -> str | None:
     return text.replace("</script", "<\\/script")
 
 
-def render_html(result: AnalysisResult) -> str:
-    """Render a complete report as a standalone HTML document."""
+def _render_exploration_html(
+    result: AnalysisResult, *, branding: BrandingLike, title: str | None
+) -> str:
+    """The exploration report has its own template: its sections (inventory,
+    relationships, links) have no counterpart in the single-table recipes."""
+    environment = _environment()
+    environment.filters["bytes"] = size
+    issues, observations = split_findings(result.findings)
+    shared = shared_columns(result.evidence)
+    by_table: dict[str, dict[str, list[Any]]] = {}
+    chart_cards: dict[str, list[dict[str, Any]]] = {}
+    time_ranges: dict[str, Any] = {}
+    unique = {
+        (table.name, column.name)
+        for table in result.catalog.tables
+        for column in table.columns
+        if "unique_key_candidate" in column.roles or (column.unique_count or 0) <= 2
+    }
+    for item in result.evidence:
+        table = item.scope.table
+        if item.kind == "explore_time_coverage":
+            time_ranges = {row["table"]: row for row in item.value["tables"]}
+        if not table:
+            continue
+        by_table.setdefault(table, {}).setdefault(item.kind, []).append(item)
+        if item.kind in {"profile_distribution", "profile_category_frequency"}:
+            column = item.value["column"]
+            # A histogram of account numbers or of a 0/1 flag shows nothing.
+            if item.kind == "profile_distribution" and (
+                (table, column) in shared or (table, column) in unique
+            ):
+                continue
+            chart_cards.setdefault(table, []).append(
+                {
+                    "column": column,
+                    "kind": "numeric"
+                    if item.kind == "profile_distribution"
+                    else "categorical",
+                    "value": item.value,
+                }
+            )
+
+    def detail(table: str, column: Any) -> str:
+        is_key = (
+            "unique_key_candidate" in column.roles or (table, column.name) in shared
+        )
+        return column_detail(column, is_key)
+
+    def flags(table: str, column: Any) -> list[str]:
+        return column_flags(column, (table, column.name) in shared)
+
+    return environment.get_template("exploration_report.html").render(
+        result=result,
+        report_title=title or "Data exploration report",
+        issues=issues,
+        observations=observations,
+        by_table=by_table,
+        chart_cards=chart_cards,
+        time_ranges=time_ranges,
+        column_detail=detail,
+        column_flags=flags,
+        **_brand_context(branding),
+    )
+
+
+def render_html(
+    result: AnalysisResult,
+    *,
+    branding: BrandingLike = None,
+    title: str | None = None,
+) -> str:
+    """Render a complete report as a standalone HTML document.
+
+    ``branding`` controls the product name, logo, favicon, gradient, and footer:
+    ``None`` uses the process default, ``False`` renders none of them, and a
+    :class:`~prism_eda.branding.Branding` supplies a custom identity.
+    """
+    if result.goal == "exploration":
+        return _render_exploration_html(result, branding=branding, title=title)
     template = _environment().get_template("report.html")
     cytoscape_js = _load_cytoscape_js() if result.goal == "schema_discovery" else None
     issues, observations = split_findings(result.findings)
@@ -126,34 +210,27 @@ def render_html(result: AnalysisResult) -> str:
         sections=report_sections(result),
         issues=issues,
         observations=observations,
-        dataset_title=dataset_title(result),
+        dataset_title=title or dataset_title(result),
         source_location=_source_location(result),
-        logo_uri=_data_uri("assets/logo.png", "image/png"),
-        favicon_uri=_data_uri("assets/favicon.png", "image/png"),
+        **_brand_context(branding),
         column_charts=_by_column(result, "profile_distribution"),
         column_frequencies=_by_column(result, "profile_category_frequency"),
         column_timelines=_by_column(result, "profile_timeline"),
     )
 
 
-def render_feature_plan_html(result: Any) -> str:
+def render_feature_plan_html(result: Any, *, branding: BrandingLike = None) -> str:
     """Render a self-contained feature-plan report."""
     template = _environment().get_template("feature_plan_report.html")
-    return template.render(
-        result=result,
-        logo_uri=_data_uri("logo.png", "image/png"),
-        favicon_uri=_data_uri("favicon.png", "image/png"),
-    )
+    return template.render(result=result, **_brand_context(branding))
 
 
-def render_comparison_html(result: ComparisonResult) -> str:
+def render_comparison_html(
+    result: ComparisonResult, *, branding: BrandingLike = None
+) -> str:
     """Render a complete comparison report as a standalone HTML document."""
     template = _environment().get_template("comparison_report.html")
-    return template.render(
-        result=result,
-        logo_uri=_data_uri("assets/logo.png", "image/png"),
-        favicon_uri=_data_uri("assets/favicon.png", "image/png"),
-    )
+    return template.render(result=result, **_brand_context(branding))
 
 
 def _by_column(result: AnalysisResult, kind: str) -> dict[tuple[str, str], Any]:

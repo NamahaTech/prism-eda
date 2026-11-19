@@ -19,8 +19,9 @@ import hashlib
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
+
+from prism_eda._compat import StrEnum
 
 __all__ = [
     "AGGREGATE_FUNCS",
