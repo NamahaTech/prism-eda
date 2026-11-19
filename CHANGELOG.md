@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project intends to follow semantic versioning once its public API
 stabilizes.
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-11-19
 
 A major release. It widens what the library can be installed on (Python 3.10),
 makes every report white-labellable, and removes two things that never worked.
